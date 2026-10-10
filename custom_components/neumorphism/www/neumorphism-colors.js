@@ -1,18 +1,19 @@
 /*
- * Neumorphism-Farben für Home Assistant
+ * Neumorphism für Home Assistant: Farbwähler und Effektstärke
  *
- * - Zeigt im Profil unter "Design" Farbwähler für Primär- und Akzentfarbe,
- *   sobald ein Neumorphism-Theme gewählt ist.
- * - Stellt die Karte "custom:neumorphism-color-card" bereit (gleiche Farbwähler).
- * - Wendet die gewählten Farben auf das aktive Neumorphism-Theme an.
+ * - Zeigt im Profil unter "Design" Farbwähler für Primär- und Akzentfarbe und
+ *   einen Regler für die Effektstärke, sobald das Theme "Neumorphism" gewählt ist.
+ * - Stellt die Karte "custom:neumorphism-color-card" bereit (gleiche Einstellungen).
+ * - Wendet die Einstellungen auf das aktive Theme an.
  *
- * Die Farben stehen in den Theme-Einstellungen des Benutzers (primaryColor /
- * accentColor), dort wo Home Assistant sie auch beim Standard-Theme ablegt.
+ * Gespeichert wird in den Theme-Einstellungen des Benutzers (primaryColor,
+ * accentColor, neumorphismStrength), dort wo Home Assistant auch die Farben
+ * des Standard-Themes ablegt.
  *
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.0.1";
+const VERSION = "3.1.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -32,6 +33,7 @@ const PRESETS = [
 ];
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
+const STRENGTH_MAX = 2;
 
 // ---------------------------------------------------------------------------
 // Farbrechnung (sRGB <-> OKLCH), wie im Home-Assistant-Frontend
@@ -136,18 +138,27 @@ const normalize = (value) => (typeof value === "string" && HEX_RE.test(value.tri
 const getRoot = () => document.querySelector("home-assistant");
 const getHass = () => getRoot()?.hass;
 
-function storedColors(hass = getHass()) {
+const clampStrength = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(STRENGTH_MAX, Math.max(0, number)) : null;
+};
+
+function storedSettings(hass = getHass()) {
   const theme = hass?.selectedTheme || {};
-  return { primary: normalize(theme.primaryColor), accent: normalize(theme.accentColor) };
+  return {
+    primary: normalize(theme.primaryColor),
+    accent: normalize(theme.accentColor),
+    strength: theme.neumorphismStrength == null ? null : clampStrength(theme.neumorphismStrength),
+  };
 }
 
 /** Speichert wie das Profil von Home Assistant: pro Benutzer in den Theme-Einstellungen. */
-function saveColors(patch) {
+function saveSettings(patch) {
   getRoot()?.dispatchEvent(new CustomEvent("settheme", { detail: patch, bubbles: true, composed: true }));
 }
 
-// Vorschau beim Ziehen im Farbwähler, bevor der Wert gespeichert ist.
-const preview = { primary: "", accent: "" };
+// Vorschau beim Ziehen, bevor der Wert gespeichert ist.
+const preview = { primary: "", accent: "", strength: null };
 let applied = null;
 
 function neumorphismActive() {
@@ -155,11 +166,12 @@ function neumorphismActive() {
 }
 
 function applyColors() {
-  const stored = storedColors();
+  const stored = storedSettings();
   const primary = preview.primary || stored.primary;
   const accent = preview.accent || stored.accent;
+  const strength = preview.strength ?? stored.strength;
   const active = neumorphismActive();
-  const key = active ? `${primary}|${accent}` : "";
+  const key = active ? `${primary}|${accent}|${strength}` : "";
   if (key === applied) return;
   applied = key;
 
@@ -171,6 +183,8 @@ function applyColors() {
   }
   // !important schlägt die Inline-Variablen, die Home Assistant für das Theme auf <html> setzt.
   const vars = active ? colorVars(primary, accent) : {};
+  // Alle Schatten des Themes sind mit dieser Variable multipliziert.
+  if (active && strength !== null) vars["neumorphism-strength"] = String(strength);
   const body = Object.entries(vars)
     .map(([name, value]) => `--${name}: ${value} !important;`)
     .join(" ");
@@ -188,14 +202,17 @@ function texts(hass) {
     colors: de ? "Farben" : "Colors",
     primary: loc("ui.panel.profile.themes.primary_color", de ? "Primärfarbe" : "Primary color"),
     accent: loc("ui.panel.profile.themes.accent_color", de ? "Akzentfarbe" : "Accent color"),
-    reset: loc("ui.panel.profile.themes.reset", de ? "Zurücksetzen" : "Reset"),
+    reset: de ? "Zurücksetzen" : "Reset",
     primaryHint: de ? "Buttons, Symbole, Auswahl" : "Buttons, icons, selection",
     accentHint: de ? "Schalter, Hervorhebungen" : "Switches, highlights",
     fromTheme: de ? "aus dem Theme" : "from theme",
+    strength: de ? "Effektstärke" : "Effect strength",
+    strengthHint: de ? "Tiefe der Schatten, von flach bis kräftig" : "Depth of the shadows, from flat to strong",
+    flat: de ? "flach" : "flat",
     perUser: de ? "Gilt für deinen Benutzer." : "Applies to your user.",
     inactive: de
-      ? "Wähle im Profil ein Neumorphism-Theme, dann wirken diese Farben."
-      : "Select a Neumorphism theme in your profile to use these colors.",
+      ? "Wähle im Profil das Theme „Neumorphism“, dann wirken diese Einstellungen."
+      : "Select the theme “Neumorphism” in your profile to use these settings.",
   };
 }
 
@@ -254,6 +271,22 @@ class NeumorphismColorPicker extends HTMLElement {
         .dot { width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; cursor: pointer;
           box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
         .dot.selected { outline: 2px solid var(--primary-text-color); }
+        .strength { padding: 16px 0 2px; }
+        .strength-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; margin: 6px 0 0;
+          background: transparent; cursor: pointer; --fill: 50%; }
+        input[type="range"]::-webkit-slider-runnable-track { height: 10px; border-radius: 5px;
+          background: linear-gradient(to right, var(--primary-color) var(--fill), var(--secondary-background-color) var(--fill));
+          box-shadow: var(--neumorphism-inset-shadow, none); }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 28px; height: 28px;
+          margin-top: -9px; border: none; border-radius: 50%; box-shadow: var(--ha-box-shadow-s);
+          background: radial-gradient(circle, var(--primary-color) 0 5px, var(--card-background-color) 6px); }
+        input[type="range"]::-moz-range-track { height: 10px; border-radius: 5px; background: var(--secondary-background-color);
+          box-shadow: var(--neumorphism-inset-shadow, none); }
+        input[type="range"]::-moz-range-progress { height: 10px; border-radius: 5px; background: var(--primary-color); }
+        input[type="range"]::-moz-range-thumb { width: 28px; height: 28px; border: none; border-radius: 50%;
+          box-shadow: var(--ha-box-shadow-s);
+          background: radial-gradient(circle, var(--primary-color) 0 5px, var(--card-background-color) 6px); }
         .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; }
         button.reset { border: none; background: var(--card-background-color); color: var(--primary-color);
           border-radius: 999px; padding: 9px 18px; font: inherit; font-size: 0.9rem; cursor: pointer;
@@ -281,6 +314,11 @@ class NeumorphismColorPicker extends HTMLElement {
           </div>`
         ).join("")}
       </div>
+      <div class="strength">
+        <div class="strength-head"><span class="label s-label"></span><span class="value s-value"></span></div>
+        <input type="range" min="0" max="${STRENGTH_MAX * 100}" step="5">
+        <div class="hint s-hint"></div>
+      </div>
       <div class="footer">
         <span class="info per-user"></span>
         <button class="reset"></button>
@@ -299,15 +337,23 @@ class NeumorphismColorPicker extends HTMLElement {
         dot.addEventListener("click", () => this._save({ [row.setting]: dot.dataset.color }));
       }
     }
+    const range = root.querySelector('input[type="range"]');
+    range.addEventListener("input", () => {
+      preview.strength = Number(range.value) / 100;
+      applyColors();
+      this._update();
+    });
+    range.addEventListener("change", () => this._save({ neumorphismStrength: Number(range.value) / 100 }));
     root.querySelector(".reset").addEventListener("click", () =>
-      this._save({ primaryColor: undefined, accentColor: undefined })
+      this._save({ primaryColor: undefined, accentColor: undefined, neumorphismStrength: undefined })
     );
   }
 
   _save(patch) {
-    saveColors(patch);
+    saveSettings(patch);
     preview.primary = "";
     preview.accent = "";
+    preview.strength = null;
     applyColors();
     this._render();
   }
@@ -316,7 +362,7 @@ class NeumorphismColorPicker extends HTMLElement {
     const root = this.shadowRoot;
     const t = texts(this._hass);
     const active = neumorphismActive();
-    const stored = storedColors(this._hass);
+    const stored = storedSettings(this._hass);
     this.toggleAttribute("inactive", !active);
 
     root.querySelector(".headline").textContent = t.colors;
@@ -326,7 +372,17 @@ class NeumorphismColorPicker extends HTMLElement {
     root.querySelector(".per-user").textContent = t.perUser;
     const reset = root.querySelector(".reset");
     reset.textContent = t.reset;
-    reset.hidden = !stored.primary && !stored.accent;
+    reset.hidden = !stored.primary && !stored.accent && stored.strength === null;
+
+    const strength = preview.strength ?? stored.strength ?? 1;
+    const range = root.querySelector('input[type="range"]');
+    if (root.activeElement !== range) range.value = String(Math.round(strength * 100));
+    range.style.setProperty("--fill", `${(Number(range.value) / (STRENGTH_MAX * 100)) * 100}%`);
+    range.setAttribute("aria-label", t.strength);
+    root.querySelector(".s-label").textContent = t.strength;
+    root.querySelector(".s-hint").textContent = t.strengthHint;
+    root.querySelector(".s-value").textContent =
+      strength === 0 ? `0 % (${t.flat})` : `${Math.round(strength * 100)} %`;
 
     const css = getComputedStyle(document.documentElement);
     for (const row of ROWS) {
@@ -438,7 +494,7 @@ if (!customElements.get(PICKER_TAG)) {
   window.customCards.push({
     type: "neumorphism-color-card",
     name: "Neumorphism Farben",
-    description: "Primär- und Akzentfarbe des Neumorphism-Themes per Farbwähler einstellen.",
+    description: "Primär- und Akzentfarbe und Effektstärke des Neumorphism-Themes einstellen.",
     preview: true,
   });
 

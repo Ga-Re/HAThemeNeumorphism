@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Neumorphism",
-        "description": "Stellt die Neumorphism-Themes bereit und zeigt im Profil unter „Design“ Farbwähler für Primär- und Akzentfarbe. Danach im Profil das Theme „Neumorphism“ wählen."
+        "description": "Stellt das Theme „Neumorphism“ bereit und zeigt im Profil unter „Design“ Farbwähler für Primär- und Akzentfarbe sowie einen Regler für die Effektstärke. Danach im Profil das Theme „Neumorphism“ wählen."
       }
     },
     "abort": {

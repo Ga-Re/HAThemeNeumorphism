@@ -1,7 +1,7 @@
-"""Neumorphism-Theme mit Farbwählern für Home Assistant.
+"""Neumorphism-Theme mit Farbwählern und Effektstärke für Home Assistant.
 
 Die Integration
-- registriert die Themes aus theme/neumorphism.yaml direkt im Frontend
+- registriert das Theme aus theme/neumorphism.yaml direkt im Frontend
   (kein Eintrag `frontend: themes:` in der configuration.yaml nötig),
 - liefert www/neumorphism-colors.js aus und lädt es auf jeder Seite
   (kein `extra_module_url` nötig).

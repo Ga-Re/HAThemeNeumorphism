@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Neumorphism",
-        "description": "Provides the Neumorphism themes and adds primary and accent color pickers to the Theme section of your profile. Afterwards select the theme “Neumorphism” in your profile."
+        "description": "Provides the theme “Neumorphism” and adds primary and accent color pickers and an effect strength slider to the Theme section of your profile. Afterwards select the theme “Neumorphism” in your profile."
       }
     },
     "abort": {

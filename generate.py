@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""Generator für das Neumorphism-Theme für Home Assistant.
+"""Erzeugt die Theme-Datei der Neumorphism-Integration.
 
-Erzeugt eine Theme-Datei mit Hell- und Dunkelmodus. Primär- und Akzentfarbe
-sind frei wählbar: entweder aus der Farbliste (Name) oder als Hex-Wert.
+Schreibt custom_components/neumorphism/theme/neumorphism.yaml aus den Werten
+weiter unten (MODES, Radien, Standardfarben). Nach einer Änderung hier:
 
-Beispiele:
-  python3 generate.py                               # Standard-Auswahl ("Neumorphism" + ein Theme pro Primärfarbe)
-  python3 generate.py --combo Blau:Orange           # genau eine Kombination
-  python3 generate.py --combo "#3d7bfd:#ff8a3d"     # eigene Hex-Farben
-  python3 generate.py --combo "Mein Theme=#3d7bfd:Grün"
-  python3 generate.py --all                         # alle Kombinationen der Farbliste
-  python3 generate.py --list                        # Farbliste anzeigen
+  python3 generate.py
 
 Kein Zusatzpaket nötig, es reicht Python 3.8+.
 """
@@ -19,41 +13,16 @@ from __future__ import annotations
 
 import argparse
 import math
-import re
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_OUTPUT = HERE / "custom_components" / "neumorphism" / "theme" / "neumorphism.yaml"
-THEME_PREFIX = "Neumorphism"
+THEME_NAME = "Neumorphism"
 
-# Farbliste: Name -> Hex. Die Namen erscheinen im Theme-Namen und in der Farbauswahl.
-COLORS = {
-    "Blau": "#3d7bfd",
-    "Indigo": "#5c6bc0",
-    "Violett": "#8e6cf0",
-    "Rosa": "#e5609a",
-    "Rot": "#e5534b",
-    "Orange": "#ff8a3d",
-    "Bernstein": "#f2a922",
-    "Grün": "#2fb67c",
-    "Türkis": "#14a7a0",
-    "Graphit": "#5f7389",
-}
-
-# Standard-Auswahl: eine passende Akzentfarbe pro Primärfarbe.
-DEFAULT_COMBOS = [
-    ("Blau", "Orange"),
-    ("Indigo", "Bernstein"),
-    ("Violett", "Türkis"),
-    ("Rosa", "Violett"),
-    ("Rot", "Bernstein"),
-    ("Orange", "Blau"),
-    ("Bernstein", "Indigo"),
-    ("Grün", "Rosa"),
-    ("Türkis", "Orange"),
-    ("Graphit", "Türkis"),
-]
+# Standardfarben, solange im Profil keine eigenen gewählt sind.
+DEFAULT_PRIMARY = "#3d7bfd"
+DEFAULT_ACCENT = "#ff8a3d"
 
 # Grundflächen und Schatten pro Modus, angelehnt an klassisches Soft UI:
 # Karten liegen eine Spur heller als der Hintergrund und heben sich über einen
@@ -92,13 +61,9 @@ MODES = {
     },
 }
 
-# Effektstärke: (Faktor für Schattenabstand/-weichheit, Faktor für Deckkraft)
-INTENSITY = {
-    "dezent": (0.65, 0.7),
-    "normal": (1.0, 1.0),
-    "stark": (1.3, 1.25),
-}
-DEFAULT_INTENSITY = "normal"
+# Effektstärke: Alle Schatten werden mit dieser Variable multipliziert (Abstand,
+# Weichheit und Deckkraft). Den Wert setzt der Regler im Profil, Standard ist 1.
+STRENGTH = "var(--neumorphism-strength, 1)"
 
 CARD_RADIUS = "28px"
 DIALOG_RADIUS = "32px"
@@ -181,14 +146,16 @@ def text_on(value: str) -> str:
 # Theme-Aufbau
 # --------------------------------------------------------------------------
 
-def mode_vars(m: dict, intensity: str = DEFAULT_INTENSITY) -> list[tuple[str, str]]:
-    size, strength = INTENSITY[intensity]
-    rgba = lambda c: f"rgba({c[0]}, {min(1.0, c[1] * strength):.2f})"  # noqa: E731
+def mode_vars(m: dict) -> list[tuple[str, str]]:
+    rgba = lambda c: f"rgba({c[0]}, calc({c[1]} * {STRENGTH}))"  # noqa: E731
     dark, light = rgba(m["shadow_dark"]), rgba(m["shadow_light"])
+    px = lambda v: f"calc({v}px * {STRENGTH})"  # noqa: E731
 
     def shadow(d: float, b: float, inset: str = "") -> str:
-        d, b = round(d * size), round(b * size)
-        return f"{inset}{d}px {d}px {b}px {dark}, {inset}-{d}px -{d}px {b}px {light}"
+        return (
+            f"{inset}{px(d)} {px(d)} {px(b)} {dark}, "
+            f"{inset}{px(-d)} {px(-d)} {px(b)} {light}"
+        )
 
     return [
         ("# Flächen", None),
@@ -306,94 +273,29 @@ def emit_vars(lines: list[str], items, indent: int) -> None:
             lines.append(f'{pad}{key}: "{value}"')
 
 
-def build_file(themes: list[tuple[str, str, str]], intensity: str = DEFAULT_INTENSITY) -> str:
+def build_file() -> str:
     lines = [
         "# Neumorphism-Theme für Home Assistant (Hell- und Dunkelmodus)",
-        "# Erzeugt mit generate.py. Änderungen am besten dort vornehmen",
-        "# und die Datei neu erzeugen.",
-        "#",
-        "# Der Modus (hell/dunkel/automatisch) wird im Benutzerprofil eingestellt.",
-        f"# Effektstärke: {intensity}",
+        "# Erzeugt mit generate.py. Änderungen dort vornehmen und die Datei neu erzeugen.",
         "",
+        f'"{THEME_NAME}":',
     ]
-    for index, (name, primary, accent) in enumerate(themes):
-        lines.append(f'"{name}":')
-        emit_vars(lines, color_vars(primary, accent), 2)
-        if index == 0:
-            lines.append("  modes: &neumorphism_modes")
-            for mode in ("light", "dark"):
-                lines.append(f"    {mode}:")
-                emit_vars(lines, mode_vars(MODES[mode], intensity), 6)
-        else:
-            lines.append("  modes: *neumorphism_modes")
-        lines.append("")
+    emit_vars(lines, color_vars(DEFAULT_PRIMARY, DEFAULT_ACCENT), 2)
+    lines.append("  modes:")
+    for mode in ("light", "dark"):
+        lines.append(f"    {mode}:")
+        emit_vars(lines, mode_vars(MODES[mode]), 6)
+    lines.append("")
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------
-# Kommandozeile
-# --------------------------------------------------------------------------
-
-HEX_RE = re.compile(r"^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
-
-
-def resolve_color(value: str) -> tuple[str, str]:
-    """Liefert (Anzeigename, Hex) für einen Farbnamen oder Hex-Wert."""
-    value = value.strip()
-    for name, hex_value in COLORS.items():
-        if name.lower() == value.lower():
-            return name, hex_value
-    match = HEX_RE.match(value)
-    if match:
-        hex_value = rgb_to_hex(hex_to_rgb(match.group(1)))
-        return hex_value, hex_value
-    raise SystemExit(f"Unbekannte Farbe '{value}'. Erlaubt: {', '.join(COLORS)} oder #rrggbb")
-
-
-def parse_combo(spec: str) -> tuple[str, str, str]:
-    name = None
-    if "=" in spec:
-        name, spec = spec.split("=", 1)
-    if ":" not in spec:
-        raise SystemExit(f"Kombination '{spec}' muss die Form PRIMÄR:AKZENT haben")
-    primary_raw, accent_raw = spec.split(":", 1)
-    p_name, p_hex = resolve_color(primary_raw)
-    a_name, a_hex = resolve_color(accent_raw)
-    return (name.strip() if name else f"{THEME_PREFIX} {p_name} + {a_name}"), p_hex, a_hex
-
-
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Neumorphism-Theme für Home Assistant erzeugen")
-    parser.add_argument("--combo", action="append", default=[], metavar="[NAME=]PRIMÄR:AKZENT",
-                        help="Farbkombination, Farbname oder #rrggbb (mehrfach möglich)")
-    parser.add_argument("--all", action="store_true", help="alle Kombinationen der Farbliste erzeugen")
+    parser = argparse.ArgumentParser(description="Theme-Datei der Neumorphism-Integration erzeugen")
     parser.add_argument("-o", "--output", type=Path, default=DEFAULT_OUTPUT, help="Ziel-Datei")
-    parser.add_argument("--effekt", choices=list(INTENSITY), default=DEFAULT_INTENSITY,
-                        help=f"Stärke des Schatteneffekts (Standard: {DEFAULT_INTENSITY})")
-    parser.add_argument("--list", action="store_true", help="Farbliste anzeigen")
     args = parser.parse_args(argv)
-
-    if args.list:
-        for name, hex_value in COLORS.items():
-            print(f"{name:<10} {hex_value}")
-        return 0
-
-    themes: list[tuple[str, str, str]] = []
-    if args.all:
-        themes += [(f"{THEME_PREFIX} {p} + {a}", COLORS[p], COLORS[a]) for p in COLORS for a in COLORS]
-    themes += [parse_combo(c) for c in args.combo]
-    if not themes:
-        p, a = DEFAULT_COMBOS[0]
-        themes = [(THEME_PREFIX, COLORS[p], COLORS[a])]
-        themes += [(f"{THEME_PREFIX} {p} + {a}", COLORS[p], COLORS[a]) for p, a in DEFAULT_COMBOS]
-
-    seen = set()
-    themes = [t for t in themes if not (t[0] in seen or seen.add(t[0]))]
-
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(build_file(themes, args.effekt), encoding="utf-8")
-    print(f"{len(themes)} Theme(s) geschrieben: {args.output}")
-
+    args.output.write_text(build_file(), encoding="utf-8")
+    print(f"Theme geschrieben: {args.output}")
     return 0
 
 
