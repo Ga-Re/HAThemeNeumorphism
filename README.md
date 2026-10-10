@@ -4,7 +4,7 @@ Ein weiches „Soft UI“-Design für Home Assistant, bei dem alles aus einem Gu
 
 - **Hell- und Dunkelmodus**, umgeschaltet wie gewohnt im Profil (Auto / Hell / Dunkel)
 - **Geformte Bedienelemente** in Kacheln, Karten und Detailansichten: Schalter, Schieber, Modus-Auswahl, Thermostat- und Luftbefeuchter-Regler, +/–-Knöpfe, Buttons, Eingabefelder
-- **Titelleiste ohne Kante**: Der Inhalt läuft beim Scrollen weich darunter aus, nebeneinanderliegende Knöpfe verschmelzen zu einer gemeinsamen Form
+- **Titelleiste ohne Kante**: Der Inhalt läuft beim Scrollen weich darunter aus, nebeneinanderliegende Knöpfe laufen wie zwei Tropfen zusammen
 - **Primär- und Akzentfarbe** per Farbwähler direkt im Profil
 - **Effektstärke** per Regler, von flach bis kräftig
 - Einstellungen werden **pro Benutzer** gespeichert und gelten auf allen Geräten

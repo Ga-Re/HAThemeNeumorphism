@@ -15,7 +15,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.3.0";
+const VERSION = "3.4.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -205,8 +205,8 @@ const INSET = "var(--neumorphism-inset-shadow)";
 const INSET_S = "var(--neumorphism-inset-shadow-s)";
 const SURFACE = "var(--card-background-color)";
 const STRENGTH = "var(--neumorphism-strength, 1)";
-// Mehrere Knöpfe teilen sich eine erhabene Form.
-const PILL = `border-radius: 999px; box-shadow: ${RAISED};`;
+// Knopfgruppen liegen über ihrer Tropfenform (siehe updateDroplets).
+const GROUP = "position: relative; z-index: 1;";
 // Statt einer Kante läuft der Inhalt unter der Titelleiste weich aus.
 const HEADER_BG = "var(--app-header-background-color, var(--primary-background-color))";
 const HEADER_FADE = `content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 32px;
@@ -273,36 +273,33 @@ const CONTROL_STYLES = {
   "ha-icon-button": `
     ha-button { --ha-button-box-shadow: none; }
   `,
-  // Menü- und Zurück-Knopf: einzelne erhabene Kreise
-  "ha-menu-button": `
-    :host { border-radius: 50%; box-shadow: ${RAISED}; }
-  `,
-  "ha-icon-button-arrow-prev": `
-    :host { border-radius: 50%; box-shadow: ${RAISED}; }
-  `,
   // Titelleisten: keine Linie, kein Schatten, Knöpfe rechts als gemeinsame Pille
   "hui-root": `
     .header { box-shadow: none !important; }
     .header::after { ${HEADER_FADE} }
-    .toolbar { border-bottom: none !important; }
-    .action-items:has(> :not([hidden])) { ${PILL} }
+    .toolbar { border-bottom: none !important; position: relative; }
+    .action-items, .toolbar > ha-menu-button, .toolbar > ha-icon-button-arrow-prev { ${GROUP} }
   `,
   "ha-top-app-bar-fixed": `
     .row, .sub-row { border-bottom: none !important; }
     .top-app-bar, .top-app-bar.scrolled:not(.pane-header) { box-shadow: none !important; }
     .top-app-bar::after { ${HEADER_FADE} }
-    #actions slot[name="actionItems"] { display: flex; align-items: center; ${PILL} }
+    #actions, #navigation { position: relative; }
+    #actions slot[name="actionItems"], slot[name="navigationIcon"] { display: flex; align-items: center; ${GROUP} }
   `,
   "hass-subpage": `
     .toolbar { position: relative; z-index: 2; }
     .toolbar::after { ${HEADER_FADE} }
-    .toolbar-content { border-bottom: none !important; }
-    slot[name="toolbar-icon"] { display: flex; align-items: center; ${PILL} }
+    .toolbar-content { border-bottom: none !important; position: relative; }
+    slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
+    .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${GROUP} }
   `,
   "hass-tabs-subpage": `
     .toolbar { border-bottom: none !important; position: relative; z-index: 2; }
     .toolbar::after { ${HEADER_FADE} }
-    #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${PILL} }
+    .toolbar-content, #toolbar-icon { position: relative; }
+    #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
+    .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${GROUP} }
   `,
   // Gewählter Eintrag in der Seitenleiste: eingelassen
   "ha-sidebar": `
@@ -371,13 +368,199 @@ function patchControls() {
         proto.createRenderRoot = function () {
           const root = original.call(this);
           adoptControlStyle(root, tag);
+          if (DROPLET_GROUPS[tag]) dropletHosts.add(this);
           return root;
         };
         proto.__neumorphismPatched = true;
       }
-      for (const el of findAllDeep(tag)) adoptControlStyle(el.shadowRoot, tag);
+      for (const el of findAllDeep(tag)) {
+        adoptControlStyle(el.shadowRoot, tag);
+        if (DROPLET_GROUPS[tag]) dropletHosts.add(el);
+      }
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Knopfgruppen in der Titelleiste: wie zusammenlaufende Tropfen
+// ---------------------------------------------------------------------------
+
+// Wo in den Titelleisten Knöpfe liegen: rechts die Aktionen, links Menü oder Zurück.
+const slotGroup = (slot) => slot && { anchor: slot, elements: slot.assignedElements({ flatten: true }) };
+const childGroup = (el) => el && { anchor: el, elements: [...el.children] };
+const singleGroup = (el) => el && { anchor: el, elements: [el] };
+const NAV_BUTTON = ":scope > ha-menu-button, :scope > ha-icon-button-arrow-prev";
+const DROPLET_GROUPS = {
+  "hui-root": [
+    (root) => !root.querySelector(".edit-mode") && childGroup(root.querySelector(".toolbar .action-items")),
+    (root) => !root.querySelector(".edit-mode") && singleGroup(root.querySelector(".toolbar")?.querySelector(NAV_BUTTON)),
+  ],
+  "ha-top-app-bar-fixed": [
+    (root) => slotGroup(root.querySelector('#actions slot[name="actionItems"]')),
+    (root) => slotGroup(root.querySelector('#navigation slot[name="navigationIcon"]')),
+  ],
+  "hass-subpage": [
+    (root) => slotGroup(root.querySelector('slot[name="toolbar-icon"]')),
+    (root) => singleGroup(root.querySelector(".toolbar-content")?.querySelector(NAV_BUTTON)),
+  ],
+  "hass-tabs-subpage": [
+    (root) => slotGroup(root.querySelector('#toolbar-icon slot[name="toolbar-icon"]')),
+    (root) => singleGroup(root.querySelector(".toolbar-content")?.querySelector(NAV_BUTTON)),
+  ],
+};
+const DROPLET_MARGIN = 24; // Platz für die Schatten rund um die Form
+const DROPLET_INSET = 4; // Kreise etwas kleiner als die Knopffläche
+const DROPLET_NECK = 0.5; // halbe Halsbreite im Verhältnis zum Radius
+const dropletHosts = new Set();
+let dropletProbe = null;
+
+/** Sichtbare Fläche eines Elements; Hüllen mit display: contents (z. B. Menüs) über ihren Auslöser. */
+function itemRects(el) {
+  if (el.hidden || el.classList.contains("neumorphism-droplet")) return [];
+  if (getComputedStyle(el).display !== "contents") {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 ? [rect] : [];
+  }
+  // Nur Auslöser berücksichtigen, keine (geöffneten) Menüeinträge
+  return [...el.children]
+    .filter((child) => [null, "trigger"].includes(child.getAttribute("slot")) && !/item$/.test(child.localName))
+    .flatMap(itemRects)
+    .slice(0, 1);
+}
+
+function groupItems(group) {
+  return group.elements.flatMap(itemRects).sort((a, b) => a.left - b.left);
+}
+
+/** Farben und Stärke aus dem Theme, aufgelöst über ein unsichtbares Element. */
+function dropletPaint() {
+  if (!dropletProbe) {
+    dropletProbe = document.createElement("div");
+    dropletProbe.style.cssText =
+      "position:absolute;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;" +
+      "color:var(--neumorphism-shadow-dark);background-color:var(--neumorphism-shadow-light);" +
+      "border:0 solid var(--card-background-color);";
+    document.body.appendChild(dropletProbe);
+  }
+  const css = getComputedStyle(dropletProbe);
+  const strength = clampStrength(getComputedStyle(document.documentElement).getPropertyValue("--neumorphism-strength").trim() || 1) ?? 1;
+  return { dark: css.color, light: css.backgroundColor, fill: css.borderTopColor, strength };
+}
+
+const fmt = (n) => (Math.round(n * 100) / 100).toString();
+
+/** Kreis als Pfad im Uhrzeigersinn (für eine gemeinsame Füllung ohne Nähte). */
+const circlePath = (cx, cy, r) =>
+  `M${fmt(cx - r)} ${fmt(cy)}A${fmt(r)} ${fmt(r)} 0 1 1 ${fmt(cx + r)} ${fmt(cy)}A${fmt(r)} ${fmt(r)} 0 1 1 ${fmt(cx - r)} ${fmt(cy)}Z`;
+
+/** Eingeschnürte Brücke zwischen zwei Kreisen: Hohlkehlen tangential an beide Kreise. */
+function bridgePath(x1, x2, cy, r) {
+  const a = (x2 - x1) / 2;
+  const h = DROPLET_NECK * r;
+  if (a <= 0 || a > 2 * r) return "";
+  const R = (a * a + h * h - r * r) / (2 * (r - h));
+  if (!(R > 0)) return "";
+  const m = x1 + a;
+  const yR = h + R;
+  const touch = (cx, fy) => {
+    const len = Math.hypot(m - cx, fy);
+    return [cx + (r * (m - cx)) / len, cy + (r * fy) / len];
+  };
+  const [t1x, t1y] = touch(x1, -yR);
+  const [t2x, t2y] = touch(x2, -yR);
+  const [b2x, b2y] = touch(x2, yR);
+  const [b1x, b1y] = touch(x1, yR);
+  return (
+    `M${fmt(t1x)} ${fmt(t1y)}A${fmt(R)} ${fmt(R)} 0 0 0 ${fmt(t2x)} ${fmt(t2y)}` +
+    `L${fmt(b2x)} ${fmt(b2y)}A${fmt(R)} ${fmt(R)} 0 0 0 ${fmt(b1x)} ${fmt(b1y)}Z`
+  );
+}
+
+const rgbaParts = (color) => {
+  const m = color.match(/rgba?\(([^)]+)\)/);
+  if (!m) return ["rgb(0,0,0)", 0];
+  const [r, g, b, a = "1"] = m[1].split(",").map((v) => v.trim());
+  return [`rgb(${r},${g},${b})`, Number(a)];
+};
+
+function dropletSvg(width, height, shapes, paint) {
+  const s = paint.strength;
+  const [dark, darkA] = rgbaParts(paint.dark);
+  const [light, lightA] = rgbaParts(paint.light);
+  const d = shapes.join("");
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+    `<defs><filter id="s" x="-50%" y="-50%" width="200%" height="200%">` +
+    `<feGaussianBlur in="SourceAlpha" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
+    `<feOffset in="b" dx="${fmt(4 * s)}" dy="${fmt(4 * s)}" result="o1"/>` +
+    `<feFlood flood-color="${dark}" flood-opacity="${darkA}"/><feComposite in2="o1" operator="in" result="d"/>` +
+    `<feOffset in="b" dx="${fmt(-4 * s)}" dy="${fmt(-4 * s)}" result="o2"/>` +
+    `<feFlood flood-color="${light}" flood-opacity="${lightA}"/><feComposite in2="o2" operator="in" result="l"/>` +
+    `<feMerge><feMergeNode in="d"/><feMergeNode in="l"/><feMergeNode in="SourceGraphic"/></feMerge>` +
+    `</filter></defs><path filter="url(#s)" fill="${paint.fill}" d="${d}"/></svg>`
+  );
+}
+
+/** Zeichnet hinter jeder Knopfgruppe eine Form: Kreise, verbunden wie zwei Tropfen. */
+function updateDroplets() {
+  // Home Assistant hängt Seiten beim Zurückkehren wieder ein, deshalb nicht verworfen.
+  if (dropletHosts.size > 50) for (const host of dropletHosts) if (!host.isConnected) dropletHosts.delete(host);
+  for (const host of dropletHosts) {
+    const root = host.shadowRoot;
+    if (!host.isConnected || !root) continue;
+    DROPLET_GROUPS[host.localName].forEach((find, index) => {
+      const existing = root.querySelector(`.neumorphism-droplet[data-group="${index}"]`);
+      const group = controlsActive ? find(root) : null;
+      const items = group ? groupItems(group) : [];
+      const parent = group?.anchor.parentElement;
+      if (!items.length || !parent) {
+        existing?.remove();
+        return;
+      }
+      drawDroplet(existing, parent, group.anchor, items, index);
+    });
+  }
+}
+
+function drawDroplet(existing, parent, anchor, items, index) {
+  const box = parent.getBoundingClientRect();
+  const circles = items.map((r) => ({
+    cx: r.left + r.width / 2 - box.left,
+    cy: r.top + r.height / 2 - box.top,
+    r: Math.min(r.width, r.height) / 2 - DROPLET_INSET,
+  }));
+  const left = Math.min(...circles.map((c) => c.cx - c.r)) - DROPLET_MARGIN;
+  const top = Math.min(...circles.map((c) => c.cy - c.r)) - DROPLET_MARGIN;
+  const width = Math.max(...circles.map((c) => c.cx + c.r)) + DROPLET_MARGIN - left;
+  const height = Math.max(...circles.map((c) => c.cy + c.r)) + DROPLET_MARGIN - top;
+  const local = circles.map((c) => ({ ...c, cx: c.cx - left, cy: c.cy - top }));
+  const shapes = local.map((c) => circlePath(c.cx, c.cy, c.r));
+  for (let i = 1; i < local.length; i++) {
+    const a = local[i - 1];
+    const b = local[i];
+    shapes.push(bridgePath(a.cx, b.cx, (a.cy + b.cy) / 2, Math.min(a.r, b.r)));
+  }
+  const paint = dropletPaint();
+  const key = `${fmt(left)}|${fmt(top)}|${shapes.join("")}|${paint.dark}|${paint.light}|${paint.fill}|${paint.strength}`;
+
+  let droplet = existing;
+  if (!droplet) {
+    droplet = document.createElement("div");
+    droplet.className = "neumorphism-droplet";
+    droplet.dataset.group = String(index);
+    droplet.setAttribute("aria-hidden", "true");
+    droplet.style.cssText = "position:absolute;pointer-events:none;z-index:0;background-repeat:no-repeat;background-size:100% 100%;";
+  }
+  if (droplet.parentElement !== parent || droplet.nextSibling !== anchor) parent.insertBefore(droplet, anchor);
+  if (droplet.dataset.key === key) return;
+  droplet.dataset.key = key;
+  Object.assign(droplet.style, {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+    height: `${height}px`,
+    backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(dropletSvg(width, height, shapes, paint))}")`,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -691,7 +874,9 @@ if (!customElements.get(PICKER_TAG)) {
   const tick = () => {
     applyColors();
     injectIntoProfile();
+    updateDroplets();
   };
+  window.addEventListener("resize", () => requestAnimationFrame(updateDroplets));
   // Theme- oder Moduswechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.
   new MutationObserver(tick).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
   window.addEventListener("location-changed", () => setTimeout(tick, 100));
