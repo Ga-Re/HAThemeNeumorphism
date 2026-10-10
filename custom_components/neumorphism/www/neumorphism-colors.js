@@ -1,21 +1,23 @@
 /*
- * Neumorphism für Home Assistant: Farbwähler und Effektstärke
+ * Neumorphism für Home Assistant: Farbwähler, Effektstärke und Formung
  *
- * - Zeigt im Profil unter "Design" Farbwähler für Primär- und Akzentfarbe und
- *   einen Regler für die Effektstärke, sobald das Theme "Neumorphism" gewählt ist.
+ * - Zeigt im Profil unter "Design" Farbwähler für Primär- und Akzentfarbe, einen
+ *   Regler für die Effektstärke und die Schalter für eigene Karten und Add-ons,
+ *   sobald das Theme "Neumorphism" gewählt ist.
  * - Stellt die Karte "custom:neumorphism-color-card" bereit (gleiche Einstellungen).
  * - Wendet die Einstellungen auf das aktive Theme an.
- * - Formt die Bedienelemente von Home Assistant (Schalter, Schieber, Knöpfe,
- *   Eingabefelder ...) erhaben oder eingelassen, damit alles aus einem Guss wirkt.
+ * - Formt die Bausteine von Home Assistant (Schalter, Schieber, Knöpfe, Reiter,
+ *   Eingabefelder, Tabellen ...) erhaben oder eingelassen, damit alles aus einem Guss wirkt,
+ *   ebenso eigene Karten, HACS und die Oberflächen von Add-ons.
  *
  * Gespeichert wird in den Theme-Einstellungen des Benutzers (primaryColor,
- * accentColor, neumorphismStrength), dort wo Home Assistant auch die Farben
- * des Standard-Themes ablegt.
+ * accentColor, neumorphismStrength, neumorphismCards, neumorphismApps,
+ * neumorphismAppsOff), dort wo Home Assistant auch die Farben des Standard-Themes ablegt.
  *
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "4.0.0";
+const VERSION = "5.0.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -154,6 +156,16 @@ function colorVars(primary, accent) {
 // Farben lesen, speichern, anwenden
 // ---------------------------------------------------------------------------
 
+// Jeder Schritt für sich: Ein Fehler in einem Teil soll die anderen nicht aufhalten.
+function safely(fn) {
+  try {
+    return fn();
+  } catch (err) {
+    console.warn("Neumorphism:", err);
+    return undefined;
+  }
+}
+
 const normalize = (value) => (typeof value === "string" && HEX_RE.test(value.trim()) ? value.trim().toLowerCase() : "");
 const getRoot = () => document.querySelector("home-assistant");
 const getHass = () => getRoot()?.hass;
@@ -171,6 +183,9 @@ function storedSettings(hass = getHass()) {
     strength: theme.neumorphismStrength == null ? null : clampStrength(theme.neumorphismStrength),
     cards: ["full", "frame", "off"].includes(theme.neumorphismCards) ? theme.neumorphismCards : "full",
     cardsStored: theme.neumorphismCards != null,
+    apps: theme.neumorphismApps === "off" ? "off" : "full",
+    appsOff: Array.isArray(theme.neumorphismAppsOff) ? theme.neumorphismAppsOff.filter((v) => typeof v === "string") : [],
+    appsStored: theme.neumorphismApps != null || theme.neumorphismAppsOff != null,
   };
 }
 
@@ -182,6 +197,7 @@ function saveSettings(patch) {
 // Vorschau beim Ziehen, bevor der Wert gespeichert ist.
 const preview = { primary: "", accent: "", strength: null };
 let applied = null;
+let colorCss = ""; // eigene Farben und Effektstärke, auch für eingebettete Seiten
 
 function neumorphismActive() {
   return getComputedStyle(document.documentElement).getPropertyValue(MARKER_VAR).trim() !== "";
@@ -211,6 +227,7 @@ function applyColors() {
   const body = Object.entries(vars)
     .map(([name, value]) => `--${name}: ${value} !important;`)
     .join(" ");
+  colorCss = body;
   style.textContent = body ? `html { ${body} }` : "";
 }
 
@@ -224,6 +241,7 @@ const RAISED_L = "var(--neumorphism-raised-shadow-l)";
 const INSET = "var(--neumorphism-inset-shadow)";
 const INSET_S = "var(--neumorphism-inset-shadow-s)";
 const SURFACE = "var(--card-background-color)";
+const PILL = "var(--ha-border-radius-pill, 999px)";
 const STRENGTH = "var(--neumorphism-strength, 1)";
 // Knopfgruppen liegen über ihrer Tropfenform (siehe updateDroplets).
 const GROUP = "position: relative; z-index: 1;";
@@ -291,9 +309,16 @@ const CONTROL_STYLES = {
   `,
   // Hülle jeder Dashboard-Karte; dient nur dazu, eigene Karten zu finden
   "hui-card": "",
+  // Seiten in eingebetteten Fenstern (HACS, Add-ons, Webseiten); nur zum Finden
+  "ha-panel-custom": "",
+  "ha-panel-app": "",
+  "ha-panel-iframe": "",
+  "hui-iframe-card": "",
   // Symbol-Knöpfe sind flach, erhaben werden sie erst als Gruppe in der Titelleiste
   // Buttons, die mit Nachbarn eine gemeinsame Form haben (siehe updateButtonGroups)
   "ha-button": `
+    :host([appearance="outlined"]) .button { border-color: transparent !important; background-color: ${SURFACE}; }
+    :host([slot="fab"]) .button { box-shadow: ${RAISED_L} !important; }
     :host([neumorphism-merged]) { position: relative; z-index: 1; }
     :host([neumorphism-merged]) .button { box-shadow: none !important; }
   `,
@@ -329,6 +354,58 @@ const CONTROL_STYLES = {
     #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
     .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${GROUP} }
   `,
+  // --- Seiten von Home Assistant: Einstellungen, Werkzeuge, Listen, Kalender ...
+  // Reiter: der gewählte als erhabene Pille statt Unterstrich
+  "ha-tab": `
+    div { isolation: isolate; }
+    :host(:not([narrow])[active]) div { border-bottom: none !important; }
+    :host([active]) div::after { content: ""; position: absolute; inset: 8px 10px; z-index: -1;
+      border-radius: ${PILL}; background: ${SURFACE}; box-shadow: ${RAISED}; }
+    :host([narrow][active]) div::after { inset: 6px 4px; border-radius: 18px; }
+  `,
+  "ha-tab-group": `
+    :host { --track-color: transparent !important; --indicator-color: transparent !important; }
+    .indicator { display: none !important; }
+  `,
+  "ha-tab-group-tab": `
+    .tab { border-radius: ${PILL}; margin: 10px 4px; }
+    :host([active]) .tab { background: ${SURFACE}; box-shadow: ${RAISED}; }
+  `,
+  // Filter- und Auswahl-Chips: erhaben statt umrandet
+  "ha-assist-chip": `
+    :host([appearance="outlined"]) .button { border-color: transparent !important; background-color: ${SURFACE}; box-shadow: ${RAISED}; }
+    /* ältere Fassung (z. B. in HACS) */
+    .container:has(> .outline) { background: ${SURFACE}; box-shadow: ${RAISED}; }
+    .outline { border-color: transparent !important; }
+  `,
+  // Aufklappbare Abschnitte mit Rahmen: erhaben statt umrandet
+  "ha-expansion-panel": `
+    :host([outlined]) { border-color: transparent !important; background: ${SURFACE}; box-shadow: ${RAISED}; }
+    .top.focused { background: transparent; }
+  `,
+  // Ältere umrandete Eingabefelder (z. B. die Suche in HACS): eingelassen
+  "ha-outlined-field": `
+    .field:not(.focused):not(.error) .outline { opacity: 0; }
+    .container-overflow { box-shadow: ${INSET_S}; }
+  `,
+  // Code-Editor: eingelassen
+  "ha-code-editor": `
+    .cm-editor { border-radius: var(--ha-border-radius-lg, 12px) !important; box-shadow: ${INSET}; overflow: hidden; }
+    .cm-gutters, .code-editor-toolbar { background: transparent !important; }
+    :host(.hasToolbar) .cm-content { border-top-color: var(--divider-color) !important; }
+  `,
+  // Tabellen: Zeilen flach, ausgewählte Zeilen eingelassen
+  "ha-data-table": `
+    .mdc-data-table__row--selected { background: transparent !important; box-shadow: ${INSET_S}; }
+  `,
+  // Gewählter Eintrag in Listen und Menüs (To-do-Listen, Sortierung ...): eingelassen
+  "ha-dropdown-item": `
+    :host([selected]) { background-color: transparent !important; box-shadow: ${INSET_S}; }
+  `,
+  "ha-list-item": `
+    :host([activated]) { background: transparent !important; box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-md, 8px); }
+    :host([activated]) .fake-activated-ripple::before { opacity: 0 !important; }
+  `,
   // Gewählter Eintrag in der Seitenleiste: eingelassen
   "ha-sidebar": `
     ha-list-item-button.selected { box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-md); }
@@ -340,22 +417,29 @@ const supportsSheets =
   typeof CSSStyleSheet !== "undefined" &&
   "replaceSync" in CSSStyleSheet.prototype &&
   "adoptedStyleSheets" in Document.prototype;
-const controlSheets = new Map();
+// Stylesheets lassen sich nur im eigenen Dokument verwenden, deshalb je Dokument
+// (Hauptfenster, HACS, Add-ons ...) ein eigener Satz.
+const sheetSets = new Map(); // Dokument -> Map(Tag -> Stylesheet)
 let controlsActive = false;
 
-function controlSheet(tag) {
-  let sheet = controlSheets.get(tag);
+function controlSheet(tag, doc = document) {
+  let sheets = sheetSets.get(doc);
+  if (!sheets) {
+    sheets = new Map();
+    sheetSets.set(doc, sheets);
+  }
+  let sheet = sheets.get(tag);
   if (!sheet) {
-    sheet = new CSSStyleSheet();
+    sheet = new doc.defaultView.CSSStyleSheet();
     sheet.replaceSync(controlsActive ? CONTROL_STYLES[tag] : "");
-    controlSheets.set(tag, sheet);
+    sheets.set(tag, sheet);
   }
   return sheet;
 }
 
 function adoptControlStyle(root, tag) {
-  if (!root || !root.adoptedStyleSheets) return;
-  const sheet = controlSheet(tag);
+  if (!root || !root.adoptedStyleSheets || !root.ownerDocument?.defaultView) return;
+  const sheet = controlSheet(tag, root.ownerDocument);
   if (!root.adoptedStyleSheets.includes(sheet)) {
     root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
   }
@@ -365,12 +449,18 @@ function adoptControlStyle(root, tag) {
 function setControlsActive(active) {
   if (active === controlsActive) return;
   controlsActive = active;
-  for (const [tag, sheet] of controlSheets) sheet.replaceSync(active ? CONTROL_STYLES[tag] : "");
+  for (const [doc, sheets] of sheetSets) {
+    if (doc !== document && !doc.defaultView) {
+      sheetSets.delete(doc); // Fenster geschlossen
+      continue;
+    }
+    for (const [tag, sheet] of sheets) sheet.replaceSync(active ? CONTROL_STYLES[tag] : "");
+  }
 }
 
-function findAllDeep(selector) {
+function findAllDeep(selector, doc = document) {
   const found = [];
-  const stack = [document];
+  const stack = [doc];
   while (stack.length) {
     const node = stack.pop();
     found.push(...node.querySelectorAll(selector));
@@ -381,33 +471,40 @@ function findAllDeep(selector) {
   return found;
 }
 
+/** Merkt sich Elemente, die später noch bearbeitet werden (Tropfen, Karten, eingebettete Seiten). */
+function trackHost(el, tag) {
+  if (DROPLET_GROUPS[tag]) dropletHosts.set(el, tag);
+  if (tag === "ha-button") buttonHosts.add(el);
+  if (tag === "hui-card") cardHosts.add(el);
+  if (FRAME_HOSTS.includes(tag)) frameHosts.add(el);
+}
+
 /**
  * Hängt das Stylesheet an alle vorhandenen und künftigen Exemplare eines Elements.
  * Lifecycle-Callbacks liest der Browser nur bei der Registrierung, deshalb wird
  * createRenderRoot erweitert: Lit ruft es für jedes neue Exemplar auf.
+ * Gilt für das Hauptfenster und für eingebettete Seiten mit eigenen Bausteinen (HACS).
  */
-function patchControls() {
-  if (!supportsSheets) return;
+function patchControls(win = window) {
+  if (!supportsSheets || win.__neumorphismPatched) return;
+  win.__neumorphismPatched = true;
   for (const tag of Object.keys(CONTROL_STYLES)) {
-    customElements.whenDefined(tag).then(() => {
-      const proto = customElements.get(tag).prototype;
+    if (tag.startsWith("__")) continue;
+    win.customElements.whenDefined(tag).then(() => {
+      const proto = win.customElements.get(tag).prototype;
       const original = proto.createRenderRoot;
       if (typeof original === "function" && !Object.prototype.hasOwnProperty.call(proto, "__neumorphismPatched")) {
         proto.createRenderRoot = function () {
           const root = original.call(this);
           adoptControlStyle(root, tag);
-          if (DROPLET_GROUPS[tag]) dropletHosts.add(this);
-          if (tag === "ha-button") buttonHosts.add(this);
-          if (tag === "hui-card") cardHosts.add(this);
+          trackHost(this, tag);
           return root;
         };
         proto.__neumorphismPatched = true;
       }
-      for (const el of findAllDeep(tag)) {
+      for (const el of findAllDeep(tag, win.document)) {
         adoptControlStyle(el.shadowRoot, tag);
-        if (DROPLET_GROUPS[tag]) dropletHosts.add(el);
-        if (tag === "ha-button") buttonHosts.add(el);
-        if (tag === "hui-card") cardHosts.add(el);
+        trackHost(el, tag);
       }
     });
   }
@@ -443,7 +540,7 @@ const DROPLET_GROUPS = {
 const DROPLET_MARGIN = 24; // Platz für die Schatten rund um die Form
 const DROPLET_INSET = 4; // Kreise etwas kleiner als die Knopffläche
 const DROPLET_NECK = 0.5; // halbe Halsbreite im Verhältnis zum Radius
-const dropletHosts = new Set();
+const dropletHosts = new Map(); // Element -> Tag, dessen Gruppen gelten (auch für Unterklassen)
 const buttonHosts = new Set();
 const cardHosts = new Set();
 const BUTTON_GAP = 24; // Buttons mit höchstens diesem Abstand laufen zusammen
@@ -545,11 +642,11 @@ function dropletSvg(width, height, shapes, paint) {
 /** Zeichnet hinter jeder Knopfgruppe eine Form: Kreise, verbunden wie zwei Tropfen. */
 function updateDroplets() {
   // Home Assistant hängt Seiten beim Zurückkehren wieder ein, deshalb nicht verworfen.
-  if (dropletHosts.size > 50) for (const host of dropletHosts) if (!host.isConnected) dropletHosts.delete(host);
-  for (const host of dropletHosts) {
+  if (dropletHosts.size > 50) for (const host of dropletHosts.keys()) if (!host.isConnected) dropletHosts.delete(host);
+  for (const [host, tag] of dropletHosts) {
     const root = host.shadowRoot;
     if (!host.isConnected || !root) continue;
-    DROPLET_GROUPS[host.localName].forEach((find, index) => {
+    DROPLET_GROUPS[tag].forEach((find, index) => {
       const existing = root.querySelector(`.neumorphism-droplet[data-group="${index}"]`);
       const group = (controlsActive && find(root)) || null;
       const items = group ? groupItems(group) : [];
@@ -593,7 +690,7 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
 
   let droplet = existing;
   if (!droplet) {
-    droplet = document.createElement("div");
+    droplet = parent.ownerDocument.createElement("div");
     droplet.className = "neumorphism-droplet";
     droplet.dataset.group = String(group);
     droplet.setAttribute("aria-hidden", "true");
@@ -724,6 +821,10 @@ let cardsKey = "";
 const isCardElement = (el) =>
   el.localName !== "hui-card" && el.localName.endsWith("-card") && typeof el.setConfig === "function";
 
+const NUM = "([\\d.e+-]+%?|none)";
+const OK_RE = new RegExp(`^(oklch|oklab)\\(\\s*${NUM}\\s+${NUM}\\s+${NUM}(?:\\s*\\/\\s*${NUM})?\\s*\\)`);
+const num = (v, scale = 1) => (v === undefined || v === "none" ? 0 : v.endsWith("%") ? (parseFloat(v) / 100) * scale : +v);
+
 function parseColor(value) {
   let m = value.match(/^rgba?\(([^)]+)\)/);
   if (m) {
@@ -732,6 +833,23 @@ function parseColor(value) {
   }
   m = value.match(/^color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.e-]+))?\)/);
   if (m) return { r: m[1] * 255, g: m[2] * 255, b: m[3] * 255, a: m[4] === undefined ? 1 : +m[4] };
+  // Neuere Seiten (z. B. mit Tailwind) liefern Farben in OKLCH oder OKLab
+  m = value.match(OK_RE);
+  if (m) {
+    const L = num(m[2]);
+    let C, h;
+    if (m[1] === "oklch") {
+      C = num(m[3], 0.4);
+      h = (num(m[4]) * Math.PI) / 180;
+    } else {
+      const a = num(m[3], 0.4);
+      const b = num(m[4], 0.4);
+      C = Math.hypot(a, b);
+      h = Math.atan2(b, a);
+    }
+    const [r, g, b] = oklchToLinear(L, C, h).map((c) => Math.min(1, Math.max(0, fromLinear(c))) * 255);
+    return { r, g, b, a: m[5] === undefined ? 1 : num(m[5], 1) };
+  }
   return null;
 }
 
@@ -896,6 +1014,672 @@ function updateCards() {
 }
 
 // ---------------------------------------------------------------------------
+// Eingebettete Seiten: HACS, Seiten von Integrationen, Add-ons, Webseiten
+// ---------------------------------------------------------------------------
+//
+// Eingebettete Fenster mit derselben Adresse wie Home Assistant sind erreichbar,
+// fremde Adressen sperrt der Browser. Seiten aus Home-Assistant-Bausteinen (HACS)
+// bekommen die Theme-Variablen und dieselbe Formung wie das Hauptfenster, alle
+// anderen (Add-ons) werden nach Farbe und Form eingeordnet (siehe unten).
+
+const FRAME_HOSTS = ["ha-panel-custom", "ha-panel-app", "ha-panel-iframe", "hui-iframe-card"];
+const frameHosts = new Set();
+const FRAME_STYLE_ID = "neumorphism-theme";
+
+function frameDocument(iframe) {
+  try {
+    return iframe.contentDocument; // bei fremder Adresse null oder Fehler
+  } catch {
+    return null;
+  }
+}
+
+function setFrameStyle(doc, css) {
+  let style = doc.getElementById(FRAME_STYLE_ID);
+  if (!style) {
+    if (!css) return;
+    style = doc.createElement("style");
+    style.id = FRAME_STYLE_ID;
+  }
+  // Als letztes Stylesheet, damit es gleichrangige Regeln der Seite schlägt
+  if (doc.head.lastElementChild !== style) doc.head.appendChild(style);
+  if (style.textContent !== css) style.textContent = css;
+}
+
+/** Seiten aus Home-Assistant-Bausteinen: alle Theme-Variablen, eigene Farben mit Vorrang. */
+function haFrameCss() {
+  if (!controlsActive) return "";
+  const style = document.documentElement.style;
+  const vars = [];
+  for (let i = 0; i < style.length; i++) {
+    if (style[i].startsWith("--")) vars.push(`${style[i]}: ${style.getPropertyValue(style[i])};`);
+  }
+  return `:root { ${vars.join(" ")} }\n:root, body { ${colorCss} }`;
+}
+
+/** Add-on hinter einem eingebetteten Fenster (für Ausnahmen in den Einstellungen). */
+function frameApp(host) {
+  return host.localName === "ha-panel-app" ? host._addon?.slug || host.panel?.config?.addon || "" : "";
+}
+
+function updateFrames() {
+  if (frameHosts.size > 50) for (const host of frameHosts) if (!host.isConnected) frameHosts.delete(host);
+  const haCss = haFrameCss();
+  const foreignCss = controlsActive ? foreignVarsCss() : "";
+  for (const host of frameHosts) {
+    if (!host.isConnected) continue;
+    const iframes = [...host.querySelectorAll("iframe"), ...(host.shadowRoot?.querySelectorAll("iframe") || [])];
+    for (const iframe of iframes) updateFrame(iframe, host, haCss, foreignCss);
+  }
+  for (const [doc, state] of foreignDocs) if (!doc.defaultView) foreignDocs.delete(doc) && state.observer.disconnect();
+}
+
+function updateFrame(iframe, host, haCss, foreignCss) {
+  if (!iframe.__neumorphismFrame) {
+    iframe.__neumorphismFrame = true;
+    // Neue Seite im Fenster (z. B. Navigation im Add-on): gleich anwenden, nicht erst beim nächsten Takt
+    iframe.addEventListener("load", () =>
+      safely(() => updateFrame(iframe, host, haFrameCss(), controlsActive ? foreignVarsCss() : ""))
+    );
+  }
+  const doc = frameDocument(iframe);
+  if (!doc?.head || !doc.body) return;
+  if (host.localName === "ha-panel-custom") {
+    // Seite aus Home-Assistant-Bausteinen (HACS und andere Integrations-Seiten)
+    setFrameStyle(doc, haCss + (haCss ? HA_FRAME_EXTRA : ""));
+    patchControls(doc.defaultView);
+    return;
+  }
+  const settings = storedSettings();
+  const enabled = !!foreignCss && settings.apps === "full" && !settings.appsOff.includes(frameApp(host));
+  updateForeign(doc, enabled ? foreignCss : "");
+}
+
+// Ältere Home-Assistant-Bausteine in HACS (eigene Kopie im eingebetteten Fenster)
+const HA_FRAME_EXTRA = `
+  :root, body { --md-assist-chip-outline-color: transparent; --md-sys-color-outline: transparent; }`;
+
+// ---------------------------------------------------------------------------
+// Fremde Oberflächen: Add-ons und andere eingebettete Seiten
+// ---------------------------------------------------------------------------
+//
+// Add-ons bringen ihr eigenes Design mit und kennen das Theme nicht. Deshalb wird
+// jedes Element nach Farbe und Form eingeordnet:
+//   - Seitenhintergrund, Leisten und große neutrale Flächen -> Theme-Hintergrund, flach
+//   - neutrale Flächen mit Rundung, Rahmen oder Schatten (Karten, Dialoge, Menüs)
+//     -> erhaben; kleinere Flächen darin -> eingelassen
+//   - Knöpfe -> erhaben, gedrückt eingelassen; kräftig gefärbte behalten ihre Farbe
+//   - Eingabe- und Auswahlfelder, Code-Editoren -> eingelassen
+//   - neutral hervorgehobene Einträge (gewählte Zeile) -> eingelassen
+//   - neutrale Schrift und Linien -> Farben des Themes; farbige Schrift bleibt
+// Bilder, Grafiken, Videos und Verläufe bleiben unberührt. Für einzelne Add-ons
+// gibt es zusätzlich Feinschliff (FOREIGN_TUNING).
+
+const FX = "nm-x"; // Einordnung der Fläche
+const FX_FG = "nm-x-fg"; // 1 = Schrift, 2 = leise Schrift
+const FX_LINE = "nm-x-line"; // Linien in der Farbe der Trennlinien
+const FX_ROUND = "nm-x-round"; // eckige Bausteine abrunden
+const FX_PRESS = "nm-x-press"; // gedrückt eingelassen
+const FX_MARKS = [FX, FX_FG, FX_LINE, FX_ROUND, FX_PRESS];
+
+const FOREIGN_VARS = {
+  bg: "primary-background-color",
+  surface: "card-background-color",
+  text: "primary-text-color",
+  text2: "secondary-text-color",
+  divider: "divider-color",
+  primary: "primary-color",
+  accent: "accent-color",
+  "on-primary": "text-primary-color",
+  raised: "neumorphism-raised-shadow",
+  "raised-l": "neumorphism-raised-shadow-l",
+  card: "neumorphism-card-shadow",
+  inset: "neumorphism-inset-shadow",
+  "inset-s": "neumorphism-inset-shadow-s",
+};
+
+/** Theme-Werte für fremde Seiten unter eigenem Namen, damit sie sich nicht mit deren Variablen mischen. */
+function foreignVarsCss() {
+  const css = getComputedStyle(document.documentElement);
+  const vars = Object.entries(FOREIGN_VARS).map(([key, name]) => `--nm-${key}: ${css.getPropertyValue(`--${name}`).trim()};`);
+  const dark = !!getHass()?.themes?.darkMode;
+  return `:root { ${vars.join(" ")} --nm-scheme: ${dark ? "dark" : "light"}; }`;
+}
+
+const FOREIGN_STYLE = `
+  :root { color-scheme: var(--nm-scheme); accent-color: var(--nm-primary); }
+  html { background-color: var(--nm-bg); }
+  [nm-x="flat"] { background-color: var(--nm-bg) !important; box-shadow: none !important; }
+  [nm-x="plain"] { background-color: var(--nm-surface) !important; box-shadow: none !important; }
+  [nm-x="raised"], [nm-x="raised-l"] { background-color: var(--nm-surface) !important;
+    border-color: transparent !important; box-shadow: var(--nm-raised) !important; }
+  [nm-x="raised-l"] { box-shadow: var(--nm-card) !important; }
+  [nm-x="accent"] { border-color: transparent !important; box-shadow: var(--nm-raised) !important; }
+  [nm-x="sunken"], [nm-x="field"] { background-color: var(--nm-bg) !important;
+    border-color: transparent !important; box-shadow: var(--nm-inset-s) !important; }
+  [nm-x="field"]:focus, [nm-x="field"]:focus-within { outline: none !important;
+    box-shadow: var(--nm-inset-s), 0 0 0 2px color-mix(in srgb, var(--nm-primary) 55%, transparent) !important; }
+  [nm-x="field"]::placeholder { color: var(--nm-text2) !important; opacity: 0.8 !important; }
+  [nm-x="code"] { border-color: transparent !important; box-shadow: var(--nm-inset) !important; }
+  [nm-x-press]:active { box-shadow: var(--nm-inset-s) !important; }
+  [nm-x-press]:focus-visible { outline: 2px solid var(--nm-primary) !important; outline-offset: 2px; }
+  [nm-x-round="s"] { border-radius: 10px !important; }
+  [nm-x-round="l"] { border-radius: 16px !important; }
+  [nm-x-fg="1"] { color: var(--nm-text) !important; }
+  [nm-x-fg="2"] { color: var(--nm-text2) !important; }
+  [nm-x-line] { border-color: var(--nm-divider) !important; }
+`;
+
+// Nicht einordnen (samt Inhalt): Grafiken, Medien, Skripte, eingebettete Seiten
+const FOREIGN_SKIP = new Set([
+  "svg", "canvas", "img", "video", "picture", "iframe", "object", "embed", "audio", "script", "style",
+  "link", "meta", "template", "noscript", "br", "wbr", "option", "optgroup", "head", "title", "math",
+]);
+// Code-Editoren und Terminals: eingelassen, ihr Inneres bleibt unverändert
+const CODE_SELECTOR = ".cm-editor, .CodeMirror, .monaco-editor, .ace_editor, .xterm";
+const FIELD_SELECTOR = [
+  "textarea", "select", "input:not([type])",
+  ...["text", "search", "email", "password", "number", "url", "tel", "date", "time", "datetime-local", "month", "week"].map(
+    (type) => `input[type="${type}"]`
+  ),
+  '[contenteditable=""]', '[contenteditable="true"]',
+  '[role="textbox"]', '[role="searchbox"]', '[role="combobox"]', '[role="spinbutton"]',
+].join(", ");
+const BUTTON_SELECTOR = 'button, input[type="button"], input[type="submit"], input[type="reset"], [role="button"], summary';
+const TABLE_TAGS = /^(table|thead|tbody|tfoot|tr|td|th|caption|colgroup|col)$/;
+const MAX_DEEP = 3000; // so viele Elemente pro Änderung höchstens neu einordnen
+
+const foreignDocs = new Map(); // Dokument -> Zustand
+const foreignInfo = new WeakMap(); // Element -> ursprüngliche Farben (vor dem Formen)
+const foreignRole = new WeakMap(); // Element -> Einordnung
+
+function rgbToOklch({ r, g, b }) {
+  return hexToOklch(rgbToHex([r / 255, g / 255, b / 255]));
+}
+// Grau, auch leicht bläulich; helle Töne gelten schon bei wenig Farbe als farbig (Markierungen)
+const isNeutral = (c) => {
+  const [L, C] = rgbToOklch(c);
+  return C < (L < 0.5 ? 0.045 : 0.022);
+};
+const lum = ({ r, g, b }) => 0.2126 * toLinear(r / 255) + 0.7152 * toLinear(g / 255) + 0.0722 * toLinear(b / 255);
+const contrast = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+const sameColor = (a, b) => a && b && Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) < 3;
+const parentOf = (el) => el.parentElement || el.getRootNode().host || null;
+
+function updateForeign(doc, varsCss) {
+  let state = foreignDocs.get(doc);
+  if (!varsCss) {
+    if (state) resetForeign(state);
+    return;
+  }
+  if (!state) state = startForeign(doc);
+  const tunings = FOREIGN_TUNING.filter((t) => safely(() => t.match(doc)));
+  state.themeKey = varsCss;
+  setForeignMode(state, varsCss.includes("--nm-scheme: dark"), tunings);
+  const tuning = tunings.map((t) => t.css || "").join("\n");
+  const css = `${varsCss}\n${foreignTokens(state)}\n${FOREIGN_STYLE}\n${tuning}`;
+  setFrameStyle(doc, css);
+  if (state.css !== css) {
+    state.css = css;
+    state.sheetCss = FOREIGN_STYLE + tuning;
+    for (const sheet of state.sheets) sheet.replaceSync(state.sheetCss);
+    state.colors = foreignColors();
+  }
+}
+
+// Farb-Variablen der Seite (z. B. Node-RED, Zigbee2MQTT, Web Awesome, Vuetify): neutrale
+// Hintergründe, Schriften und Linien auf das Theme umstellen. Farbige Werte bleiben.
+const TOKEN_LINE = /border|divider|outline|separator|stroke|(^|-)rule/i;
+const TOKEN_BG = /background|(^|-)bg($|-)|backdrop/i;
+const TOKEN_TEXT = /text|content|foreground|(^|-)fg($|-)|(^|-)ink|(^|-)on-/i;
+const TOKEN_SURFACE = /surface|base|fill|canvas|paper|panel|menu|card|popover|dropdown|header|sidebar|toolbar|tooltip/i;
+// Schrift auf Farbflächen (z. B. --color-primary-content, --v-theme-on-primary) und Statusfarben bleiben
+const TOKEN_KEEP = /brand|accent|success|info|warning|error|danger|critical|alert|(primary|secondary)[-_]?(content|on)|on[-_]?(primary|secondary)/i;
+const TOKEN_TARGETS = ':root, body, [data-theme], [data-bs-theme], [class*="theme"]';
+const HSL_TRIPLET = /^(\d+(?:\.\d+)?)(?:deg)?\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/; // z. B. "0 0% 100%" (shadcn)
+const RGB_TRIPLET = /^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$/; // z. B. "255,255,255" (Vuetify)
+
+function tokenColor(value) {
+  let m = value.match(HSL_TRIPLET);
+  if (m) return { color: parseColor(toRgb(`hsl(${m[1]} ${m[2]}% ${m[3]}%)`)), format: "hsl" };
+  m = value.match(RGB_TRIPLET);
+  if (m) return { color: { r: +m[1], g: +m[2], b: +m[3], a: 1 }, format: "rgb" };
+  if (!CSS.supports("color", value) || /currentcolor|inherit|transparent/i.test(value)) return null;
+  return { color: parseColor(toRgb(value)), format: "color" };
+}
+
+function rgbToHslTriplet({ r, g, b }) {
+  const [R, G, B] = [r / 255, g / 255, b / 255];
+  const max = Math.max(R, G, B);
+  const min = Math.min(R, G, B);
+  const l = (max + min) / 2;
+  const d = max - min;
+  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d) h = max === R ? ((G - B) / d) % 6 : max === G ? (B - R) / d + 2 : (R - G) / d + 4;
+  return `${Math.round(((h * 60) + 360) % 360)} ${Math.round(sat * 1000) / 10}% ${Math.round(l * 1000) / 10}%`;
+}
+
+/** Liest die Farb-Variablen der Seite (ohne die eigene Umstellung) und ordnet die neutralen zu. */
+function foreignTokens(state) {
+  const style = state.doc.getElementById(FRAME_STYLE_ID);
+  const count = state.view.getComputedStyle(state.doc.documentElement).length;
+  const key = `${count}|${state.dark}|${state.themeKey}`;
+  if (state.tokenKey === key) return state.tokens;
+  if (style?.sheet) style.sheet.disabled = true;
+  try {
+    const view = state.view;
+    const cs = view.getComputedStyle(state.doc.documentElement);
+    const page = [state.doc.body, state.doc.documentElement]
+      .map((el) => parseColor(view.getComputedStyle(el).backgroundColor))
+      .find((c) => c && c.a >= 0.5) || { r: 255, g: 255, b: 255, a: 1 };
+    const theme = themeColors();
+    const lines = [];
+    for (const name of cs) {
+      if (!name.startsWith("--") || name.startsWith("--nm-") || TOKEN_KEEP.test(name)) continue;
+      const value = cs.getPropertyValue(name).trim();
+      if (!value || value.length > 60) continue;
+      const parsed = tokenColor(value);
+      if (!parsed?.color || parsed.color.a < 0.9 || !isNeutral(parsed.color)) continue;
+      let kind = TOKEN_LINE.test(name) ? "divider" : TOKEN_BG.test(name) ? "bg" : TOKEN_TEXT.test(name) ? "text" : TOKEN_SURFACE.test(name) ? "bg" : null;
+      if (!kind) continue;
+      if (kind === "text" && contrast(parsed.color, page) < 4.5) kind = "text2";
+      const target = theme[kind];
+      const out = parsed.format === "hsl" ? rgbToHslTriplet(target) : parsed.format === "rgb" ? `${Math.round(target.r)},${Math.round(target.g)},${Math.round(target.b)}` : `var(--nm-${kind})`;
+      lines.push(`${name}: ${out} !important;`);
+    }
+    state.tokens = lines.length ? `${TOKEN_TARGETS} { ${lines.join(" ")} }` : "";
+  } finally {
+    if (style?.sheet) style.sheet.disabled = false;
+  }
+  state.tokenKey = key;
+  return state.tokens;
+}
+
+/** Theme-Farben als RGB (für Variablen, die Farben als Zahlen ablegen); Linien auf den Hintergrund gemischt. */
+function themeColors() {
+  const css = getComputedStyle(document.documentElement);
+  const get = (name) => parseColor(toRgb(css.getPropertyValue(`--${name}`).trim())) || { r: 0, g: 0, b: 0, a: 1 };
+  const bg = get("primary-background-color");
+  const line = get("divider-color");
+  const mix = (key) => line[key] * line.a + bg[key] * (1 - line.a);
+  return {
+    bg,
+    text: get("primary-text-color"),
+    text2: get("secondary-text-color"),
+    divider: { r: mix("r"), g: mix("g"), b: mix("b"), a: 1 },
+  };
+}
+
+// Hell/Dunkel der Seite an Home Assistant anpassen, wo die Seite das selbst anbietet:
+// Attribute wie data-theme="dark" oder Klassen wie wa-light / theme-dark an <html> und <body>.
+const MODE_ATTRS = ["data-theme", "data-bs-theme", "data-color-scheme", "data-mode", "theme"];
+const MODE_CLASS = /^((?:.*[-_])?theme[-_]{0,2}|wa-|)(light|dark)$/i;
+
+function setForeignMode(state, dark, tunings) {
+  const mode = dark ? "dark" : "light";
+  const record = (key, undo) => {
+    if (!state.undo.has(key)) state.undo.set(key, undo);
+  };
+  for (const el of [state.doc.documentElement, state.doc.body]) {
+    for (const attr of MODE_ATTRS) {
+      const value = el.getAttribute(attr);
+      if ((value === "light" || value === "dark") && value !== mode) {
+        record(el.tagName + attr, () => el.setAttribute(attr, value));
+        el.setAttribute(attr, mode);
+      }
+    }
+    for (const cls of [...el.classList]) {
+      const m = cls.match(MODE_CLASS);
+      if (!m || m[2].toLowerCase() === mode) continue;
+      const other = m[1] + (m[2] === m[2].toUpperCase() ? mode.toUpperCase() : mode);
+      record(el.tagName + cls, () => el.classList.replace(other, cls));
+      el.classList.replace(cls, other);
+    }
+  }
+  for (const tuning of tunings) if (tuning.mode) safely(() => tuning.mode(state.doc, dark, record));
+  state.dark = dark;
+}
+
+/** Aufgelöste Schriftfarben des Themes: geerbte Schrift erkennen statt erneut einordnen. */
+function foreignColors() {
+  const css = getComputedStyle(document.documentElement);
+  return [css.getPropertyValue("--primary-text-color"), css.getPropertyValue("--secondary-text-color")].map((v) =>
+    parseColor(toRgb(v.trim()))
+  );
+}
+
+let colorProbe = null;
+function toRgb(color) {
+  if (!colorProbe) {
+    colorProbe = document.createElement("div");
+    colorProbe.style.cssText = "position:absolute;width:0;height:0;visibility:hidden;pointer-events:none;";
+    document.body.appendChild(colorProbe);
+  }
+  colorProbe.style.color = color;
+  return getComputedStyle(colorProbe).color;
+}
+
+function startForeign(doc) {
+  const view = doc.defaultView;
+  const state = {
+    doc,
+    view,
+    css: "",
+    sheetCss: "",
+    colors: [],
+    tokens: "",
+    tokenKey: "",
+    dark: null,
+    undo: new Map(), // Änderungen an Hell/Dunkel der Seite, zum Zurücksetzen
+    sheets: [],
+    roots: new WeakSet(),
+    queue: new Map(), // Element -> mit Inhalt?
+    timer: 0,
+    last: 0,
+    observer: new view.MutationObserver((records) => onForeignMutations(state, records)),
+  };
+  foreignDocs.set(doc, state);
+  observeForeignRoot(state, doc);
+  queueForeign(state, doc.documentElement, true);
+  return state;
+}
+
+function observeForeignRoot(state, root) {
+  if (state.roots.has(root)) return;
+  state.roots.add(root);
+  if (root !== state.doc) {
+    const sheet = new state.view.CSSStyleSheet();
+    sheet.replaceSync(state.sheetCss);
+    root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+    state.sheets.push(sheet);
+  }
+  state.observer.observe(root, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "style", "hidden", "open", "disabled", "checked", "selected", "aria-selected", "aria-expanded", "aria-pressed", "aria-current", "data-state", "data-active"],
+  });
+}
+
+function onForeignMutations(state, records) {
+  for (const record of records) {
+    if (record.type === "childList") {
+      for (const node of record.addedNodes) if (node.nodeType === 1) queueForeign(state, node, true);
+    } else if (record.target.nodeType === 1) {
+      queueForeign(state, record.target, true);
+    }
+  }
+}
+
+function queueForeign(state, el, deep) {
+  if (!el || FOREIGN_SKIP.has(el.localName) || el.closest?.("svg")) return;
+  state.queue.set(el, deep || state.queue.get(el) || false);
+  if (state.timer) return;
+  // Viele Änderungen (z. B. beim Ziehen) gebündelt, höchstens etwa sechsmal pro Sekunde
+  const wait = Math.max(0, state.last + 160 - Date.now());
+  state.timer = setTimeout(() => state.view.requestAnimationFrame(() => safely(() => runForeign(state))), wait);
+}
+
+function resetForeign(state) {
+  state.observer.disconnect();
+  foreignDocs.delete(state.doc);
+  for (const undo of [...state.undo.values()].reverse()) safely(undo);
+  const style = state.doc.getElementById(FRAME_STYLE_ID);
+  style?.remove();
+  for (const sheet of state.sheets) sheet.replaceSync("");
+  const selector = FX_MARKS.map((m) => `[${m}]`).join(",");
+  const stack = [state.doc];
+  while (stack.length) {
+    const root = stack.pop();
+    for (const el of root.querySelectorAll(selector)) for (const m of FX_MARKS) el.removeAttribute(m);
+    for (const el of root.querySelectorAll("*")) if (el.shadowRoot) stack.push(el.shadowRoot);
+  }
+}
+
+/** Elemente in Dokumentreihenfolge, durch offene Shadow-DOMs hindurch. */
+function collectForeign(state, el, deep, out, seen) {
+  if (seen.has(el) || FOREIGN_SKIP.has(el.localName)) return;
+  seen.add(el);
+  out.push(el);
+  if (!deep || out.length > MAX_DEEP || el.matches(CODE_SELECTOR)) return;
+  if (el.shadowRoot) {
+    observeForeignRoot(state, el.shadowRoot);
+    for (const child of el.shadowRoot.children) collectForeign(state, child, true, out, seen);
+  }
+  for (const child of el.children) collectForeign(state, child, true, out, seen);
+}
+
+function runForeign(state) {
+  state.timer = 0;
+  state.last = Date.now();
+  if (!state.doc.defaultView || !foreignDocs.has(state.doc)) return;
+  const list = [];
+  const seen = new Set();
+  for (const [el, deep] of state.queue) if (el.isConnected) collectForeign(state, el, deep, list, seen);
+  state.queue.clear();
+  // Ein Durchgang: erst alle Markierungen lösen, dann lesen, dann schreiben (kein Hin und Her im Layout)
+  for (const el of list) for (const m of FX_MARKS) if (el.hasAttribute(m)) el.removeAttribute(m);
+  const infos = list.map((el) => readForeign(state, el));
+  const view = { w: state.view.innerWidth, h: state.view.innerHeight };
+  const results = list.map((el, i) => decideForeign(state, el, infos[i], view));
+  list.forEach((el, i) => writeForeign(el, results[i]));
+}
+
+function readForeign(state, el) {
+  const cs = state.view.getComputedStyle(el);
+  const rect = el.getBoundingClientRect();
+  let text = el.childElementCount === 0;
+  if (!text) for (const n of el.childNodes) if (n.nodeType === 3 && n.data.trim()) { text = true; break; }
+  const info = {
+    cs,
+    rect,
+    text,
+    bg: parseColor(cs.backgroundColor) || { r: 0, g: 0, b: 0, a: 0 },
+    image: cs.backgroundImage !== "none",
+    color: parseColor(cs.color),
+    hidden: cs.display === "none" || cs.visibility === "hidden" || (!rect.width && !rect.height),
+  };
+  foreignInfo.set(el, info);
+  return info;
+}
+
+/** Ursprüngliche Hintergrundfarbe unter einem Element (über Eltern hinweg). */
+function effectiveBg(el) {
+  for (let node = el; node; node = parentOf(node)) {
+    const info = foreignInfo.get(node);
+    if (!info) continue;
+    if (info.image) return null; // Bild oder Verlauf: Schrift nicht anfassen
+    if (info.bg.a >= 0.5) return info.bg;
+  }
+  return { r: 255, g: 255, b: 255, a: 1 };
+}
+
+/** Sichtbarer Rahmen; box = rundherum (Umrandung), sonst Trennlinie. */
+function borderInfo(cs) {
+  const sides = ["Top", "Right", "Bottom", "Left"].filter((side) => {
+    const color = parseColor(cs[`border${side}Color`]);
+    return (parseFloat(cs[`border${side}Width`]) || 0) > 0 && color && color.a >= 0.1;
+  });
+  if (!sides.length) return null;
+  return { box: sides.length === 4, neutral: isNeutral(parseColor(cs[`border${sides[0]}Color`])) };
+}
+
+/**
+ * Neutral hervorgehobener Eintrag (gewählte Zeile, aktiver Menüpunkt): gleichartige Geschwister
+ * gleicher Größe haben einen anderen Hintergrund.
+ */
+function highlighted(el, info) {
+  const { rect, bg } = info;
+  if (rect.height > 72 || bg.a < 0.5) return false;
+  const parent = el.parentElement;
+  if (!parent || parent.childElementCount > 200) return false;
+  const lightness = rgbToOklch(bg)[0];
+  for (const sibling of parent.children) {
+    if (sibling === el || sibling.localName !== el.localName) continue;
+    const other = foreignInfo.get(sibling);
+    if (!other || other.hidden) continue;
+    if (Math.abs(other.rect.height - rect.height) > rect.height * 0.3 || Math.abs(other.rect.width - rect.width) > rect.width * 0.1) continue;
+    if (other.bg.a < 0.5 || Math.abs(rgbToOklch(other.bg)[0] - lightness) > 0.03) return true;
+  }
+  return false;
+}
+
+function nearestRole(el) {
+  for (let node = parentOf(el); node; node = parentOf(node)) {
+    const role = foreignRole.get(node);
+    if (role && ["raised", "raised-l", "sunken", "field", "accent", "plain"].includes(role.kind)) return { node, ...role };
+  }
+  return null;
+}
+
+function decideForeign(state, el, info, view) {
+  const result = { kind: null, fg: null, line: false, round: null, press: false };
+  foreignRole.set(el, result);
+  if (el.matches(CODE_SELECTOR)) {
+    result.kind = "code";
+    return result;
+  }
+  const { cs, rect, bg } = info;
+  const w = rect.width;
+  const h = rect.height;
+  const area = w * h;
+  const screen = view.w * view.h;
+  const hasBg = bg.a >= 0.05 && !info.image;
+  const neutralBg = hasBg && isNeutral(bg);
+  const radius = parseFloat(cs.borderTopLeftRadius) || 0;
+  const border = borderInfo(cs);
+  const shadow = cs.boxShadow !== "none";
+  const field = el.matches(FIELD_SELECTOR);
+  const button = !field && (el.matches(BUTTON_SELECTOR) || (el.localName === "a" && (hasBg || border?.box)));
+  const visible = !info.hidden && w > 0 && h > 0;
+
+  if (visible) {
+    if (field && (hasBg || border || shadow)) {
+      result.kind = "field";
+      if (radius < 4 && h < 120) result.round = "s";
+    } else if (button && w >= 16 && h >= 16 && area < screen * 0.25 && (hasBg || border?.box)) {
+      result.kind = neutralBg || !hasBg ? "raised" : "accent";
+      result.press = true;
+      if (radius < 4) result.round = "s";
+    } else if (hasBg && !neutralBg) {
+      // farbige Fläche: Chips und Abzeichen erhaben, große Flächen (Leisten, Banner) bleiben
+      if (radius >= 4 && w >= 20 && h >= 14 && area < screen * 0.1) result.kind = "accent";
+    } else if (neutralBg) {
+      // Leisten und Seitenleisten: eckig über (fast) die ganze Breite oder Höhe des Fensters oder Elternelements
+      const outer = parentOf(el)?.getBoundingClientRect();
+      const edge =
+        w >= view.w * 0.9 || h >= view.h * 0.9 || (radius < 4 && outer && (w >= outer.width * 0.95 || h >= outer.height * 0.95));
+      if (!TABLE_TAGS.test(el.localName) && highlighted(el, info)) {
+        result.kind = "sunken"; // gewählter Eintrag in einer Liste
+      } else if (area > screen * 0.6 || edge || TABLE_TAGS.test(el.localName)) {
+        if (bg.a >= 0.9) result.kind = "flat";
+      } else if ((radius >= 4 || shadow || border?.box || cs.backdropFilter !== "none") && w >= 40 && h >= 24) {
+        result.kind = area >= 200 * 120 ? "raised-l" : "raised";
+        if (radius < 4) result.round = result.kind === "raised-l" ? "l" : "s";
+      } else if (bg.a >= 0.9) {
+        result.kind = "flat";
+      }
+    }
+    // Fläche in einer Fläche: über die ganze Breite gehört sie zur Fläche, sonst eingelassen
+    if (result.kind === "raised" || result.kind === "raised-l") {
+      const outer = !result.press && nearestRole(el);
+      if (outer && outer.kind !== "accent") {
+        const outerWidth = outer.node.getBoundingClientRect().width;
+        result.kind = w >= outerWidth * 0.9 ? "plain" : "sunken";
+        if (result.kind === "plain") result.round = null;
+      }
+    }
+  }
+  if (border?.neutral && !["raised", "raised-l", "sunken", "field", "accent", "code"].includes(result.kind)) result.line = true;
+
+  // Schrift: neutrale Farben auf neutralem Grund folgen dem Theme
+  const color = info.color;
+  if ((info.text || field || button) && color && color.a >= 0.3 && isNeutral(color)) {
+    const under = hasBg && bg.a >= 0.5 ? bg : effectiveBg(parentOf(el) || el);
+    const [text, text2] = state.colors;
+    const inherited = sameColor(color, text) || sameColor(color, text2);
+    if (under && isNeutral(under) && !inherited) {
+      result.fg = contrast(color, under) < 4.5 || color.a < 0.8 ? "2" : "1";
+    }
+  }
+  return result;
+}
+
+function writeForeign(el, result) {
+  if (result.kind) el.setAttribute(FX, result.kind);
+  if (result.fg) el.setAttribute(FX_FG, result.fg);
+  if (result.line) el.setAttribute(FX_LINE, "");
+  if (result.round) el.setAttribute(FX_ROUND, result.round);
+  if (result.press) el.setAttribute(FX_PRESS, "");
+}
+
+/** Hell/Dunkel über ein Attribut an <html> setzen (und beim Zurücksetzen wiederherstellen). */
+function setRootAttr(doc, name, value, record) {
+  const html = doc.documentElement;
+  const old = html.getAttribute(name);
+  if (old === value) return;
+  record(`attr:${name}`, () => (old === null ? html.removeAttribute(name) : html.setAttribute(name, old)));
+  html.setAttribute(name, value);
+}
+
+/**
+ * Feinschliff für einzelne Add-ons, zusätzlich zur allgemeinen Einordnung:
+ * match erkennt die Seite, css ergänzt Regeln, mode schaltet Hell/Dunkel der Seite selbst um.
+ */
+const FOREIGN_TUNING = [
+  {
+    // ESPHome Device Builder: übernimmt Home-Assistant-Farben, Hell/Dunkel über wa-light/wa-dark
+    match: (doc) => !!doc.querySelector("esphome-app"),
+    css: `:root { --primary-color: var(--nm-primary); --text-primary-color: var(--nm-on-primary); }`,
+  },
+  {
+    // Zigbee2MQTT (Windfront, daisyUI): Primärfarbe, Rundungen, ohne eigene Tiefe; Hell/Dunkel über data-theme
+    match: (doc) => /zigbee2mqtt/i.test(doc.title) && !!doc.querySelector('link[href*="assets/index-"], script[src*="assets/index-"]'),
+    css: `
+      :root, [data-theme] { --color-primary: var(--nm-primary) !important; --color-primary-content: var(--nm-on-primary) !important;
+        --radius-box: 18px !important; --radius-field: 12px !important; --depth: 0 !important; --noise: 0 !important; }
+      .navbar { box-shadow: none !important; }`,
+    mode: (doc, dark, record) => {
+      const current = doc.documentElement.getAttribute("data-theme");
+      if (!current || current === "light" || current === "dark") setRootAttr(doc, "data-theme", dark ? "dark" : "light", record);
+    },
+  },
+  {
+    // Node-RED: Hell/Dunkel über die Klasse nr-theme-dark (auch für Code-Editor und Arbeitsfläche)
+    match: (doc) => !!doc.getElementById("red-ui-editor"),
+    css: `
+      #red-ui-header { box-shadow: none !important; border-bottom-color: var(--nm-divider) !important; }
+      .red-ui-palette-node { box-shadow: var(--nm-raised) !important; }`,
+    mode: (doc, dark, record) => {
+      const html = doc.documentElement;
+      const was = html.classList.contains("nr-theme-dark");
+      if (was === dark) return;
+      record("class:nr-theme-dark", () => html.classList.toggle("nr-theme-dark", was));
+      html.classList.toggle("nr-theme-dark", dark);
+    },
+  },
+  {
+    // File editor (HASS Configurator, Materialize): Kopfleiste und Menüs wie Home Assistant, Code-Editor hell/dunkel
+    match: (doc) => /HASS Configurator/i.test(doc.title),
+    css: `
+      nav, nav .nav-wrapper { background-color: var(--nm-bg) !important; box-shadow: none !important; }
+      nav i, nav a, nav .brand-logo, nav input { color: var(--nm-text2) !important; }
+      .side-nav, .dropdown-content, .modal, .modal .modal-footer, .card, .collapsible-header, .collapsible-body {
+        background-color: var(--nm-surface) !important; color: var(--nm-text) !important; }
+      .btn-floating.red { background-color: var(--nm-accent) !important; }
+      .btn, .btn-large, .btn-flat { box-shadow: var(--nm-raised) !important; }`,
+    mode: (doc, dark) => {
+      const editor = doc.defaultView.editor;
+      if (!editor?.setTheme) return;
+      // Nur umschalten, nicht zurückstellen: die Seite merkt sich ihr Theme nicht dauerhaft
+      const theme = dark ? "ace/theme/tomorrow_night" : "ace/theme/chrome";
+      if (editor.getTheme() !== theme) editor.setTheme(theme);
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Farbwähler (im Profil und in der Karte)
 // ---------------------------------------------------------------------------
 
@@ -920,6 +1704,13 @@ function texts(hass) {
     cardsFull: de ? "Vollständig" : "Full",
     cardsFrame: de ? "Nur Rahmen" : "Frame only",
     cardsOff: de ? "Aus" : "Off",
+    apps: de ? "Add-ons" : "Add-ons",
+    appsHint: de
+      ? "Oberflächen von Add-ons wie ESPHome, Zigbee2MQTT oder Node-RED im selben Design."
+      : "Add-on interfaces such as ESPHome, Zigbee2MQTT or Node-RED in the same design.",
+    appsFull: de ? "Angepasst" : "Adapted",
+    appsOff: de ? "Aus" : "Off",
+    appsExceptions: de ? "Abgewählte Add-ons behalten ihr eigenes Aussehen." : "Unchecked add-ons keep their own look.",
     perUser: de ? "Gilt für deinen Benutzer." : "Applies to your user.",
     inactive: de
       ? "Wähle im Profil das Theme „Neumorphism“, dann wirken diese Einstellungen."
@@ -1003,8 +1794,19 @@ class NeumorphismColorPicker extends HTMLElement {
           box-shadow: var(--neumorphism-inset-shadow-s, none); }
         .segmented button { flex: 1; border: none; border-radius: 999px; padding: 8px 6px; cursor: pointer;
           background: transparent; color: var(--secondary-text-color); font: inherit; font-size: 0.85rem; }
+        .segmented button[hidden] { display: none; }
         .segmented button.selected { background: var(--card-background-color); color: var(--primary-color);
           font-weight: var(--ha-font-weight-medium, 500); box-shadow: var(--neumorphism-raised-shadow, none); }
+        .apps-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 16px; margin: 8px 0 2px; }
+        .apps-list[hidden] { display: none; }
+        .apps-list label { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer;
+          color: var(--primary-text-color); font-size: 0.9rem; }
+        .apps-list input { -webkit-appearance: none; appearance: none; flex: none; width: 20px; height: 20px; margin: 0;
+          border-radius: 6px; cursor: pointer; background: var(--card-background-color) center / 14px no-repeat;
+          box-shadow: var(--neumorphism-inset-shadow-s, inset 0 0 0 1px var(--divider-color)); }
+        .apps-list input:checked { background-color: var(--primary-color);
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E");
+          box-shadow: var(--neumorphism-raised-shadow, none); }
         .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; }
         button.reset { border: none; background: var(--card-background-color); color: var(--primary-color);
           border-radius: 999px; padding: 9px 18px; font: inherit; font-size: 0.9rem; cursor: pointer;
@@ -1039,10 +1841,19 @@ class NeumorphismColorPicker extends HTMLElement {
       </div>
       <div class="cards-mode">
         <div class="label c-label"></div>
-        <div class="segmented">
+        <div class="segmented cards">
           <button data-mode="full"></button><button data-mode="frame"></button><button data-mode="off"></button>
         </div>
         <div class="hint c-hint"></div>
+      </div>
+      <div class="cards-mode apps-mode">
+        <div class="label a-label"></div>
+        <div class="segmented apps">
+          <button data-apps="full"></button><button data-apps="off"></button>
+        </div>
+        <div class="hint a-hint"></div>
+        <div class="apps-list" hidden></div>
+        <div class="hint a-exceptions" hidden></div>
       </div>
       <div class="footer">
         <span class="info per-user"></span>
@@ -1069,17 +1880,89 @@ class NeumorphismColorPicker extends HTMLElement {
       this._update();
     });
     range.addEventListener("change", () => this._save({ neumorphismStrength: Number(range.value) / 100 }));
-    for (const button of root.querySelectorAll(".segmented button")) {
+    for (const button of root.querySelectorAll(".segmented.cards button")) {
       button.addEventListener("click", () => this._save({ neumorphismCards: button.dataset.mode }));
     }
+    for (const button of root.querySelectorAll(".segmented.apps button")) {
+      button.addEventListener("click", () => this._save({ neumorphismApps: button.dataset.apps }));
+    }
+    root.querySelector(".apps-list").addEventListener("change", (ev) => {
+      const off = new Set(storedSettings(this._hass).appsOff);
+      if (ev.target.checked) off.delete(ev.target.value);
+      else off.add(ev.target.value);
+      this._save({ neumorphismAppsOff: [...off] });
+    });
     root.querySelector(".reset").addEventListener("click", () =>
       this._save({
         primaryColor: undefined,
         accentColor: undefined,
         neumorphismStrength: undefined,
         neumorphismCards: undefined,
+        neumorphismApps: undefined,
+        neumorphismAppsOff: undefined,
       })
     );
+  }
+
+  /** Add-ons: an/aus und Ausnahmen (Liste nur für Administratoren, aus dem Supervisor). */
+  _updateApps(t, stored) {
+    const root = this.shadowRoot;
+    root.querySelector(".a-label").textContent = t.apps;
+    root.querySelector(".a-hint").textContent = t.appsHint;
+    for (const button of root.querySelectorAll(".segmented.apps button")) {
+      button.textContent = t[button.dataset.apps === "full" ? "appsFull" : "appsOff"];
+      button.classList.toggle("selected", stored.apps === button.dataset.apps);
+    }
+    if (this._apps === undefined) {
+      this._apps = null;
+      this._loadApps().then((apps) => {
+        this._apps = apps;
+        this._render();
+      });
+    }
+    // Auch Ausnahmen für Add-ons zeigen, die gerade nicht in der Liste stehen (z. B. gestoppt)
+    const apps = [...(this._apps || [])];
+    for (const slug of stored.appsOff) if (!apps.some((app) => app.slug === slug)) apps.push({ slug, name: slug });
+    const list = root.querySelector(".apps-list");
+    const visible = stored.apps === "full" && apps.length > 0;
+    list.hidden = !visible;
+    root.querySelector(".a-exceptions").hidden = !visible;
+    root.querySelector(".a-exceptions").textContent = t.appsExceptions;
+    const key = apps.map((app) => `${app.slug}:${app.name}`).join("|");
+    if (list.dataset.key !== key) {
+      list.dataset.key = key;
+      list.replaceChildren(
+        ...apps.map((app) => {
+          const label = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = app.slug;
+          label.append(input, document.createTextNode(app.name));
+          return label;
+        })
+      );
+    }
+    for (const input of list.querySelectorAll("input")) input.checked = !stored.appsOff.includes(input.value);
+  }
+
+  /** Add-ons mit eigener Oberfläche: aus dem Supervisor, sonst aus der Seitenleiste. */
+  async _loadApps() {
+    const hass = this._hass;
+    if (!hass?.user?.is_admin) return [];
+    const fromPanels = () =>
+      Object.values(hass.panels || {})
+        .filter((panel) => panel.component_name === "app" && panel.config?.addon)
+        .map((panel) => ({ slug: panel.config.addon, name: panel.title || panel.config.addon }));
+    if (!hass.config?.components?.includes("hassio")) return fromPanels();
+    const api = (endpoint) => hass.callWS({ type: "supervisor/api", endpoint, method: "get" });
+    try {
+      const list = (await api("/addons"))?.addons || [];
+      const infos = await Promise.all(list.map((app) => api(`/addons/${app.slug}/info`).catch(() => null)));
+      const apps = infos.filter((info) => info?.ingress).map((info) => ({ slug: info.slug, name: info.name }));
+      return apps.sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      return fromPanels();
+    }
   }
 
   _save(patch) {
@@ -1105,14 +1988,15 @@ class NeumorphismColorPicker extends HTMLElement {
     root.querySelector(".per-user").textContent = t.perUser;
     const reset = root.querySelector(".reset");
     reset.textContent = t.reset;
-    reset.hidden = !stored.primary && !stored.accent && stored.strength === null && !stored.cardsStored;
+    reset.hidden = !stored.primary && !stored.accent && stored.strength === null && !stored.cardsStored && !stored.appsStored;
     root.querySelector(".c-label").textContent = t.cards;
     root.querySelector(".c-hint").textContent = t.cardsHint;
-    for (const button of root.querySelectorAll(".segmented button")) {
+    for (const button of root.querySelectorAll(".segmented.cards button")) {
       const mode = button.dataset.mode;
       button.textContent = t[`cards${mode[0].toUpperCase()}${mode.slice(1)}`];
       button.classList.toggle("selected", stored.cards === mode);
     }
+    this._updateApps(t, stored);
 
     const strength = preview.strength ?? stored.strength ?? 1;
     const range = root.querySelector('input[type="range"]');
@@ -1239,20 +2123,13 @@ if (!customElements.get(PICKER_TAG)) {
   });
 
   patchControls();
-  // Jeder Schritt für sich: Ein Fehler in einem Teil soll die anderen nicht aufhalten.
-  const safely = (fn) => {
-    try {
-      fn();
-    } catch (err) {
-      console.warn("Neumorphism:", err);
-    }
-  };
   const tick = () => {
     safely(applyColors);
     safely(injectIntoProfile);
     safely(updateDroplets);
     safely(updateButtonGroups);
     safely(updateCards);
+    safely(updateFrames);
   };
   window.addEventListener("resize", () =>
     requestAnimationFrame(() => {

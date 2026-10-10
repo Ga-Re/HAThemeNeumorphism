@@ -255,7 +255,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("# Tabellen, Code, Badges", None),
         ("table-header-background-color", "var(--card-background-color)"),
         ("table-row-background-color", "var(--card-background-color)"),
-        ("table-row-alternative-background-color", "var(--secondary-background-color)"),
+        ("table-row-alternative-background-color", "var(--card-background-color)"),
         ("data-table-background-color", "var(--card-background-color)"),
         ("markdown-code-background-color", "var(--secondary-background-color)"),
         ("code-editor-background-color", "var(--secondary-background-color)"),
