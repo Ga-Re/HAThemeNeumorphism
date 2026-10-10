@@ -15,7 +15,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.7.0";
+const VERSION = "4.0.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -169,6 +169,8 @@ function storedSettings(hass = getHass()) {
     primary: normalize(theme.primaryColor),
     accent: normalize(theme.accentColor),
     strength: theme.neumorphismStrength == null ? null : clampStrength(theme.neumorphismStrength),
+    cards: ["full", "frame", "off"].includes(theme.neumorphismCards) ? theme.neumorphismCards : "full",
+    cardsStored: theme.neumorphismCards != null,
   };
 }
 
@@ -680,65 +682,26 @@ function updateButtonGroups() {
 }
 
 // ---------------------------------------------------------------------------
-// Eigene Karten (HACS, selbst geschrieben): äußere Karte angleichen
-// ---------------------------------------------------------------------------
-
-// Viele eigene Karten setzen Rand und Schatten selbst. Ihre oberste Karte wird
-// erhaben wie die übrigen; durchsichtige Karten (z. B. reine Überschriften) bleiben unverändert.
-const CUSTOM_CARD_STYLE = `
-  :host > ha-card { box-shadow: var(--neumorphism-card-shadow) !important; border-width: 0 !important; }
-`;
-let customCardSheet = null;
-const customCardChecked = new WeakSet();
-
-function isOpaque(el) {
-  const css = getComputedStyle(el);
-  if (css.backgroundImage && css.backgroundImage !== "none") return true;
-  const m = css.backgroundColor.match(/rgba?\(([^)]+)\)/);
-  if (!m) return false;
-  const alpha = m[1].split(",")[3];
-  return alpha === undefined || Number(alpha) > 0.5;
-}
-
-function updateCustomCards() {
-  if (!supportsSheets) return;
-  if (!customCardSheet) {
-    customCardSheet = new CSSStyleSheet();
-    controlSheets.set("__custom-card", customCardSheet);
-    CONTROL_STYLES["__custom-card"] = CUSTOM_CARD_STYLE;
-    customCardSheet.replaceSync(controlsActive ? CUSTOM_CARD_STYLE : "");
-  }
-  if (cardHosts.size > 2000) for (const host of cardHosts) if (!host.isConnected) cardHosts.delete(host);
-  for (const host of cardHosts) {
-    if (!host.isConnected) continue;
-    const card = host.firstElementChild;
-    if (!card || card.localName.startsWith("hui-") || !card.shadowRoot || customCardChecked.has(card)) continue;
-    const haCard = [...card.shadowRoot.children].find((el) => el.localName === "ha-card");
-    if (!haCard) continue; // noch nicht gerendert, später erneut prüfen
-    customCardChecked.add(card);
-    if (isOpaque(haCard)) adoptControlStyle(card.shadowRoot, "__custom-card");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// M3 Cards (github.com/j0sp0r/m3-cards)
+// Eigene Karten (HACS, selbst geschrieben): Rahmen und Flächen formen
 // ---------------------------------------------------------------------------
 //
-// Alle M3-Karten haben einen gemeinsamen Glas-Rahmen (.card-inner) in einer
-// durchsichtigen ha-card. Die Flächen darin (Chips, Symbolfelder, Knöpfe ...)
-// bekommen ihre Farbe per Inline-Stil. Die Flächen werden deshalb nach Farbe
-// und Form eingeordnet statt pro Karte gepflegt:
+// Gilt für alle Karten, die nicht von Home Assistant selbst stammen. Jede bringt
+// ihre eigenen Bausteine mit, deshalb wird nach Farbe und Form eingeordnet:
+//   - Rahmen: die Karte selbst oder ein innerer Rahmen, der sie ausfüllt
+//     (z. B. bei M3 Cards) -> erhaben, ohne Rand, ohne Glas-Effekt
 //   - neutrale oder leicht getönte Fläche -> erhaben in der Kartenfarbe
 //   - kräftig gefärbte Fläche (aktiver Zustand) -> Farbe bleibt, erhaben
 //   - Fläche in einer Fläche, schmale Spur -> eingelassen
+// Bilder, Verläufe, Overlays und die Bausteine von Home Assistant bleiben unberührt.
+// Karten in einer Karte mit Rahmen bekommen keinen zweiten Rahmenschatten.
 
-const M3_TAG = /^m3-[a-z0-9-]+-card$/;
-const M3_STYLE = `
-  :host([nm-frame]) ha-card {
+const CARD_STYLE = `
+  [nm-card-shadow] {
     box-shadow: var(--neumorphism-card-shadow) !important;
+    border-color: transparent !important;
     border-radius: var(--nm-frame-radius, var(--ha-card-border-radius)) !important;
   }
-  :host([nm-frame]) .card-inner {
+  [nm-frame-inner] {
     border-color: transparent !important;
     background: var(--card-background-color) !important;
     backdrop-filter: none !important;
@@ -748,10 +711,18 @@ const M3_STYLE = `
   [nm-accent] { box-shadow: ${RAISED} !important; }
   [nm-inset] { background: var(--card-background-color) !important; box-shadow: ${INSET_S} !important; }
 `;
-const M3_ACCENT_DISTANCE = 90; // Abstand zur Kartenfarbe, ab dem eine Fläche als farbig gilt
-const m3Hosts = new Set();
-const m3Pending = new Set();
-let m3PaintKey = "";
+const CARD_MARKS = ["nm-card-shadow", "nm-frame-inner", "nm-raised", "nm-accent", "nm-inset"];
+const ACCENT_DISTANCE = 90; // Abstand zur Kartenfarbe, ab dem eine Fläche als farbig gilt
+// Bausteine von Home Assistant und Komponenten-Bibliotheken: eigene Regeln oder bewusst unberührt
+const FOREIGN = /^(ha-|hui-|mwc-|md-|wa-|paper-|state-badge$)/;
+const knownCards = new Set();
+const framedCards = new WeakSet();
+const cardPending = new Set();
+const observedRoots = new WeakSet();
+let cardsKey = "";
+
+const isCardElement = (el) =>
+  el.localName !== "hui-card" && el.localName.endsWith("-card") && typeof el.setConfig === "function";
 
 function parseColor(value) {
   let m = value.match(/^rgba?\(([^)]+)\)/);
@@ -764,123 +735,164 @@ function parseColor(value) {
   return null;
 }
 
-function scanM3(host) {
-  const root = host.shadowRoot;
-  if (!root) return;
-  const ATTRS = ["nm-raised", "nm-accent", "nm-inset"];
-  const elements = [...root.querySelectorAll("*")];
-  for (const el of elements) for (const attr of ATTRS) if (el.hasAttribute(attr)) el.removeAttribute(attr);
-  const inner = root.querySelector(".card-inner");
-  // In einer M3-Gruppe übernimmt die Gruppe den Rahmen
-  const inGroup = getComputedStyle(host).getPropertyValue("--m3-group-border").trim() !== "";
-  host.toggleAttribute("nm-frame", controlsActive && !!inner && !inGroup);
-  if (!controlsActive) return;
-  if (inner) host.style.setProperty("--nm-frame-radius", getComputedStyle(inner).borderTopLeftRadius);
+const bgAlpha = (css) => parseColor(css.backgroundColor)?.a ?? 0;
 
-  const surface = parseColor(dropletPaint().fill) || { r: 0, g: 0, b: 0 };
-  const marks = [];
-  for (const el of elements) {
-    if (el === inner || el.localName === "ha-card" || el.closest("svg")) continue;
-    const css = getComputedStyle(el);
-    if (css.backgroundImage !== "none") continue; // Bilder, Verläufe
-    const bg = parseColor(css.backgroundColor);
-    if (!bg || bg.a < 0.05) continue;
-    const rect = el.getBoundingClientRect();
-    const mix = (c) => c * bg.a;
-    const blended = {
-      r: mix(bg.r) + surface.r * (1 - bg.a),
-      g: mix(bg.g) + surface.g * (1 - bg.a),
-      b: mix(bg.b) + surface.b * (1 - bg.a),
-    };
-    const accent = Math.hypot(blended.r - surface.r, blended.g - surface.g, blended.b - surface.b) > M3_ACCENT_DISTANCE;
-    // Schmale Spur (Schieber, Fortschritt): eingelassen; farbige Füllungen bleiben unverändert
-    if (rect.height >= 3 && rect.height <= 12 && rect.width >= 60 && rect.width > rect.height * 6) {
-      if (!accent) marks.push({ el, kind: "track" });
-      continue;
-    }
-    if (rect.width < 20 || rect.height < 14) continue; // Punkte, Griffe, Farbtupfer
-    if (parseFloat(css.borderTopLeftRadius) < 4) continue; // eckige Flächen sind keine Bausteine
-    marks.push({ el, kind: accent ? "accent" : "raised" });
-  }
-  const marked = new Set(marks.map((m) => m.el));
-  for (const mark of marks) {
-    if (mark.kind !== "raised") continue;
-    for (let p = mark.el.parentElement; p && p !== inner; p = p.parentElement) {
-      if (marked.has(p)) {
-        mark.kind = "inset";
-        break;
-      }
-    }
-  }
-  for (const mark of marks) mark.el.setAttribute(`nm-${mark.kind === "track" ? "inset" : mark.kind}`, "");
+function registerCard(card) {
+  if (knownCards.has(card) || card.localName.startsWith("hui-")) return;
+  knownCards.add(card);
+  scheduleCard(card);
 }
 
-function scheduleM3(host) {
-  if (m3Pending.has(host)) return;
-  m3Pending.add(host);
+function scheduleCard(card) {
+  if (cardPending.has(card)) return;
+  cardPending.add(card);
   requestAnimationFrame(() => {
-    m3Pending.delete(host);
+    cardPending.delete(card);
     try {
-      if (host.isConnected) scanM3(host);
+      if (card.isConnected) scanCard(card);
     } catch (err) {
       console.warn("Neumorphism:", err);
     }
   });
 }
 
-function registerM3(host) {
-  if (m3Hosts.has(host)) return;
-  m3Hosts.add(host);
-  if (host.shadowRoot) {
-    adoptControlStyle(host.shadowRoot, "__m3");
-    new MutationObserver(() => scheduleM3(host)).observe(host.shadowRoot, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["style", "class"],
+function observeRoot(root, card) {
+  if (observedRoots.has(root)) return;
+  observedRoots.add(root);
+  adoptControlStyle(root, "__cards");
+  new MutationObserver(() => scheduleCard(card)).observe(root, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["style", "class"],
+  });
+}
+
+/** Elemente einer Karte, auch in verschachtelten Bausteinen; eingebettete Karten werden eigens behandelt. */
+function collectCard(root, card, out) {
+  observeRoot(root, card);
+  const nestedCards = [];
+  for (const el of root.querySelectorAll("*")) {
+    if (el.localName === "svg" || el.closest("svg")) continue;
+    if (nestedCards.some((n) => n.contains(el))) continue;
+    if (isCardElement(el)) {
+      nestedCards.push(el);
+      registerCard(el);
+      continue;
+    }
+    if (el.localName !== "ha-card" && FOREIGN.test(el.localName)) continue;
+    out.push(el);
+    if (el.shadowRoot && el.localName !== "ha-card") collectCard(el.shadowRoot, card, out);
+  }
+}
+
+/** Liegt die Karte in einer anderen Karte mit sichtbarem Rahmen? */
+function insideFramedCard(card) {
+  for (let node = card.parentElement || card.getRootNode().host; node; node = node.parentElement || node.getRootNode().host) {
+    if (framedCards.has(node)) return true;
+    if (node.localName === "ha-card" && bgAlpha(getComputedStyle(node)) > 0.5) return true;
+  }
+  return false;
+}
+
+function cardsMode() {
+  return storedSettings().cards;
+}
+
+function scanCard(card) {
+  const root = card.shadowRoot;
+  if (!root) return;
+  const elements = [];
+  collectCard(root, card, elements);
+  for (const el of elements) for (const attr of CARD_MARKS) if (el.hasAttribute(attr)) el.removeAttribute(attr);
+  framedCards.delete(card);
+  const mode = cardsMode();
+  if (!controlsActive || mode === "off") return;
+
+  // Rahmen: die oberste ha-card oder ein innerer Rahmen, der die Karte ausfüllt
+  const haCard = elements.find((el) => el.localName === "ha-card");
+  const box = (haCard || card).getBoundingClientRect();
+  if (!box.width || !box.height) return;
+  let frame = null;
+  let inner = null;
+  if (haCard) {
+    const css = getComputedStyle(haCard);
+    if (bgAlpha(css) > 0.5 || css.backgroundImage !== "none") frame = haCard;
+  }
+  if (!frame) {
+    inner = elements.find((el) => {
+      if (el === haCard) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < box.width * 0.95 || r.height < box.height * 0.9) return false;
+      const css = getComputedStyle(el);
+      return bgAlpha(css) > 0.05 || parseFloat(css.borderTopWidth) > 0 || css.backdropFilter !== "none";
     });
+    if (inner) frame = haCard || inner;
   }
-  scheduleM3(host);
+  if (frame && !insideFramedCard(card)) {
+    frame.setAttribute("nm-card-shadow", "");
+    frame.style.setProperty("--nm-frame-radius", getComputedStyle(inner || frame).borderTopLeftRadius);
+    framedCards.add(card);
+  }
+  if (inner) inner.setAttribute("nm-frame-inner", "");
+  if (mode !== "full") return;
+
+  // Flächen in der Karte
+  const surface = parseColor(dropletPaint().fill) || { r: 0, g: 0, b: 0 };
+  const cardArea = box.width * box.height;
+  const marks = [];
+  for (const el of elements) {
+    if (el === haCard || el === inner) continue;
+    const css = getComputedStyle(el);
+    if (css.backgroundImage !== "none" || css.position === "fixed") continue; // Bilder, Verläufe, Popups
+    const bg = parseColor(css.backgroundColor);
+    if (!bg || bg.a < 0.05) continue;
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || rect.width * rect.height > cardArea * 0.6) continue; // Overlays, große Container
+    const blend = (c, s) => c * bg.a + s * (1 - bg.a);
+    const distance = Math.hypot(
+      blend(bg.r, surface.r) - surface.r,
+      blend(bg.g, surface.g) - surface.g,
+      blend(bg.b, surface.b) - surface.b
+    );
+    const accent = distance > ACCENT_DISTANCE;
+    // Schmale Spur (Schieber, Fortschritt): eingelassen; farbige Füllungen bleiben unverändert
+    if (rect.height >= 3 && rect.height <= 12 && rect.width >= 60 && rect.width > rect.height * 6) {
+      if (!accent) marks.push({ el, kind: "inset" });
+      continue;
+    }
+    if (rect.width < 20 || rect.height < 14) continue; // Punkte, Griffe, Farbtupfer
+    if (parseFloat(css.borderTopLeftRadius) < 4) continue; // eckige Flächen sind keine Bausteine
+    marks.push({ el, kind: accent ? "accent" : "raised" });
+  }
+  // Fläche in einer Fläche (auch über Shadow-DOM-Grenzen): eingelassen
+  const marked = new Set(marks.map((m) => m.el));
+  for (const mark of marks) {
+    if (mark.kind !== "raised") continue;
+    for (let p = mark.el.parentElement || mark.el.getRootNode().host; p && p !== card; p = p.parentElement || p.getRootNode().host) {
+      if (marked.has(p)) {
+        mark.kind = "inset";
+        break;
+      }
+    }
+  }
+  for (const mark of marks) mark.el.setAttribute(`nm-${mark.kind}`, "");
 }
 
-function patchM3Class(tag) {
-  const cls = customElements.get(tag);
-  if (!cls || !supportsSheets) return;
-  const proto = cls.prototype;
-  const original = proto.createRenderRoot;
-  if (typeof original === "function" && !Object.prototype.hasOwnProperty.call(proto, "__neumorphismPatched")) {
-    proto.createRenderRoot = function () {
-      const root = original.call(this);
-      queueMicrotask(() => registerM3(this));
-      return root;
-    };
-    proto.__neumorphismPatched = true;
-  }
-  for (const el of findAllDeep(tag)) registerM3(el);
-}
-
-function setupM3() {
+/** Neue Karten aufnehmen; nach Theme-, Modus- oder Einstellungswechsel alle neu einordnen. */
+function updateCards() {
   if (!supportsSheets) return;
-  CONTROL_STYLES.__m3 = M3_STYLE;
-  // Karten, die nach diesem Modul geladen werden
-  const define = customElements.define.bind(customElements);
-  customElements.define = (name, cls, options) => {
-    define(name, cls, options);
-    if (M3_TAG.test(name)) patchM3Class(name);
-  };
-  // Karten, die schon geladen sind
-  for (const card of window.customCards || []) {
-    if (M3_TAG.test(card.type) && customElements.get(card.type)) patchM3Class(card.type);
+  CONTROL_STYLES.__cards = CARD_STYLE;
+  if (cardHosts.size > 2000) for (const host of cardHosts) if (!host.isConnected) cardHosts.delete(host);
+  for (const host of cardHosts) {
+    // Direkt im Dashboard ist jedes Kind von hui-card eine Karte, egal wie sie heißt
+    const card = host.isConnected && host.firstElementChild;
+    if (card && card.shadowRoot && typeof card.setConfig === "function") registerCard(card);
   }
-}
-
-/** Nach Theme-, Modus- oder Stärkewechsel alle M3-Karten neu einordnen. */
-function updateM3() {
-  const paint = dropletPaint();
-  const key = `${controlsActive}|${paint.fill}`;
-  if (key === m3PaintKey) return;
-  m3PaintKey = key;
-  for (const host of m3Hosts) if (host.isConnected) scheduleM3(host);
+  const key = `${controlsActive}|${dropletPaint().fill}|${cardsMode()}`;
+  if (key === cardsKey) return;
+  cardsKey = key;
+  for (const card of knownCards) if (card.isConnected) scheduleCard(card);
 }
 
 // ---------------------------------------------------------------------------
@@ -901,6 +913,13 @@ function texts(hass) {
     strength: de ? "Effektstärke" : "Effect strength",
     strengthHint: de ? "Tiefe der Schatten, von flach bis kräftig" : "Depth of the shadows, from flat to strong",
     flat: de ? "flach" : "flat",
+    cards: de ? "Eigene Karten" : "Custom cards",
+    cardsHint: de
+      ? "Karten aus HACS oder selbst geschrieben. „Nur Rahmen“ oder „Aus“, falls eine Karte nicht richtig aussieht."
+      : "Cards from HACS or self-written. Use “Frame only” or “Off” if a card does not look right.",
+    cardsFull: de ? "Vollständig" : "Full",
+    cardsFrame: de ? "Nur Rahmen" : "Frame only",
+    cardsOff: de ? "Aus" : "Off",
     perUser: de ? "Gilt für deinen Benutzer." : "Applies to your user.",
     inactive: de
       ? "Wähle im Profil das Theme „Neumorphism“, dann wirken diese Einstellungen."
@@ -979,6 +998,13 @@ class NeumorphismColorPicker extends HTMLElement {
         input[type="range"]::-moz-range-thumb { width: 28px; height: 28px; border: none; border-radius: 50%;
           box-shadow: var(--ha-box-shadow-s);
           background: radial-gradient(circle, var(--primary-color) 0 5px, var(--card-background-color) 6px); }
+        .cards-mode { padding: 16px 0 2px; }
+        .segmented { display: flex; gap: 6px; padding: 5px; margin: 8px 0 6px; border-radius: 999px;
+          box-shadow: var(--neumorphism-inset-shadow-s, none); }
+        .segmented button { flex: 1; border: none; border-radius: 999px; padding: 8px 6px; cursor: pointer;
+          background: transparent; color: var(--secondary-text-color); font: inherit; font-size: 0.85rem; }
+        .segmented button.selected { background: var(--card-background-color); color: var(--primary-color);
+          font-weight: var(--ha-font-weight-medium, 500); box-shadow: var(--neumorphism-raised-shadow, none); }
         .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; }
         button.reset { border: none; background: var(--card-background-color); color: var(--primary-color);
           border-radius: 999px; padding: 9px 18px; font: inherit; font-size: 0.9rem; cursor: pointer;
@@ -1011,6 +1037,13 @@ class NeumorphismColorPicker extends HTMLElement {
         <input type="range" min="0" max="${STRENGTH_MAX * 100}" step="5">
         <div class="hint s-hint"></div>
       </div>
+      <div class="cards-mode">
+        <div class="label c-label"></div>
+        <div class="segmented">
+          <button data-mode="full"></button><button data-mode="frame"></button><button data-mode="off"></button>
+        </div>
+        <div class="hint c-hint"></div>
+      </div>
       <div class="footer">
         <span class="info per-user"></span>
         <button class="reset"></button>
@@ -1036,8 +1069,16 @@ class NeumorphismColorPicker extends HTMLElement {
       this._update();
     });
     range.addEventListener("change", () => this._save({ neumorphismStrength: Number(range.value) / 100 }));
+    for (const button of root.querySelectorAll(".segmented button")) {
+      button.addEventListener("click", () => this._save({ neumorphismCards: button.dataset.mode }));
+    }
     root.querySelector(".reset").addEventListener("click", () =>
-      this._save({ primaryColor: undefined, accentColor: undefined, neumorphismStrength: undefined })
+      this._save({
+        primaryColor: undefined,
+        accentColor: undefined,
+        neumorphismStrength: undefined,
+        neumorphismCards: undefined,
+      })
     );
   }
 
@@ -1064,7 +1105,14 @@ class NeumorphismColorPicker extends HTMLElement {
     root.querySelector(".per-user").textContent = t.perUser;
     const reset = root.querySelector(".reset");
     reset.textContent = t.reset;
-    reset.hidden = !stored.primary && !stored.accent && stored.strength === null;
+    reset.hidden = !stored.primary && !stored.accent && stored.strength === null && !stored.cardsStored;
+    root.querySelector(".c-label").textContent = t.cards;
+    root.querySelector(".c-hint").textContent = t.cardsHint;
+    for (const button of root.querySelectorAll(".segmented button")) {
+      const mode = button.dataset.mode;
+      button.textContent = t[`cards${mode[0].toUpperCase()}${mode.slice(1)}`];
+      button.classList.toggle("selected", stored.cards === mode);
+    }
 
     const strength = preview.strength ?? stored.strength ?? 1;
     const range = root.querySelector('input[type="range"]');
@@ -1191,7 +1239,6 @@ if (!customElements.get(PICKER_TAG)) {
   });
 
   patchControls();
-  setupM3();
   // Jeder Schritt für sich: Ein Fehler in einem Teil soll die anderen nicht aufhalten.
   const safely = (fn) => {
     try {
@@ -1205,8 +1252,7 @@ if (!customElements.get(PICKER_TAG)) {
     safely(injectIntoProfile);
     safely(updateDroplets);
     safely(updateButtonGroups);
-    safely(updateCustomCards);
-    safely(updateM3);
+    safely(updateCards);
   };
   window.addEventListener("resize", () =>
     requestAnimationFrame(() => {

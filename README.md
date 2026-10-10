@@ -5,7 +5,7 @@ Ein weiches „Soft UI“-Design für Home Assistant, bei dem alles aus einem Gu
 - **Hell- und Dunkelmodus**, umgeschaltet wie gewohnt im Profil (Auto / Hell / Dunkel)
 - **Geformte Bedienelemente** in Kacheln, Karten und Detailansichten: Schalter, Schieber, Modus-Auswahl, Thermostat- und Luftbefeuchter-Regler, +/–-Knöpfe, Buttons, Eingabefelder
 - **Titelleiste ohne Kante**: Der Inhalt läuft beim Scrollen weich darunter aus
-- **Unterstützung für [M3 Cards](https://github.com/j0sp0r/m3-cards)**: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen, kräftig gefärbte Flächen behalten ihre Farbe
+- **Auch eigene Karten** aus HACS oder selbst geschrieben, etwa [M3 Cards](https://github.com/j0sp0r/m3-cards), Mushroom, Button Card oder Bubble Card: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen
 - **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen
 - **Primär- und Akzentfarbe** per Farbwähler direkt im Profil
 - **Effektstärke** per Regler, von flach bis kräftig
@@ -35,10 +35,23 @@ Sobald im Profil das Theme „Neumorphism“ gewählt ist, erscheinen im Bereich
 - **Primärfarbe**: Buttons, Symbole, ausgewählte Einträge, Fortschrittsbalken
 - **Akzentfarbe**: Schalter, Checkboxen, Hervorhebungen
 - **Effektstärke**: 0 % ist flach ohne Schatten, 100 % der Standard, 200 % besonders kräftig
+- **Eigene Karten**: *Vollständig*, *Nur Rahmen* oder *Aus* (siehe unten)
 
-Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen. Änderungen sind sofort zu sehen, schon während du den Farbwähler oder den Regler bewegst. **Zurücksetzen** stellt Farben und Effektstärke auf die Standardwerte zurück.
+Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen. Änderungen sind sofort zu sehen, schon während du den Farbwähler oder den Regler bewegst. **Zurücksetzen** stellt alle Einstellungen auf die Standardwerte zurück.
 
 Die Einstellungen gehören zu deinem Benutzer. Andere Benutzer stellen ihre eigenen Farben ein. Wählst du im Profil ein anderes Theme, setzt Home Assistant die Farben zurück.
+
+### Eigene Karten
+
+Karten, die nicht von Home Assistant selbst stammen, bringen ihre eigenen Bausteine mit. Damit auch sie aus einem Guss wirken, werden sie nach Farbe und Form eingeordnet:
+
+- **Rahmen**: Die Karte selbst oder ein innerer Rahmen, der sie ausfüllt, wird erhaben, ohne Rand und ohne Glas-Effekt. Durchsichtige Karten (z. B. reine Überschriften) bleiben unverändert. Karten in einer Karte bekommen keinen zweiten Rahmen.
+- **Neutrale oder leicht getönte Flächen** (Chips, Symbolfelder, Knöpfe, Kacheln) werden erhaben in der Kartenfarbe, ihr Inhalt behält seine Farbe.
+- **Kräftig gefärbte Flächen** (z. B. ein aktiver Modus) behalten ihre Farbe und werden erhaben.
+- **Flächen in Flächen und schmale Spuren** (Schieber, Fortschrittsbalken) werden eingelassen.
+- Bilder, Verläufe, Diagramme, Overlays und die Bausteine von Home Assistant bleiben unberührt.
+
+Getestet mit M3 Cards, Mushroom, Button Card und Bubble Card. Weil die Einordnung allgemein arbeitet, kann sie bei einzelnen Karten danebenliegen. Dann im Profil **Eigene Karten** auf *Nur Rahmen* oder *Aus* stellen.
 
 ### Als Dashboard-Karte
 
@@ -83,7 +96,7 @@ Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit 
 
 ## Grenzen
 
-- Geformt werden die Bedienelemente von Home Assistant selbst. Eigene Karten aus HACS oder selbst geschriebene Karten bekommen die erhabene Kartenform (ohne Rand, mit Schatten), durchsichtige Karten bleiben unverändert. Ihre inneren Elemente bringen sie selbst mit, die bleiben flach. Ausnahme sind die M3 Cards, die gezielt unterstützt werden.
+- Geformt werden die Bedienelemente von Home Assistant selbst. Eigene Karten werden nach Farbe und Form eingeordnet, nicht nach ihrer Bedeutung. Grafiken, die eine Karte selbst zeichnet (z. B. gewellte Schieber), bleiben unverändert.
 - Neumorphism hat von Natur aus wenig Kontrast zwischen Karte und Hintergrund. Auf sehr hellen oder sehr dunklen Displays sind die Kartenränder schwächer zu sehen.
 - Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Home-Assistant-Updates kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10.
 
