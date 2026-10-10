@@ -15,7 +15,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.5.0";
+const VERSION = "3.6.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -59,19 +59,37 @@ function hexToOklch(hex) {
   return [L, Math.hypot(a, bb), Math.atan2(bb, a)];
 }
 
-function oklchToHex(L, C, h) {
+function oklchToLinear(L, C, h) {
   const a = C * Math.cos(h);
   const b = C * Math.sin(h);
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  return rgbToHex(
-    [
-      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-      -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-    ].map(fromLinear)
-  );
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+/**
+ * Wie im HA-Frontend, aber außerhalb von sRGB wird die Sättigung verringert statt
+ * abgeschnitten. So kippt der Farbton bei sehr dunklen oder hellen Stufen nicht.
+ */
+function oklchToHex(L, C, h) {
+  const inGamut = (rgb) => rgb.every((c) => c >= -1e-4 && c <= 1 + 1e-4);
+  let rgb = oklchToLinear(L, C, h);
+  if (!inGamut(rgb)) {
+    let low = 0;
+    let high = C;
+    for (let i = 0; i < 20; i++) {
+      const mid = (low + high) / 2;
+      if (inGamut(oklchToLinear(L, mid, h))) low = mid;
+      else high = mid;
+    }
+    rgb = oklchToLinear(L, low, h);
+  }
+  return rgbToHex(rgb.map(fromLinear));
 }
 
 /** Stufen 05..95 wie generateColorPalette() im HA-Frontend (Basis = 50). */
@@ -269,6 +287,8 @@ const CONTROL_STYLES = {
   "ha-picker-field": `
     ha-combo-box-item { box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-lg) !important; }
   `,
+  // Hülle jeder Dashboard-Karte; dient nur dazu, eigene Karten zu finden
+  "hui-card": "",
   // Symbol-Knöpfe sind flach, erhaben werden sie erst als Gruppe in der Titelleiste
   // Buttons, die mit Nachbarn eine gemeinsame Form haben (siehe updateButtonGroups)
   "ha-button": `
@@ -282,6 +302,7 @@ const CONTROL_STYLES = {
   "hui-root": `
     .header { box-shadow: none !important; }
     .header::after { ${HEADER_FADE} }
+    .edit-mode .header::after { background: linear-gradient(to bottom, var(--app-header-edit-background-color), transparent); }
     .toolbar { border-bottom: none !important; position: relative; }
     .action-items, .toolbar > ha-menu-button, .toolbar > ha-icon-button-arrow-prev { ${GROUP} }
   `,
@@ -375,6 +396,7 @@ function patchControls() {
           adoptControlStyle(root, tag);
           if (DROPLET_GROUPS[tag]) dropletHosts.add(this);
           if (tag === "ha-button") buttonHosts.add(this);
+          if (tag === "hui-card") cardHosts.add(this);
           return root;
         };
         proto.__neumorphismPatched = true;
@@ -383,6 +405,7 @@ function patchControls() {
         adoptControlStyle(el.shadowRoot, tag);
         if (DROPLET_GROUPS[tag]) dropletHosts.add(el);
         if (tag === "ha-button") buttonHosts.add(el);
+        if (tag === "hui-card") cardHosts.add(el);
       }
     });
   }
@@ -420,6 +443,7 @@ const DROPLET_INSET = 4; // Kreise etwas kleiner als die Knopffläche
 const DROPLET_NECK = 0.5; // halbe Halsbreite im Verhältnis zum Radius
 const dropletHosts = new Set();
 const buttonHosts = new Set();
+const cardHosts = new Set();
 const BUTTON_GAP = 24; // Buttons mit höchstens diesem Abstand laufen zusammen
 let dropletProbe = null;
 
@@ -525,7 +549,7 @@ function updateDroplets() {
     if (!host.isConnected || !root) continue;
     DROPLET_GROUPS[host.localName].forEach((find, index) => {
       const existing = root.querySelector(`.neumorphism-droplet[data-group="${index}"]`);
-      const group = controlsActive ? find(root) : null;
+      const group = (controlsActive && find(root)) || null;
       const items = group ? groupItems(group) : [];
       const parent = group?.anchor.parentElement;
       if (!items.length || !parent) {
@@ -653,6 +677,47 @@ function updateButtonGroups() {
   buttonDroplets.clear();
   for (const [parent, droplets] of used) buttonDroplets.set(parent, droplets);
   for (const btn of buttonHosts) btn.toggleAttribute("neumorphism-merged", merged.has(btn));
+}
+
+// ---------------------------------------------------------------------------
+// Eigene Karten (HACS, selbst geschrieben): äußere Karte angleichen
+// ---------------------------------------------------------------------------
+
+// Viele eigene Karten setzen Rand und Schatten selbst. Ihre oberste Karte wird
+// erhaben wie die übrigen; durchsichtige Karten (z. B. reine Überschriften) bleiben unverändert.
+const CUSTOM_CARD_STYLE = `
+  :host > ha-card { box-shadow: var(--neumorphism-card-shadow) !important; border-width: 0 !important; }
+`;
+let customCardSheet = null;
+const customCardChecked = new WeakSet();
+
+function isOpaque(el) {
+  const css = getComputedStyle(el);
+  if (css.backgroundImage && css.backgroundImage !== "none") return true;
+  const m = css.backgroundColor.match(/rgba?\(([^)]+)\)/);
+  if (!m) return false;
+  const alpha = m[1].split(",")[3];
+  return alpha === undefined || Number(alpha) > 0.5;
+}
+
+function updateCustomCards() {
+  if (!supportsSheets) return;
+  if (!customCardSheet) {
+    customCardSheet = new CSSStyleSheet();
+    controlSheets.set("__custom-card", customCardSheet);
+    CONTROL_STYLES["__custom-card"] = CUSTOM_CARD_STYLE;
+    customCardSheet.replaceSync(controlsActive ? CUSTOM_CARD_STYLE : "");
+  }
+  if (cardHosts.size > 2000) for (const host of cardHosts) if (!host.isConnected) cardHosts.delete(host);
+  for (const host of cardHosts) {
+    if (!host.isConnected) continue;
+    const card = host.firstElementChild;
+    if (!card || card.localName.startsWith("hui-") || !card.shadowRoot || customCardChecked.has(card)) continue;
+    const haCard = [...card.shadowRoot.children].find((el) => el.localName === "ha-card");
+    if (!haCard) continue; // noch nicht gerendert, später erneut prüfen
+    customCardChecked.add(card);
+    if (isOpaque(haCard)) adoptControlStyle(card.shadowRoot, "__custom-card");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -963,16 +1028,25 @@ if (!customElements.get(PICKER_TAG)) {
   });
 
   patchControls();
+  // Jeder Schritt für sich: Ein Fehler in einem Teil soll die anderen nicht aufhalten.
+  const safely = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      console.warn("Neumorphism:", err);
+    }
+  };
   const tick = () => {
-    applyColors();
-    injectIntoProfile();
-    updateDroplets();
-    updateButtonGroups();
+    safely(applyColors);
+    safely(injectIntoProfile);
+    safely(updateDroplets);
+    safely(updateButtonGroups);
+    safely(updateCustomCards);
   };
   window.addEventListener("resize", () =>
     requestAnimationFrame(() => {
-      updateDroplets();
-      updateButtonGroups();
+      safely(updateDroplets);
+      safely(updateButtonGroups);
     })
   );
   // Theme- oder Moduswechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.

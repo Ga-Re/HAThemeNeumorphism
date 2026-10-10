@@ -82,7 +82,7 @@ Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit 
 
 ## Grenzen
 
-- Geformt werden die Bedienelemente von Home Assistant selbst. Eigene Karten aus HACS (z. B. Mushroom oder Bubble Card) bringen eigene Bausteine mit und bekommen nur Farben und Kartenschatten, ihre inneren Elemente bleiben flach.
+- Geformt werden die Bedienelemente von Home Assistant selbst. Eigene Karten aus HACS oder selbst geschriebene Karten bekommen die erhabene Kartenform (ohne Rand, mit Schatten), durchsichtige Karten bleiben unverändert. Ihre inneren Elemente bringen sie selbst mit, die bleiben flach.
 - Neumorphism hat von Natur aus wenig Kontrast zwischen Karte und Hintergrund. Auf sehr hellen oder sehr dunklen Displays sind die Kartenränder schwächer zu sehen.
 - Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Home-Assistant-Updates kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10.
 

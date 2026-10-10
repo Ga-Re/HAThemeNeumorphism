@@ -99,15 +99,33 @@ def hex_to_oklch(value: str) -> tuple[float, float, float]:
     return L, math.hypot(a, bb), math.atan2(bb, a)
 
 
-def oklch_to_hex(L: float, C: float, h: float) -> str:
+def _oklch_to_linear(L: float, C: float, h: float) -> tuple[float, float, float]:
     a, b = C * math.cos(h), C * math.sin(h)
     l_ = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
     m_ = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
     s_ = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3
-    r = 4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_
-    g = -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_
-    bl = -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_
-    return rgb_to_hex(_from_linear(c) for c in (r, g, bl))
+    return (
+        4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+        -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+        -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_,
+    )
+
+
+def oklch_to_hex(L: float, C: float, h: float) -> str:
+    """Wie im HA-Frontend, aber außerhalb von sRGB wird die Sättigung verringert statt
+    abgeschnitten. So kippt der Farbton bei sehr dunklen oder hellen Stufen nicht."""
+    in_gamut = lambda rgb: all(-1e-4 <= c <= 1 + 1e-4 for c in rgb)  # noqa: E731
+    rgb = _oklch_to_linear(L, C, h)
+    if not in_gamut(rgb):
+        low, high = 0.0, C
+        for _ in range(20):
+            mid = (low + high) / 2
+            if in_gamut(_oklch_to_linear(L, mid, h)):
+                low = mid
+            else:
+                high = mid
+        rgb = _oklch_to_linear(L, low, h)
+    return rgb_to_hex(_from_linear(c) for c in rgb)
 
 
 def palette(base: str) -> dict[int, str]:
@@ -171,6 +189,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("ha-card-header-color", "var(--primary-text-color)"),
         ("# Karten: weicher Schatten unten rechts, heller Schein oben links", None),
         ("ha-card-box-shadow", shadow(9, 22)),
+        ("neumorphism-card-shadow", shadow(9, 22)),
         ("ha-card-border-width", "0px"),
         ("ha-card-border-color", "transparent"),
         ("ha-card-border-radius", CARD_RADIUS),
@@ -194,6 +213,8 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("app-header-background-color", "var(--primary-background-color)"),
         ("app-header-text-color", "var(--primary-text-color)"),
         ("app-header-border-bottom", "none"),
+        ("app-header-edit-background-color", m["inset"]),
+        ("app-header-edit-text-color", "var(--primary-text-color)"),
         ("sidebar-background-color", "var(--primary-background-color)"),
         ("sidebar-text-color", "var(--primary-text-color)"),
         ("sidebar-icon-color", "var(--secondary-text-color)"),
