@@ -10,20 +10,24 @@ Weiches „Soft UI“-Theme: Karten liegen eine Spur heller als der Hintergrund 
 
 ## Installation
 
-1. **Theme:** Über HACS: ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/Ga-Re/HAThemeNeumorphism`, Typ „Theme“, danach „Neumorphism“ herunterladen.
-   Oder von Hand: `themes/neumorphism.yaml` nach `/config/themes/neumorphism.yaml` kopieren.
-2. **Farbwähler:** `www/neumorphism-colors.js` nach `/config/www/neumorphism-colors.js` kopieren. HACS installiert bei Themes nur den Ordner `themes/`, diese Datei musst du selbst kopieren.
-3. In der `configuration.yaml`:
-   ```yaml
-   frontend:
-     themes: !include_dir_merge_named themes
-     extra_module_url:
-       - /local/neumorphism-colors.js?v=2
-   ```
-4. Home Assistant neu starten.
-5. **Profil → Design**: „Neumorphism“ wählen und den Modus einstellen. Darunter erscheinen die Farbwähler.
+Das Repository ist eine Home-Assistant-Integration. Sie bringt Theme und Farbwähler mit, es müssen keine Dateien kopiert und keine Einträge in der `configuration.yaml` gemacht werden.
 
-Ohne Schritt 2 und den Eintrag `extra_module_url` funktioniert das Theme auch, nur ohne Farbwähler.
+1. **HACS** → ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/Ga-Re/HAThemeNeumorphism`, Typ **„Integration“**. Danach „Neumorphism“ herunterladen.
+2. Home Assistant neu starten.
+3. *Einstellungen → Geräte & Dienste → Integration hinzufügen* → **„Neumorphism“** → *Absenden*.
+4. **Profil → Design**: „Neumorphism“ wählen und den Modus einstellen. Darunter erscheinen die Farbwähler.
+
+Ohne HACS: den Ordner `custom_components/neumorphism` nach `/config/custom_components/neumorphism` kopieren, dann weiter mit Schritt 2.
+
+Updates kommen über HACS. Die Integration hängt die Versionsnummer an das Skript an, Browser und App laden nach einem Update also automatisch die neue Fassung.
+
+### Umstieg von der früheren Theme-Installation
+
+Wer das Theme vorher als HACS-„Theme“ oder von Hand installiert hatte:
+
+1. In HACS den bisherigen Eintrag „Neumorphism“ (Typ Theme) entfernen und das Repository wie oben als **Integration** neu hinzufügen.
+2. Falls angelegt: in der `configuration.yaml` die Zeile `- /local/neumorphism-colors.js?v=…` unter `extra_module_url` löschen und die Datei `/config/www/neumorphism-colors.js` entfernen. Die Zeile `themes: !include_dir_merge_named themes` kann bleiben, falls du andere Themes nutzt.
+3. Falls angelegt: die Text-Helfer `input_text.neumorphism_primaerfarbe` und `input_text.neumorphism_akzentfarbe` löschen, sie werden nicht mehr gebraucht.
 
 ## Farben einstellen
 
@@ -35,7 +39,6 @@ Gut zu wissen:
 - Die Farben werden wie die übrigen Design-Einstellungen **pro Benutzer** gespeichert, dort wo Home Assistant auch die Farben des Standard-Themes ablegt. Bei älteren Home-Assistant-Versionen gelten sie pro Browser bzw. Gerät.
 - Wechselst du im Profil das Theme, setzt Home Assistant die Farben zurück. Erst das Theme wählen, dann die Farben.
 - Bei anderen Themes ändert das Modul nichts und blendet die Farbwähler aus.
-- Nach einem Update der JS-Datei die Zahl in `?v=2` erhöhen, sonst lädt der Browser oder die App die alte Version aus dem Cache.
 
 Die Farbwähler gibt es auch als Karte für ein Dashboard. Sie speichert in dieselben Einstellungen:
 
@@ -46,13 +49,9 @@ title: Farben   # optional
 
 ## Farbwähler erscheinen nicht
 
-Die Farbwähler kommen aus `neumorphism-colors.js`, nicht aus dem Theme. Fehlen sie, lädt Home Assistant die Datei meist nicht:
-
 1. Ist im Profil unter „Design“ wirklich ein **Neumorphism**-Theme gewählt? Bei „Standard-Design verwenden“ zeigt Home Assistant seine eigenen Farbwähler, unsere bleiben dann ausgeblendet.
-2. Liegt die Datei unter `/config/www/neumorphism-colors.js`? Test im Browser: `http://<home-assistant>:8123/local/neumorphism-colors.js?v=2` muss JavaScript-Code anzeigen, keine Fehlerseite. Gab es den Ordner `www` vorher noch nicht, muss Home Assistant einmal neu starten.
-3. Steht `extra_module_url` unter dem **einzigen** `frontend:`-Eintrag in der `configuration.yaml`? Ein zweiter `frontend:`-Block überschreibt den ersten. Nach der Änderung Home Assistant neu starten, ein YAML-Neuladen reicht nicht.
-4. In der Companion-App den Cache leeren: *Einstellungen → Companion-App → Fehlerbehebung → Frontend-Cache zurücksetzen*. Im Browser einmal hart neu laden (Strg/Cmd + Shift + R).
-5. Zur Kontrolle: Beim Bearbeiten eines Dashboards unter „Karte hinzufügen“ nach „Neumorphism Farben“ suchen. Taucht die Karte auf, ist das Modul geladen.
+2. Ist die Integration eingerichtet? Unter *Einstellungen → Geräte & Dienste* muss „Neumorphism“ stehen. Nur herunterladen reicht nicht.
+3. In der Companion-App den Cache leeren: *Einstellungen → Companion-App → Fehlerbehebung → Frontend-Cache zurücksetzen*. Im Browser einmal hart neu laden (Strg/Cmd + Shift + R).
 
 ## Fertige Farbkombinationen
 
@@ -89,7 +88,7 @@ python3 generate.py --effekt stark                          # Schatteneffekt: de
 
 Die mitgelieferte Datei nutzt **normal**. Mit `--effekt stark` werden die Schatten breiter und kräftiger, mit `--effekt dezent` kürzer und blasser.
 
-Ohne `-o` landet das Ergebnis in `themes/neumorphism.yaml`. Danach die Datei wie oben kopieren und `frontend.reload_themes` ausführen.
+Ohne `-o` landet das Ergebnis in `custom_components/neumorphism/themes/neumorphism.yaml`, also in der Datei, die die Integration lädt. Danach den Ordner `custom_components/neumorphism` nach Home Assistant kopieren und die Integration neu laden. Achtung: Ein HACS-Update überschreibt diese Datei wieder. Eigene Varianten daher besser mit `-o meine-themes.yaml` erzeugen und klassisch über `frontend: themes: !include_dir_merge_named themes` einbinden.
 
 Hintergrund, Schatten, Textfarben und Rundungen stehen oben in `generate.py` (`MODES`, `CARD_RADIUS`, `DIALOG_RADIUS`). Eigene Farben kommen in `COLORS`.
 
@@ -111,3 +110,4 @@ card_mod:
 - Neumorphism hat von Natur aus wenig Kontrast zwischen Karte und Hintergrund. Auf sehr hellen oder sehr dunklen Displays sind die Kartenränder schwächer zu sehen.
 - Die Farbwähler im Profil hängt das Modul in die Profilseite von Home Assistant ein. Ändert Home Assistant diese Seite grundlegend, können sie dort fehlen. Die Dashboard-Karte funktioniert dann weiterhin.
 - Runde, erhabene Knöpfe und farbig leuchtende Buttons wie in vielen Neumorphism-Entwürfen lassen sich über ein Theme nicht auf die Bedienelemente von Home Assistant übertragen.
+- Für das Registrieren der Themes ohne `configuration.yaml` nutzt die Integration interne Datenstrukturen des Frontends, für die es keine offizielle Schnittstelle gibt. Nach größeren Home-Assistant-Updates kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10.

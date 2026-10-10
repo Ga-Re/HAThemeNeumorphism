@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Neumorphism",
+        "description": "Provides the Neumorphism themes and adds primary and accent color pickers to the Theme section of your profile. Afterwards select the theme “Neumorphism” in your profile."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Neumorphism is already set up."
+    }
+  }
+}

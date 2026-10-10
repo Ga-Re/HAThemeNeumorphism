@@ -9,13 +9,10 @@
  * Die Farben stehen in den Theme-Einstellungen des Benutzers (primaryColor /
  * accentColor), dort wo Home Assistant sie auch beim Standard-Theme ablegt.
  *
- * Einbinden (configuration.yaml):
- *   frontend:
- *     extra_module_url:
- *       - /local/neumorphism-colors.js?v=2
+ * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "2.0.0";
+const VERSION = "3.0.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
