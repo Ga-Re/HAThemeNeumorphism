@@ -8,8 +8,7 @@ Das Design gilt überall: auf den Dashboards, in allen Seiten von Home Assistant
 - **Geformte Bedienelemente** in Kacheln, Karten und Detailansichten: Schalter, Schieber, Modus-Auswahl, Thermostat- und Luftbefeuchter-Regler, +/–-Knöpfe, Buttons, Eingabefelder
 - **Titelleiste ohne Kante**: Der Inhalt läuft beim Scrollen weich darunter aus
 - **Alle Seiten von Home Assistant**: Einstellungen, Automationen-Editor, Entwicklerwerkzeuge, Verlauf, Kalender, To-do-Listen, Dialoge und Menüs. Der gewählte Reiter ist eine erhabene Pille, Filter-Chips und aufklappbare Abschnitte sind erhaben, Suchfelder und Code-Editoren eingelassen, die gewählte Zeile in Listen und Tabellen ebenfalls
-- **HACS** und andere Seiten von Integrationen in derselben Form
-- **Add-ons**: Die Oberflächen von Add-ons wie ESPHome, Zigbee2MQTT, Node-RED oder File editor im selben Design, im Dunkelmodus auch dunkel
+- **Alles andere automatisch**: Seiten von Integrationen (z. B. WashData, Vacuum Agent), HACS und die Oberflächen von Add-ons (z. B. ESPHome, Zigbee2MQTT, Node-RED, File editor) bekommen dasselbe Design, im Dunkelmodus auch dunkel. Ohne Anpassungen für einzelne Integrationen oder Add-ons, deshalb auch für künftige
 - **Auch eigene Karten** aus HACS oder selbst geschrieben, etwa [M3 Cards](https://github.com/j0sp0r/m3-cards), Mushroom, Button Card oder Bubble Card: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen
 - **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen
 - **Primär- und Akzentfarbe** per Farbwähler direkt im Profil
@@ -41,7 +40,7 @@ Sobald im Profil das Theme „Neumorphism“ gewählt ist, erscheinen im Bereich
 - **Akzentfarbe**: Schalter, Checkboxen, Hervorhebungen
 - **Effektstärke**: 0 % ist flach ohne Schatten, 100 % der Standard, 200 % besonders kräftig
 - **Eigene Karten**: *Vollständig*, *Nur Rahmen* oder *Aus* (siehe unten)
-- **Add-ons**: *Angepasst* oder *Aus*, einzelne Add-ons lassen sich abwählen (siehe unten)
+- **Add-ons und Integrationen**: *Angepasst* oder *Aus*, einzelne lassen sich abwählen (siehe unten)
 
 Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen. Änderungen sind sofort zu sehen, schon während du den Farbwähler oder den Regler bewegst. **Zurücksetzen** stellt alle Einstellungen auf die Standardwerte zurück.
 
@@ -59,19 +58,17 @@ Karten, die nicht von Home Assistant selbst stammen, bringen ihre eigenen Bauste
 
 Getestet mit M3 Cards, Mushroom, Button Card und Bubble Card. Weil die Einordnung allgemein arbeitet, kann sie bei einzelnen Karten danebenliegen. Dann im Profil **Eigene Karten** auf *Nur Rahmen* oder *Aus* stellen.
 
-### Add-ons und andere eingebettete Seiten
+### Add-ons, Integrationen und alles andere
 
-Add-ons bringen ihre eigene Oberfläche mit. Home Assistant zeigt sie in einem eingebetteten Fenster, das das Design genauso erreicht wie die eigenen Seiten. Dort wird umgestellt:
+Alles, was nicht von Home Assistant selbst stammt, wird automatisch erkannt und bekommt dasselbe Design. Dazu gehören Seiten und Dialoge von Integrationen aus HACS, die Oberflächen von Add-ons und Webseiten-Karten, deren Seite von Home Assistant selbst kommt. Erkannt wird ein fremder Baustein daran, woher sein Code geladen wird, nicht an seinem Namen. So greift das Design auch bei Integrationen und Add-ons, die es heute noch nicht gibt, ohne dass für sie etwas angepasst werden muss.
 
-- **Farben**: Hintergründe, Schrift und Linien bekommen die Farben des Themes, die Primärfarbe gilt auch im Add-on. Kräftig gefärbte Flächen, Bilder und Grafiken bleiben, wie sie sind.
-- **Formen**: Karten, Dialoge, Menüs und Knöpfe werden erhaben, Eingabefelder, Code-Editoren und gewählte Einträge eingelassen. Leisten und große Flächen bleiben flach.
-- **Hell und Dunkel**: Bietet das Add-on selbst einen Dunkelmodus, wird er passend zu Home Assistant eingeschaltet. Die Einstellungen des Add-ons bleiben dabei unverändert.
+- **Formen**: Karten, Dialoge, Menüs und Knöpfe werden erhaben, der gewählte Reiter ebenfalls. Eingabefelder, Code-Editoren und gewählte Einträge sind eingelassen, Leisten und große Flächen bleiben flach.
+- **Farben**: Hintergründe, Schrift und Linien bekommen die Farben des Themes, die Primärfarbe gilt auch dort. Kräftig gefärbte Flächen, Bilder und Grafiken bleiben, wie sie sind.
+- **Hell und Dunkel**: Hat ein Add-on selbst einen Dunkelmodus, wird er passend zu Home Assistant eingeschaltet. Den Schalter dafür findet das Design selbst in der Oberfläche des Add-ons. Die Einstellungen des Add-ons bleiben dabei unverändert. Helle Code-Editoren werden im Dunkelmodus abgedunkelt.
 
-![Zigbee2MQTT und Node-RED, hell und dunkel](addons.png)
+![WashData, Zigbee2MQTT und Node-RED, hell und dunkel](addons.png)
 
-Für **ESPHome**, **Zigbee2MQTT**, **Node-RED** und **File editor** gibt es zusätzlich einen Feinschliff. Alle anderen Add-ons werden allgemein nach Farbe und Form eingeordnet. Sieht ein Add-on damit nicht gut aus, kannst du es im Profil unter **Add-ons** abwählen. Die Liste zum Abwählen sehen nur Administratoren. Ein Klick auf *Aus* schaltet die Anpassung für alle Add-ons ab.
-
-Dasselbe gilt für Webseiten-Karten und Webseiten-Dashboards, deren Seite von Home Assistant selbst kommt (z. B. aus `/local/`).
+Sieht etwas damit nicht gut aus, kannst du es im Profil unter **Add-ons und Integrationen** abwählen, es behält dann sein eigenes Aussehen. Die Liste zum Abwählen sehen nur Administratoren. *Aus* schaltet die Anpassung für alle ab.
 
 ### Als Dashboard-Karte
 
@@ -91,7 +88,7 @@ title: Design   # optional
 
 **Das Theme „Neumorphism“ fehlt in der Auswahl**: Die Integration ist nicht eingerichtet oder Home Assistant wurde nach dem Herunterladen nicht neu gestartet.
 
-**Ein Add-on sieht nicht richtig aus**: Im Profil unter *Add-ons* das Add-on abwählen, es behält dann sein eigenes Aussehen. Öffnet sich ein Add-on in einem neuen Tab oder über einen eigenen Port, ist es für das Design nicht erreichbar.
+**Ein Add-on oder die Seite einer Integration sieht nicht richtig aus**: Im Profil unter *Add-ons und Integrationen* abwählen, es behält dann sein eigenes Aussehen. Öffnet sich ein Add-on in einem neuen Tab oder über einen eigenen Port, ist es für das Design nicht erreichbar.
 
 ## Für eigene Karten
 
@@ -121,7 +118,7 @@ Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit 
 - Eigene Karten und Add-ons werden nach Farbe und Form eingeordnet, nicht nach ihrer Bedeutung. Grafiken, die eine Karte oder ein Add-on selbst zeichnet (z. B. gewellte Schieber, Diagramme), bleiben unverändert.
 - Nicht erreichbar sind Seiten auf einer anderen Adresse: Add-ons, die sich in einem neuen Tab oder über einen eigenen Port öffnen, und Webseiten anderer Geräte. Das verhindert der Browser. Ebenso nicht die Anmeldeseite und die eigenen Einstellungsseiten der Companion-App.
 - Neumorphism hat von Natur aus wenig Kontrast zwischen Karte und Hintergrund. Auf sehr hellen oder sehr dunklen Displays sind die Kartenränder schwächer zu sehen.
-- Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends, von HACS und der Add-ons zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Updates von Home Assistant, HACS oder einem Add-on kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10, HACS 2.0.5 und den Oberflächen von ESPHome Device Builder 1.23, Zigbee2MQTT 2.14 (Windfront), Node-RED 5.0 und File editor (HASS Configurator 0.6).
+- Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends, von HACS und der Add-ons zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Updates von Home Assistant, HACS oder einem Add-on kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10, HACS 2.0.5, WashData 0.5.8, Vacuum Agent 2.2.5 und den Oberflächen von ESPHome Device Builder 1.23, Zigbee2MQTT 2.14 (Windfront), Node-RED 5.0 und File editor (HASS Configurator 0.6).
 
 ## Lizenz
 

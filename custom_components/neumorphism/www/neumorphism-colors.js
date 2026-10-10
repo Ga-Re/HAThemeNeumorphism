@@ -7,8 +7,10 @@
  * - Stellt die Karte "custom:neumorphism-color-card" bereit (gleiche Einstellungen).
  * - Wendet die Einstellungen auf das aktive Theme an.
  * - Formt die Bausteine von Home Assistant (Schalter, Schieber, Knöpfe, Reiter,
- *   Eingabefelder, Tabellen ...) erhaben oder eingelassen, damit alles aus einem Guss wirkt,
- *   ebenso eigene Karten, HACS und die Oberflächen von Add-ons.
+ *   Eingabefelder, Tabellen ...) erhaben oder eingelassen, damit alles aus einem Guss wirkt.
+ * - Alles, was nicht von Home Assistant stammt (eigene Karten, Seiten und Dialoge von
+ *   Integrationen, HACS, Oberflächen von Add-ons), wird automatisch erkannt und nach Farbe
+ *   und Form eingeordnet, ohne Regeln für einzelne Integrationen oder Add-ons.
  *
  * Gespeichert wird in den Theme-Einstellungen des Benutzers (primaryColor,
  * accentColor, neumorphismStrength, neumorphismCards, neumorphismApps,
@@ -17,7 +19,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "5.0.0";
+const VERSION = "6.0.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -810,8 +812,6 @@ const CARD_STYLE = `
 `;
 const CARD_MARKS = ["nm-card-shadow", "nm-frame-inner", "nm-raised", "nm-accent", "nm-inset"];
 const ACCENT_DISTANCE = 90; // Abstand zur Kartenfarbe, ab dem eine Fläche als farbig gilt
-// Bausteine von Home Assistant und Komponenten-Bibliotheken: eigene Regeln oder bewusst unberührt
-const FOREIGN = /^(ha-|hui-|mwc-|md-|wa-|paper-|state-badge$)/;
 const knownCards = new Set();
 const framedCards = new WeakSet();
 const cardPending = new Set();
@@ -898,7 +898,8 @@ function collectCard(root, card, out) {
       registerCard(el);
       continue;
     }
-    if (el.localName !== "ha-card" && FOREIGN.test(el.localName)) continue;
+    // Bausteine von Home Assistant: eigene Regeln (die Karte selbst wird geformt)
+    if (el.localName !== "ha-card" && isCoreElement(el, card)) continue;
     out.push(el);
     if (el.shadowRoot && el.localName !== "ha-card") collectCard(el.shadowRoot, card, out);
   }
@@ -1014,7 +1015,77 @@ function updateCards() {
 }
 
 // ---------------------------------------------------------------------------
-// Eingebettete Seiten: HACS, Seiten von Integrationen, Add-ons, Webseiten
+// Fremde Bausteine erkennen: von Home Assistant oder von Integrationen, Karten, Add-ons
+// ---------------------------------------------------------------------------
+//
+// Entscheidend ist, woher der Code eines Bausteins geladen wurde, nicht sein Name
+// (manche Integrationen nennen ihre Bausteine ebenfalls "ha-..."). Dazu wird
+// customElements.define beobachtet. Was schon vor diesem Skript registriert war,
+// wird nach dem Namen eingeordnet.
+
+const CORE_SCRIPT = /\/(frontend_latest|frontend_es5)\//;
+const OWN_SCRIPT = "/neumorphism_static/";
+const CORE_PREFIX =
+  /^(ha-|hui-|hass-|mwc-|md-|wa-|paper-|iron-|state-|more-info-|entity-|dialog-|search-input|developer-tools|partial-panel-resolver|home-assistant|notification-|lit-virtualizer)/;
+const coreTags = new Set();
+const thirdPartyTags = new Set();
+const thirdPartyElements = new Set(); // angeschlossene fremde Bausteine (Kandidaten für eigene Bereiche)
+
+/** Woher der gerade registrierte Baustein stammt, aus der Aufrufkette. */
+function definedBy() {
+  const urls = (new Error().stack || "").match(/https?:\/\/[^\s)]+/g) || [];
+  const other = urls.find((url) => !url.includes(OWN_SCRIPT));
+  if (other) return CORE_SCRIPT.test(other) ? "core" : "third";
+  return urls.length ? "own" : "unknown";
+}
+
+function hookDefine() {
+  const registry = window.customElements;
+  const define = registry.define;
+  registry.define = function (name, cls, options) {
+    safely(() => {
+      const source = definedBy();
+      if (source === "third") {
+        thirdPartyTags.add(name);
+        watchThirdParty(cls);
+      } else if (source !== "unknown") {
+        coreTags.add(name);
+      }
+    });
+    return define.call(this, name, cls, options);
+  };
+}
+
+/** Jedes angeschlossene Exemplar melden (Lifecycle-Callbacks liest der Browser bei der Registrierung). */
+function watchThirdParty(cls) {
+  const proto = cls?.prototype;
+  if (!proto || Object.prototype.hasOwnProperty.call(proto, "__neumorphismWatched")) return;
+  const connected = proto.connectedCallback;
+  proto.connectedCallback = function (...args) {
+    const result = connected?.apply(this, args);
+    thirdPartyElements.add(this);
+    return result;
+  };
+  proto.__neumorphismWatched = true;
+}
+
+const namespaceOf = (tag) => tag.split("-").slice(0, 2).join("-");
+
+/**
+ * Baustein von Home Assistant (eigene Regeln) oder fremd (wird eingeordnet)?
+ * root: der fremde Baustein, in dem das Element liegt. Gleicher Namensraum wie er
+ * (z. B. "ha-washdata-...") heißt fremd, auch wenn er vor diesem Skript registriert wurde.
+ */
+function isCoreElement(el, root) {
+  const tag = el.localName;
+  if (!tag.includes("-") || thirdPartyTags.has(tag)) return false;
+  if (coreTags.has(tag)) return true;
+  if (root && root !== el && namespaceOf(tag) === namespaceOf(root.localName)) return false;
+  return CORE_PREFIX.test(tag);
+}
+
+// ---------------------------------------------------------------------------
+// Eingebettete Seiten: HACS, Add-ons, Webseiten
 // ---------------------------------------------------------------------------
 //
 // Eingebettete Fenster mit derselben Adresse wie Home Assistant sind erreichbar,
@@ -1046,53 +1117,76 @@ function setFrameStyle(doc, css) {
   if (style.textContent !== css) style.textContent = css;
 }
 
-/** Seiten aus Home-Assistant-Bausteinen: alle Theme-Variablen, eigene Farben mit Vorrang. */
-function haFrameCss() {
+/**
+ * Theme-Variablen des Hauptfensters, eigene Farben mit Vorrang. Für fremde Seiten nur die
+ * Farben (z. B. --primary-color): Abstände, Schriften und Bausteine von Home Assistant
+ * (--ha-space-..., --wa-...) gehören nicht dorthin und brächten deren Layout durcheinander.
+ */
+const COLOR_VAR = /color|background|^--rgb-|primary|accent|text|divider|shadow|neumorphism/;
+const LAYOUT_VAR = /^--(wa-|md-|mdc-(?!theme)|safe-|ha-font|ha-space|ha-border-radius|ha-line-height|ha-animation|ha-shadow-offset)/;
+
+function haFrameCss(colorsOnly = false) {
   if (!controlsActive) return "";
   const style = document.documentElement.style;
   const vars = [];
   for (let i = 0; i < style.length; i++) {
-    if (style[i].startsWith("--")) vars.push(`${style[i]}: ${style.getPropertyValue(style[i])};`);
+    const name = style[i];
+    if (!name.startsWith("--")) continue;
+    if (colorsOnly && (!COLOR_VAR.test(name) || LAYOUT_VAR.test(name))) continue;
+    vars.push(`${name}: ${style.getPropertyValue(name)};`);
   }
   return `:root { ${vars.join(" ")} }\n:root, body { ${colorCss} }`;
 }
 
-/** Add-on hinter einem eingebetteten Fenster (für Ausnahmen in den Einstellungen). */
-function frameApp(host) {
-  return host.localName === "ha-panel-app" ? host._addon?.slug || host.panel?.config?.addon || "" : "";
+/** Schlüssel für Ausnahmen in den Einstellungen: Add-on oder Seite einer Integration. */
+function hostKey(host) {
+  if (host.localName === "ha-panel-app") return host._addon?.slug || host.panel?.config?.addon || "";
+  if (host.localName === "ha-panel-custom") return host.panel?.url_path ? `panel:${host.panel.url_path}` : "";
+  return "";
+}
+
+/** Ist die Formung fremder Oberflächen für diese Stelle eingeschaltet? */
+function foreignEnabled(key) {
+  const settings = storedSettings();
+  return controlsActive && settings.apps === "full" && !(key && settings.appsOff.includes(key));
 }
 
 function updateFrames() {
   if (frameHosts.size > 50) for (const host of frameHosts) if (!host.isConnected) frameHosts.delete(host);
   const haCss = haFrameCss();
-  const foreignCss = controlsActive ? foreignVarsCss() : "";
   for (const host of frameHosts) {
     if (!host.isConnected) continue;
     const iframes = [...host.querySelectorAll("iframe"), ...(host.shadowRoot?.querySelectorAll("iframe") || [])];
-    for (const iframe of iframes) updateFrame(iframe, host, haCss, foreignCss);
+    for (const iframe of iframes) updateFrame(iframe, host, haCss);
+    // Seite einer Integration direkt im Hauptfenster (z. B. WashData, Vacuum Agent): immer fremd
+    const panel = host.localName === "ha-panel-custom" && host.firstElementChild;
+    if (panel && panel.localName.includes("-")) thirdPartyElements.add(panel);
   }
-  for (const [doc, state] of foreignDocs) if (!doc.defaultView) foreignDocs.delete(doc) && state.observer.disconnect();
 }
 
-function updateFrame(iframe, host, haCss, foreignCss) {
+function updateFrame(iframe, host, haCss) {
   if (!iframe.__neumorphismFrame) {
     iframe.__neumorphismFrame = true;
     // Neue Seite im Fenster (z. B. Navigation im Add-on): gleich anwenden, nicht erst beim nächsten Takt
-    iframe.addEventListener("load", () =>
-      safely(() => updateFrame(iframe, host, haFrameCss(), controlsActive ? foreignVarsCss() : ""))
-    );
+    iframe.addEventListener("load", () => safely(() => updateFrame(iframe, host, haFrameCss())));
   }
   const doc = frameDocument(iframe);
   if (!doc?.head || !doc.body) return;
+  const key = hostKey(host);
   if (host.localName === "ha-panel-custom") {
-    // Seite aus Home-Assistant-Bausteinen (HACS und andere Integrations-Seiten)
-    setFrameStyle(doc, haCss + (haCss ? HA_FRAME_EXTRA : ""));
-    patchControls(doc.defaultView);
-    return;
+    // Seite einer Integration im eigenen Fenster: aus Home-Assistant-Bausteinen (HACS) oder eigene Oberfläche
+    const registry = doc.defaultView.customElements;
+    const haPage = ["ha-svg-icon", "ha-icon-button", "ha-card"].some((tag) => registry?.get(tag));
+    if (!haPage && doc.readyState !== "complete") return; // Bausteine werden noch geladen
+    if (haPage) {
+      if (scopes.has(doc)) resetScope(scopes.get(doc));
+      const css = controlsActive && !storedSettings().appsOff.includes(key) ? haCss : "";
+      setFrameStyle(doc, css + (css ? HA_FRAME_EXTRA : ""));
+      if (css) patchControls(doc.defaultView);
+      return;
+    }
   }
-  const settings = storedSettings();
-  const enabled = !!foreignCss && settings.apps === "full" && !settings.appsOff.includes(frameApp(host));
-  updateForeign(doc, enabled ? foreignCss : "");
+  updateForeignDoc(doc, key);
 }
 
 // Ältere Home-Assistant-Bausteine in HACS (eigene Kopie im eingebetteten Fenster)
@@ -1100,11 +1194,12 @@ const HA_FRAME_EXTRA = `
   :root, body { --md-assist-chip-outline-color: transparent; --md-sys-color-outline: transparent; }`;
 
 // ---------------------------------------------------------------------------
-// Fremde Oberflächen: Add-ons und andere eingebettete Seiten
+// Fremde Oberflächen: Add-ons, Seiten von Integrationen, alles nicht von Home Assistant
 // ---------------------------------------------------------------------------
 //
-// Add-ons bringen ihr eigenes Design mit und kennen das Theme nicht. Deshalb wird
-// jedes Element nach Farbe und Form eingeordnet:
+// Eine Einordnung für alles, was nicht von Home Assistant stammt: Oberflächen von
+// Add-ons, Seiten und Dialoge von Integrationen, Webseiten-Karten. Jedes Element
+// wird nach Farbe und Form eingeordnet:
 //   - Seitenhintergrund, Leisten und große neutrale Flächen -> Theme-Hintergrund, flach
 //   - neutrale Flächen mit Rundung, Rahmen oder Schatten (Karten, Dialoge, Menüs)
 //     -> erhaben; kleinere Flächen darin -> eingelassen
@@ -1112,15 +1207,18 @@ const HA_FRAME_EXTRA = `
 //   - Eingabe- und Auswahlfelder, Code-Editoren -> eingelassen
 //   - neutral hervorgehobene Einträge (gewählte Zeile) -> eingelassen
 //   - neutrale Schrift und Linien -> Farben des Themes; farbige Schrift bleibt
-// Bilder, Grafiken, Videos und Verläufe bleiben unberührt. Für einzelne Add-ons
-// gibt es zusätzlich Feinschliff (FOREIGN_TUNING).
+// Ganze Seiten in eingebetteten Fenstern bekommen zusätzlich die Theme-Variablen,
+// ihre eigenen Farb-Variablen werden umgestellt und ihr Dunkelmodus folgt Home Assistant.
+// Bilder, Grafiken, Videos und Verläufe bleiben unberührt. Bausteine von Home Assistant
+// mitten in einer fremden Seite behalten ihre eigenen Regeln.
 
 const FX = "nm-x"; // Einordnung der Fläche
 const FX_FG = "nm-x-fg"; // 1 = Schrift, 2 = leise Schrift
 const FX_LINE = "nm-x-line"; // Linien in der Farbe der Trennlinien
 const FX_ROUND = "nm-x-round"; // eckige Bausteine abrunden
 const FX_PRESS = "nm-x-press"; // gedrückt eingelassen
-const FX_MARKS = [FX, FX_FG, FX_LINE, FX_ROUND, FX_PRESS];
+const FX_INVERT = "nm-x-invert"; // heller Code-Editor im Dunkelmodus
+const FX_MARKS = [FX, FX_FG, FX_LINE, FX_ROUND, FX_PRESS, FX_INVERT];
 
 const FOREIGN_VARS = {
   bg: "primary-background-color",
@@ -1138,17 +1236,17 @@ const FOREIGN_VARS = {
   "inset-s": "neumorphism-inset-shadow-s",
 };
 
-/** Theme-Werte für fremde Seiten unter eigenem Namen, damit sie sich nicht mit deren Variablen mischen. */
-function foreignVarsCss() {
+/** Theme-Werte unter eigenem Namen, damit sie sich nicht mit Variablen der Seite mischen. */
+function foreignVarsCss(resolved) {
   const css = getComputedStyle(document.documentElement);
-  const vars = Object.entries(FOREIGN_VARS).map(([key, name]) => `--nm-${key}: ${css.getPropertyValue(`--${name}`).trim()};`);
-  const dark = !!getHass()?.themes?.darkMode;
-  return `:root { ${vars.join(" ")} --nm-scheme: ${dark ? "dark" : "light"}; }`;
+  const vars = Object.entries(FOREIGN_VARS).map(
+    ([key, name]) => `--nm-${key}: ${resolved ? css.getPropertyValue(`--${name}`).trim() : `var(--${name})`};`
+  );
+  return vars.join(" ");
 }
 
-const FOREIGN_STYLE = `
-  :root { color-scheme: var(--nm-scheme); accent-color: var(--nm-primary); }
-  html { background-color: var(--nm-bg); }
+// Regeln für eingeordnete Elemente (im Hauptfenster, in eingebetteten Seiten und ihren Shadow DOMs)
+const FOREIGN_MARK_STYLE = `
   [nm-x="flat"] { background-color: var(--nm-bg) !important; box-shadow: none !important; }
   [nm-x="plain"] { background-color: var(--nm-surface) !important; box-shadow: none !important; }
   [nm-x="raised"], [nm-x="raised-l"] { background-color: var(--nm-surface) !important;
@@ -1161,6 +1259,11 @@ const FOREIGN_STYLE = `
     box-shadow: var(--nm-inset-s), 0 0 0 2px color-mix(in srgb, var(--nm-primary) 55%, transparent) !important; }
   [nm-x="field"]::placeholder { color: var(--nm-text2) !important; opacity: 0.8 !important; }
   [nm-x="code"] { border-color: transparent !important; box-shadow: var(--nm-inset) !important; }
+  [nm-x="tab"] { border-color: transparent !important; box-shadow: none !important; }
+  [nm-x="tab-on"] { background-color: var(--nm-surface) !important; border-color: transparent !important;
+    box-shadow: var(--nm-raised) !important; border-radius: 999px !important; }
+  [nm-x="tablist"] { border-color: transparent !important; box-shadow: none !important; }
+  [nm-x-invert] { filter: invert(1) hue-rotate(180deg) !important; }
   [nm-x-press]:active { box-shadow: var(--nm-inset-s) !important; }
   [nm-x-press]:focus-visible { outline: 2px solid var(--nm-primary) !important; outline-offset: 2px; }
   [nm-x-round="s"] { border-radius: 10px !important; }
@@ -1169,11 +1272,17 @@ const FOREIGN_STYLE = `
   [nm-x-fg="2"] { color: var(--nm-text2) !important; }
   [nm-x-line] { border-color: var(--nm-divider) !important; }
 `;
+// Nur für ganze Seiten in eingebetteten Fenstern
+const FOREIGN_PAGE_STYLE = `
+  :root { color-scheme: var(--nm-scheme); accent-color: var(--nm-primary); }
+  html { background-color: var(--nm-bg); }
+`;
+const MAIN_FOREIGN_STYLE_ID = "neumorphism-foreign";
 
 // Nicht einordnen (samt Inhalt): Grafiken, Medien, Skripte, eingebettete Seiten
 const FOREIGN_SKIP = new Set([
   "svg", "canvas", "img", "video", "picture", "iframe", "object", "embed", "audio", "script", "style",
-  "link", "meta", "template", "noscript", "br", "wbr", "option", "optgroup", "head", "title", "math",
+  "link", "meta", "template", "noscript", "br", "wbr", "option", "optgroup", "head", "title", "math", "slot",
 ]);
 // Code-Editoren und Terminals: eingelassen, ihr Inneres bleibt unverändert
 const CODE_SELECTOR = ".cm-editor, .CodeMirror, .monaco-editor, .ace_editor, .xterm";
@@ -1189,9 +1298,12 @@ const BUTTON_SELECTOR = 'button, input[type="button"], input[type="submit"], inp
 const TABLE_TAGS = /^(table|thead|tbody|tfoot|tr|td|th|caption|colgroup|col)$/;
 const MAX_DEEP = 3000; // so viele Elemente pro Änderung höchstens neu einordnen
 
-const foreignDocs = new Map(); // Dokument -> Zustand
+// Bereiche, die eingeordnet werden: ganze Seiten (Schlüssel: Dokument) oder fremde
+// Bausteine im Hauptfenster (Schlüssel: Element)
+const scopes = new Map();
 const foreignInfo = new WeakMap(); // Element -> ursprüngliche Farben (vor dem Formen)
 const foreignRole = new WeakMap(); // Element -> Einordnung
+const skippedRoots = new WeakMap(); // fremde Bausteine ohne sichtbare Fläche -> Anzahl Versuche
 
 function rgbToOklch({ r, g, b }) {
   return hexToOklch(rgbToHex([r / 255, g / 255, b / 255]));
@@ -1205,36 +1317,109 @@ const lum = ({ r, g, b }) => 0.2126 * toLinear(r / 255) + 0.7152 * toLinear(g / 
 const contrast = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
 const sameColor = (a, b) => a && b && Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) < 3;
 const parentOf = (el) => el.parentElement || el.getRootNode().host || null;
+const haDark = () => !!getHass()?.themes?.darkMode;
 
-function updateForeign(doc, varsCss) {
-  let state = foreignDocs.get(doc);
-  if (!varsCss) {
-    if (state) resetForeign(state);
+/** Fremde Bausteine im Hauptfenster: Seiten, Dialoge und alles außerhalb von Dashboard-Karten. */
+function updateForeignElements() {
+  const enabled = controlsActive && storedSettings().apps === "full";
+  let style = document.getElementById(MAIN_FOREIGN_STYLE_ID);
+  if (!style && enabled) {
+    style = document.createElement("style");
+    style.id = MAIN_FOREIGN_STYLE_ID;
+    document.head.appendChild(style);
+  }
+  const css = enabled ? `html { ${foreignVarsCss(false)} }\n${FOREIGN_MARK_STYLE}` : "";
+  if (style && style.textContent !== css) style.textContent = css;
+
+  for (const el of thirdPartyElements) {
+    if (!el.isConnected) {
+      thirdPartyElements.delete(el);
+      continue;
+    }
+    if (scopes.has(el) || !enabled) continue;
+    const context = foreignContext(el);
+    if (!context) {
+      thirdPartyElements.delete(el); // in einer Dashboard-Karte oder in einem schon erfassten Bereich
+      continue;
+    }
+    if (!foreignEnabled(context.key)) continue; // Ausnahme in den Einstellungen
+    // Noch ohne Fläche (wird gerade aufgebaut) oder unsichtbar (z. B. reine Stil-Helfer): später erneut
+    const rect = el.getBoundingClientRect();
+    if (!rect.width && !rect.height && !el.shadowRoot?.childElementCount) {
+      const tries = (skippedRoots.get(el) || 0) + 1;
+      skippedRoots.set(el, tries);
+      if (tries > 5) thirdPartyElements.delete(el);
+      continue;
+    }
+    startScope({ key: el, doc: document, view: window, page: false, exception: context.key });
+  }
+
+  const dark = haDark();
+  for (const state of [...scopes.values()]) {
+    if (state.page) continue;
+    if (!state.key.isConnected || !enabled || !foreignEnabled(state.exception)) {
+      resetScope(state);
+      if (state.key.isConnected) thirdPartyElements.add(state.key); // wieder aufnehmen, sobald eingeschaltet
+      continue;
+    }
+    const colors = themeKey();
+    if (state.colorsKey !== colors) {
+      state.colorsKey = colors;
+      state.colors = foreignColors();
+    }
+    if (state.dark !== dark) {
+      if (state.dark !== null) queueForeign(state, state.key, true); // Code-Editoren neu einordnen
+      state.dark = dark;
+    }
+  }
+}
+
+/**
+ * Wo liegt ein fremder Baustein? Null, wenn er schon erfasst ist (in einer Dashboard-Karte,
+ * die die Karten-Formung übernimmt, oder in einem anderen Bereich).
+ */
+function foreignContext(el) {
+  let key = "";
+  for (let node = parentOf(el); node; node = parentOf(node)) {
+    if (node.localName === "hui-card" || scopes.has(node)) return null;
+    if (node.localName === "ha-panel-custom" && !key) key = hostKey(node);
+  }
+  return { key };
+}
+
+const themeKey = () => `${applied}|${haDark()}`;
+
+/** Ganze Seite in einem eingebetteten Fenster (Add-on, Webseiten-Karte). */
+function updateForeignDoc(doc, key) {
+  let state = scopes.get(doc);
+  if (!foreignEnabled(key)) {
+    if (state) resetScope(state);
     return;
   }
-  if (!state) state = startForeign(doc);
-  const tunings = FOREIGN_TUNING.filter((t) => safely(() => t.match(doc)));
-  state.themeKey = varsCss;
-  setForeignMode(state, varsCss.includes("--nm-scheme: dark"), tunings);
-  const tuning = tunings.map((t) => t.css || "").join("\n");
-  const css = `${varsCss}\n${foreignTokens(state)}\n${FOREIGN_STYLE}\n${tuning}`;
+  if (!state) state = startScope({ key: doc, doc, view: doc.defaultView, page: true, exception: key });
+  const dark = haDark();
+  if (state.dark !== null && state.dark !== dark) queueForeign(state, doc.documentElement, true);
+  state.dark = dark;
+  setForeignMode(state, dark);
+  const vars = `:root { ${foreignVarsCss(true)} --nm-scheme: ${dark ? "dark" : "light"}; }`;
+  const css = `${haFrameCss(true)}\n${vars}\n${foreignTokens(state)}\n${FOREIGN_PAGE_STYLE}\n${FOREIGN_MARK_STYLE}`;
   setFrameStyle(doc, css);
   if (state.css !== css) {
     state.css = css;
-    state.sheetCss = FOREIGN_STYLE + tuning;
-    for (const sheet of state.sheets) sheet.replaceSync(state.sheetCss);
     state.colors = foreignColors();
   }
 }
 
-// Farb-Variablen der Seite (z. B. Node-RED, Zigbee2MQTT, Web Awesome, Vuetify): neutrale
-// Hintergründe, Schriften und Linien auf das Theme umstellen. Farbige Werte bleiben.
+// Farb-Variablen der Seite (z. B. Node-RED, Zigbee2MQTT, Web Awesome, Vuetify, Bootstrap):
+// neutrale Hintergründe, Schriften und Linien und die Primärfarbe auf das Theme umstellen.
 const TOKEN_LINE = /border|divider|outline|separator|stroke|(^|-)rule/i;
 const TOKEN_BG = /background|(^|-)bg($|-)|backdrop/i;
 const TOKEN_TEXT = /text|content|foreground|(^|-)fg($|-)|(^|-)ink|(^|-)on-/i;
 const TOKEN_SURFACE = /surface|base|fill|canvas|paper|panel|menu|card|popover|dropdown|header|sidebar|toolbar|tooltip/i;
-// Schrift auf Farbflächen (z. B. --color-primary-content, --v-theme-on-primary) und Statusfarben bleiben
-const TOKEN_KEEP = /brand|accent|success|info|warning|error|danger|critical|alert|(primary|secondary)[-_]?(content|on)|on[-_]?(primary|secondary)/i;
+const TOKEN_PRIMARY = /(^|[-_])(primary|brand)([-_](color|main|base|default))?$/i;
+const TOKEN_ON_PRIMARY = /((primary|brand)[-_]?(content|contrast[-_]?text|contrast|foreground)|on[-_]?(primary|brand))$/i;
+// Statusfarben und Schrift auf anderen Farbflächen bleiben
+const TOKEN_KEEP = /brand|accent|success|info|warning|error|danger|critical|alert|secondary[-_]?(content|on)|on[-_]?secondary/i;
 const TOKEN_TARGETS = ':root, body, [data-theme], [data-bs-theme], [class*="theme"]';
 const HSL_TRIPLET = /^(\d+(?:\.\d+)?)(?:deg)?\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/; // z. B. "0 0% 100%" (shadcn)
 const RGB_TRIPLET = /^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$/; // z. B. "255,255,255" (Vuetify)
@@ -1260,11 +1445,11 @@ function rgbToHslTriplet({ r, g, b }) {
   return `${Math.round(((h * 60) + 360) % 360)} ${Math.round(sat * 1000) / 10}% ${Math.round(l * 1000) / 10}%`;
 }
 
-/** Liest die Farb-Variablen der Seite (ohne die eigene Umstellung) und ordnet die neutralen zu. */
+/** Liest die Farb-Variablen der Seite (ohne die eigene Umstellung) und ordnet sie zu. */
 function foreignTokens(state) {
   const style = state.doc.getElementById(FRAME_STYLE_ID);
   const count = state.view.getComputedStyle(state.doc.documentElement).length;
-  const key = `${count}|${state.dark}|${state.themeKey}`;
+  const key = `${count}|${themeKey()}`;
   if (state.tokenKey === key) return state.tokens;
   if (style?.sheet) style.sheet.disabled = true;
   try {
@@ -1276,16 +1461,24 @@ function foreignTokens(state) {
     const theme = themeColors();
     const lines = [];
     for (const name of cs) {
-      if (!name.startsWith("--") || name.startsWith("--nm-") || TOKEN_KEEP.test(name)) continue;
+      if (!name.startsWith("--") || name.startsWith("--nm-")) continue;
       const value = cs.getPropertyValue(name).trim();
       if (!value || value.length > 60) continue;
       const parsed = tokenColor(value);
-      if (!parsed?.color || parsed.color.a < 0.9 || !isNeutral(parsed.color)) continue;
-      let kind = TOKEN_LINE.test(name) ? "divider" : TOKEN_BG.test(name) ? "bg" : TOKEN_TEXT.test(name) ? "text" : TOKEN_SURFACE.test(name) ? "bg" : null;
+      if (!parsed?.color || parsed.color.a < 0.9) continue;
+      let kind = null;
+      if (TOKEN_ON_PRIMARY.test(name)) kind = "on-primary";
+      else if (TOKEN_PRIMARY.test(name)) kind = isNeutral(parsed.color) ? null : "primary";
+      else if (!TOKEN_KEEP.test(name) && isNeutral(parsed.color)) {
+        kind = TOKEN_LINE.test(name) ? "divider" : TOKEN_BG.test(name) ? "bg" : TOKEN_TEXT.test(name) ? "text" : TOKEN_SURFACE.test(name) ? "bg" : null;
+        if (kind === "text" && contrast(parsed.color, page) < 4.5) kind = "text2";
+      }
       if (!kind) continue;
-      if (kind === "text" && contrast(parsed.color, page) < 4.5) kind = "text2";
       const target = theme[kind];
-      const out = parsed.format === "hsl" ? rgbToHslTriplet(target) : parsed.format === "rgb" ? `${Math.round(target.r)},${Math.round(target.g)},${Math.round(target.b)}` : `var(--nm-${kind})`;
+      const out =
+        parsed.format === "hsl" ? rgbToHslTriplet(target)
+        : parsed.format === "rgb" ? `${Math.round(target.r)},${Math.round(target.g)},${Math.round(target.b)}`
+        : `var(--nm-${kind})`;
       lines.push(`${name}: ${out} !important;`);
     }
     state.tokens = lines.length ? `${TOKEN_TARGETS} { ${lines.join(" ")} }` : "";
@@ -1308,24 +1501,68 @@ function themeColors() {
     text: get("primary-text-color"),
     text2: get("secondary-text-color"),
     divider: { r: mix("r"), g: mix("g"), b: mix("b"), a: 1 },
+    primary: get("primary-color"),
+    "on-primary": get("text-primary-color"),
   };
 }
 
-// Hell/Dunkel der Seite an Home Assistant anpassen, wo die Seite das selbst anbietet:
-// Attribute wie data-theme="dark" oder Klassen wie wa-light / theme-dark an <html> und <body>.
-const MODE_ATTRS = ["data-theme", "data-bs-theme", "data-color-scheme", "data-mode", "theme"];
-const MODE_CLASS = /^((?:.*[-_])?theme[-_]{0,2}|wa-|)(light|dark)$/i;
+// Hell/Dunkel der Seite an Home Assistant anpassen, wo die Seite das selbst anbietet.
+// Gesucht wird in ihren Stylesheets nach Schaltern an <html> oder <body>, z. B. die Klasse
+// "dark" (Tailwind), "nr-theme-dark" oder Attribute wie data-theme="dark" und data-bs-theme="dark".
+// Vorhandene Klassen und Attribute mit light/dark (z. B. wa-light) werden umgeschaltet.
+const MODE_ATTRS = ["data-theme", "data-bs-theme", "data-color-scheme", "data-color-mode", "data-mode", "theme"];
+const MODE_CLASS = /^((?:.*[-_])?(?:theme|mode|scheme)[-_]{0,2}|wa-|)(light|dark)$/i;
+const DARK_CLASS = /^dark$|(theme|mode|scheme).*dark|dark.*(theme|mode|scheme)/i;
+const DARK_ATTR = /theme|mode|scheme/i;
 
-function setForeignMode(state, dark, tunings) {
+/** Schalter für den Dunkelmodus aus den Stylesheets der Seite. */
+function scanDarkHooks(doc) {
+  const hooks = new Map(); // "class:html:dark" -> { kind, target, name, value }
+  const visit = (rules) => {
+    for (const rule of rules) {
+      if (rule.cssRules && !rule.selectorText) {
+        visit(rule.cssRules); // @media, @supports, @layer
+        continue;
+      }
+      const text = rule.selectorText;
+      if (!text || !/dark/i.test(text)) continue;
+      for (const part of text.split(",")) {
+        const sel = part.trim().replace(/^:(is|where)\(/, "");
+        const head = sel.split(/[\s>+~(]/)[0];
+        if (!/^(html|:root|body)?[.[]/.test(head)) continue;
+        const target = head.startsWith("body") ? "body" : "html";
+        for (const m of head.matchAll(/\.([\w-]*dark[\w-]*)/gi)) {
+          if (DARK_CLASS.test(m[1])) hooks.set(`class:${target}:${m[1]}`, { kind: "class", target, name: m[1] });
+        }
+        for (const m of head.matchAll(/\[([\w-]+)=["']?([\w-]*dark[\w-]*)["']?\]/gi)) {
+          if (DARK_ATTR.test(m[1])) hooks.set(`attr:${target}:${m[1]}`, { kind: "attr", target, name: m[1], value: m[2] });
+        }
+      }
+    }
+  };
+  for (const sheet of doc.styleSheets) {
+    try {
+      visit(sheet.cssRules);
+    } catch {
+      // Stylesheet von fremder Adresse: nicht lesbar
+    }
+  }
+  return [...hooks.values()];
+}
+
+function setForeignMode(state, dark) {
+  const doc = state.doc;
   const mode = dark ? "dark" : "light";
   const record = (key, undo) => {
     if (!state.undo.has(key)) state.undo.set(key, undo);
   };
-  for (const el of [state.doc.documentElement, state.doc.body]) {
+  const elements = { html: doc.documentElement, body: doc.body };
+  // Vorhandene Schalter umstellen
+  for (const el of Object.values(elements)) {
     for (const attr of MODE_ATTRS) {
       const value = el.getAttribute(attr);
       if ((value === "light" || value === "dark") && value !== mode) {
-        record(el.tagName + attr, () => el.setAttribute(attr, value));
+        record(`${el.tagName}:${attr}`, () => el.setAttribute(attr, value));
         el.setAttribute(attr, mode);
       }
     }
@@ -1333,12 +1570,31 @@ function setForeignMode(state, dark, tunings) {
       const m = cls.match(MODE_CLASS);
       if (!m || m[2].toLowerCase() === mode) continue;
       const other = m[1] + (m[2] === m[2].toUpperCase() ? mode.toUpperCase() : mode);
-      record(el.tagName + cls, () => el.classList.replace(other, cls));
+      record(`${el.tagName}:${cls}`, () => el.classList.replace(other, cls));
       el.classList.replace(cls, other);
     }
   }
-  for (const tuning of tunings) if (tuning.mode) safely(() => tuning.mode(state.doc, dark, record));
-  state.dark = dark;
+  // Schalter aus den Stylesheets (neu suchen, wenn Stylesheets dazukommen)
+  if (state.hookSheets !== doc.styleSheets.length) {
+    state.hookSheets = doc.styleSheets.length;
+    state.hooks = scanDarkHooks(doc);
+  }
+  for (const hook of state.hooks) {
+    const el = elements[hook.target];
+    if (!el) continue;
+    if (hook.kind === "class") {
+      const has = el.classList.contains(hook.name);
+      if (has === dark) continue;
+      record(`${hook.target}:class:${hook.name}`, () => el.classList.toggle(hook.name, has));
+      el.classList.toggle(hook.name, dark);
+    } else {
+      const value = el.getAttribute(hook.name);
+      if (dark ? value === hook.value : value !== hook.value) continue;
+      record(`${hook.target}:attr:${hook.name}`, () => (value === null ? el.removeAttribute(hook.name) : el.setAttribute(hook.name, value)));
+      if (dark) el.setAttribute(hook.name, hook.value);
+      else el.setAttribute(hook.name, "light");
+    }
+  }
 }
 
 /** Aufgelöste Schriftfarben des Themes: geerbte Schrift erkennen statt erneut einordnen. */
@@ -1356,20 +1612,29 @@ function toRgb(color) {
     colorProbe.style.cssText = "position:absolute;width:0;height:0;visibility:hidden;pointer-events:none;";
     document.body.appendChild(colorProbe);
   }
+  colorProbe.style.color = "";
   colorProbe.style.color = color;
   return getComputedStyle(colorProbe).color;
 }
 
-function startForeign(doc) {
-  const view = doc.defaultView;
+/**
+ * Neuer Bereich: ganze Seite (page) oder fremder Baustein im Hauptfenster.
+ * exception = Schlüssel für Ausnahmen in den Einstellungen.
+ */
+function startScope({ key, doc, view, page, exception }) {
   const state = {
+    key,
     doc,
     view,
+    page,
+    exception,
     css: "",
-    sheetCss: "",
-    colors: [],
+    colors: foreignColors(),
+    colorsKey: themeKey(),
     tokens: "",
     tokenKey: "",
+    hooks: [],
+    hookSheets: -1,
     dark: null,
     undo: new Map(), // Änderungen an Hell/Dunkel der Seite, zum Zurücksetzen
     sheets: [],
@@ -1379,18 +1644,23 @@ function startForeign(doc) {
     last: 0,
     observer: new view.MutationObserver((records) => onForeignMutations(state, records)),
   };
-  foreignDocs.set(doc, state);
-  observeForeignRoot(state, doc);
-  queueForeign(state, doc.documentElement, true);
+  scopes.set(key, state);
+  if (page) {
+    observeForeignRoot(state, doc);
+    queueForeign(state, doc.documentElement, true);
+  } else {
+    observeForeignRoot(state, key); // Inhalt im Light DOM
+    queueForeign(state, key, true);
+  }
   return state;
 }
 
 function observeForeignRoot(state, root) {
   if (state.roots.has(root)) return;
   state.roots.add(root);
-  if (root !== state.doc) {
+  if (root instanceof state.view.ShadowRoot) {
     const sheet = new state.view.CSSStyleSheet();
-    sheet.replaceSync(state.sheetCss);
+    sheet.replaceSync(FOREIGN_MARK_STYLE);
     root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
     state.sheets.push(sheet);
   }
@@ -1421,17 +1691,19 @@ function queueForeign(state, el, deep) {
   state.timer = setTimeout(() => state.view.requestAnimationFrame(() => safely(() => runForeign(state))), wait);
 }
 
-function resetForeign(state) {
+function resetScope(state) {
   state.observer.disconnect();
-  foreignDocs.delete(state.doc);
+  scopes.delete(state.key);
   for (const undo of [...state.undo.values()].reverse()) safely(undo);
-  const style = state.doc.getElementById(FRAME_STYLE_ID);
-  style?.remove();
+  if (state.page) state.doc.getElementById(FRAME_STYLE_ID)?.remove();
   for (const sheet of state.sheets) sheet.replaceSync("");
   const selector = FX_MARKS.map((m) => `[${m}]`).join(",");
-  const stack = [state.doc];
+  const start = state.page ? state.doc : state.key;
+  const stack = [start];
+  if (!state.page && state.key.shadowRoot) stack.push(state.key.shadowRoot);
   while (stack.length) {
     const root = stack.pop();
+    if (root.nodeType === 1) for (const m of FX_MARKS) root.removeAttribute(m);
     for (const el of root.querySelectorAll(selector)) for (const m of FX_MARKS) el.removeAttribute(m);
     for (const el of root.querySelectorAll("*")) if (el.shadowRoot) stack.push(el.shadowRoot);
   }
@@ -1441,6 +1713,14 @@ function resetForeign(state) {
 function collectForeign(state, el, deep, out, seen) {
   if (seen.has(el) || FOREIGN_SKIP.has(el.localName)) return;
   seen.add(el);
+  // Bausteine von Home Assistant mitten in einer fremden Seite: eigene Regeln, nur ihr
+  // Inhalt aus der fremden Seite (Light DOM) wird eingeordnet
+  // Dashboard-Karten formt die Karten-Formung (auch in fremden Seiten)
+  if (!state.page && el.localName === "hui-card") return;
+  if (!state.page && el !== state.key && isCoreElement(el, state.key)) {
+    if (deep) for (const child of el.children) collectForeign(state, child, true, out, seen);
+    return;
+  }
   out.push(el);
   if (!deep || out.length > MAX_DEEP || el.matches(CODE_SELECTOR)) return;
   if (el.shadowRoot) {
@@ -1453,7 +1733,7 @@ function collectForeign(state, el, deep, out, seen) {
 function runForeign(state) {
   state.timer = 0;
   state.last = Date.now();
-  if (!state.doc.defaultView || !foreignDocs.has(state.doc)) return;
+  if (scopes.get(state.key) !== state || !state.doc.defaultView) return;
   const list = [];
   const seen = new Set();
   for (const [el, deep] of state.queue) if (el.isConnected) collectForeign(state, el, deep, list, seen);
@@ -1485,13 +1765,19 @@ function readForeign(state, el) {
 }
 
 /** Ursprüngliche Hintergrundfarbe unter einem Element (über Eltern hinweg). */
-function effectiveBg(el) {
+function effectiveBg(el, state) {
   for (let node = el; node; node = parentOf(node)) {
     const info = foreignInfo.get(node);
-    if (!info) continue;
-    if (info.image) return null; // Bild oder Verlauf: Schrift nicht anfassen
-    if (info.bg.a >= 0.5) return info.bg;
+    if (info) {
+      if (info.image) return null; // Bild oder Verlauf: Schrift nicht anfassen
+      if (info.bg.a >= 0.5) return info.bg;
+    } else if (!state.page && node.nodeType === 1) {
+      // Im Hauptfenster: Hintergrund eines Bausteins von Home Assistant (Karte, Dialog ...)
+      const bg = parseColor(getComputedStyle(node).backgroundColor);
+      if (bg && bg.a >= 0.5) return bg;
+    }
   }
+  if (!state.page) return parseColor(toRgb(getComputedStyle(document.documentElement).getPropertyValue("--primary-background-color").trim()));
   return { r: 255, g: 255, b: 255, a: 1 };
 }
 
@@ -1533,11 +1819,24 @@ function nearestRole(el) {
   return null;
 }
 
+/** Hintergrund eines Code-Editors (auch wenn er auf einem inneren Element liegt). */
+function editorBg(el, view) {
+  for (const node of [el, el.firstElementChild, el.querySelector(".cm-scroller, .monaco-editor-background, .ace_scroller, .xterm-viewport")]) {
+    if (!node) continue;
+    const bg = parseColor(view.getComputedStyle(node).backgroundColor);
+    if (bg && bg.a >= 0.5) return bg;
+  }
+  return null;
+}
+
 function decideForeign(state, el, info, view) {
-  const result = { kind: null, fg: null, line: false, round: null, press: false };
+  const result = { kind: null, fg: null, line: false, round: null, press: false, invert: false };
   foreignRole.set(el, result);
   if (el.matches(CODE_SELECTOR)) {
     result.kind = "code";
+    // Heller Editor im Dunkelmodus: umkehren, statt eine weiße Fläche stehen zu lassen
+    const bg = editorBg(el, state.view);
+    result.invert = !!bg && haDark() && lum(bg) > 0.45;
     return result;
   }
   const { cs, rect, bg } = info;
@@ -1554,7 +1853,14 @@ function decideForeign(state, el, info, view) {
   const button = !field && (el.matches(BUTTON_SELECTOR) || (el.localName === "a" && (hasBg || border?.box)));
   const visible = !info.hidden && w > 0 && h > 0;
 
-  if (visible) {
+  const role = el.getAttribute("role");
+  if (visible && role === "tablist") {
+    result.kind = "tablist";
+  } else if (visible && role === "tab") {
+    // Reiter (nach ARIA): der gewählte als erhabene Pille wie in Home Assistant, kräftig gefärbte bleiben
+    const selected = el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-current") === "page";
+    result.kind = selected ? (hasBg && !neutralBg ? "accent" : "tab-on") : "tab";
+  } else if (visible) {
     if (field && (hasBg || border || shadow)) {
       result.kind = "field";
       if (radius < 4 && h < 120) result.round = "s";
@@ -1591,12 +1897,12 @@ function decideForeign(state, el, info, view) {
       }
     }
   }
-  if (border?.neutral && !["raised", "raised-l", "sunken", "field", "accent", "code"].includes(result.kind)) result.line = true;
+  if (border?.neutral && !["raised", "raised-l", "sunken", "field", "accent", "code", "tab", "tab-on", "tablist"].includes(result.kind)) result.line = true;
 
   // Schrift: neutrale Farben auf neutralem Grund folgen dem Theme
   const color = info.color;
   if ((info.text || field || button) && color && color.a >= 0.3 && isNeutral(color)) {
-    const under = hasBg && bg.a >= 0.5 ? bg : effectiveBg(parentOf(el) || el);
+    const under = hasBg && bg.a >= 0.5 ? bg : effectiveBg(parentOf(el) || el, state);
     const [text, text2] = state.colors;
     const inherited = sameColor(color, text) || sameColor(color, text2);
     if (under && isNeutral(under) && !inherited) {
@@ -1612,72 +1918,8 @@ function writeForeign(el, result) {
   if (result.line) el.setAttribute(FX_LINE, "");
   if (result.round) el.setAttribute(FX_ROUND, result.round);
   if (result.press) el.setAttribute(FX_PRESS, "");
+  if (result.invert) el.setAttribute(FX_INVERT, "");
 }
-
-/** Hell/Dunkel über ein Attribut an <html> setzen (und beim Zurücksetzen wiederherstellen). */
-function setRootAttr(doc, name, value, record) {
-  const html = doc.documentElement;
-  const old = html.getAttribute(name);
-  if (old === value) return;
-  record(`attr:${name}`, () => (old === null ? html.removeAttribute(name) : html.setAttribute(name, old)));
-  html.setAttribute(name, value);
-}
-
-/**
- * Feinschliff für einzelne Add-ons, zusätzlich zur allgemeinen Einordnung:
- * match erkennt die Seite, css ergänzt Regeln, mode schaltet Hell/Dunkel der Seite selbst um.
- */
-const FOREIGN_TUNING = [
-  {
-    // ESPHome Device Builder: übernimmt Home-Assistant-Farben, Hell/Dunkel über wa-light/wa-dark
-    match: (doc) => !!doc.querySelector("esphome-app"),
-    css: `:root { --primary-color: var(--nm-primary); --text-primary-color: var(--nm-on-primary); }`,
-  },
-  {
-    // Zigbee2MQTT (Windfront, daisyUI): Primärfarbe, Rundungen, ohne eigene Tiefe; Hell/Dunkel über data-theme
-    match: (doc) => /zigbee2mqtt/i.test(doc.title) && !!doc.querySelector('link[href*="assets/index-"], script[src*="assets/index-"]'),
-    css: `
-      :root, [data-theme] { --color-primary: var(--nm-primary) !important; --color-primary-content: var(--nm-on-primary) !important;
-        --radius-box: 18px !important; --radius-field: 12px !important; --depth: 0 !important; --noise: 0 !important; }
-      .navbar { box-shadow: none !important; }`,
-    mode: (doc, dark, record) => {
-      const current = doc.documentElement.getAttribute("data-theme");
-      if (!current || current === "light" || current === "dark") setRootAttr(doc, "data-theme", dark ? "dark" : "light", record);
-    },
-  },
-  {
-    // Node-RED: Hell/Dunkel über die Klasse nr-theme-dark (auch für Code-Editor und Arbeitsfläche)
-    match: (doc) => !!doc.getElementById("red-ui-editor"),
-    css: `
-      #red-ui-header { box-shadow: none !important; border-bottom-color: var(--nm-divider) !important; }
-      .red-ui-palette-node { box-shadow: var(--nm-raised) !important; }`,
-    mode: (doc, dark, record) => {
-      const html = doc.documentElement;
-      const was = html.classList.contains("nr-theme-dark");
-      if (was === dark) return;
-      record("class:nr-theme-dark", () => html.classList.toggle("nr-theme-dark", was));
-      html.classList.toggle("nr-theme-dark", dark);
-    },
-  },
-  {
-    // File editor (HASS Configurator, Materialize): Kopfleiste und Menüs wie Home Assistant, Code-Editor hell/dunkel
-    match: (doc) => /HASS Configurator/i.test(doc.title),
-    css: `
-      nav, nav .nav-wrapper { background-color: var(--nm-bg) !important; box-shadow: none !important; }
-      nav i, nav a, nav .brand-logo, nav input { color: var(--nm-text2) !important; }
-      .side-nav, .dropdown-content, .modal, .modal .modal-footer, .card, .collapsible-header, .collapsible-body {
-        background-color: var(--nm-surface) !important; color: var(--nm-text) !important; }
-      .btn-floating.red { background-color: var(--nm-accent) !important; }
-      .btn, .btn-large, .btn-flat { box-shadow: var(--nm-raised) !important; }`,
-    mode: (doc, dark) => {
-      const editor = doc.defaultView.editor;
-      if (!editor?.setTheme) return;
-      // Nur umschalten, nicht zurückstellen: die Seite merkt sich ihr Theme nicht dauerhaft
-      const theme = dark ? "ace/theme/tomorrow_night" : "ace/theme/chrome";
-      if (editor.getTheme() !== theme) editor.setTheme(theme);
-    },
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Farbwähler (im Profil und in der Karte)
@@ -1704,13 +1946,13 @@ function texts(hass) {
     cardsFull: de ? "Vollständig" : "Full",
     cardsFrame: de ? "Nur Rahmen" : "Frame only",
     cardsOff: de ? "Aus" : "Off",
-    apps: de ? "Add-ons" : "Add-ons",
+    apps: de ? "Add-ons und Integrationen" : "Add-ons and integrations",
     appsHint: de
-      ? "Oberflächen von Add-ons wie ESPHome, Zigbee2MQTT oder Node-RED im selben Design."
-      : "Add-on interfaces such as ESPHome, Zigbee2MQTT or Node-RED in the same design.",
+      ? "Oberflächen von Add-ons und Seiten von Integrationen im selben Design, automatisch für alle, auch künftige."
+      : "Add-on interfaces and integration pages in the same design, automatically for all, including future ones.",
     appsFull: de ? "Angepasst" : "Adapted",
     appsOff: de ? "Aus" : "Off",
-    appsExceptions: de ? "Abgewählte Add-ons behalten ihr eigenes Aussehen." : "Unchecked add-ons keep their own look.",
+    appsExceptions: de ? "Abgewählte behalten ihr eigenes Aussehen." : "Unchecked ones keep their own look.",
     perUser: de ? "Gilt für deinen Benutzer." : "Applies to your user.",
     inactive: de
       ? "Wähle im Profil das Theme „Neumorphism“, dann wirken diese Einstellungen."
@@ -1945,24 +2187,32 @@ class NeumorphismColorPicker extends HTMLElement {
     for (const input of list.querySelectorAll("input")) input.checked = !stored.appsOff.includes(input.value);
   }
 
-  /** Add-ons mit eigener Oberfläche: aus dem Supervisor, sonst aus der Seitenleiste. */
+  /**
+   * Was sich abwählen lässt: Seiten von Integrationen (aus der Seitenleiste) und Add-ons mit
+   * eigener Oberfläche (aus dem Supervisor, sonst aus der Seitenleiste).
+   */
   async _loadApps() {
     const hass = this._hass;
     if (!hass?.user?.is_admin) return [];
-    const fromPanels = () =>
-      Object.values(hass.panels || {})
-        .filter((panel) => panel.component_name === "app" && panel.config?.addon)
-        .map((panel) => ({ slug: panel.config.addon, name: panel.title || panel.config.addon }));
-    if (!hass.config?.components?.includes("hassio")) return fromPanels();
-    const api = (endpoint) => hass.callWS({ type: "supervisor/api", endpoint, method: "get" });
-    try {
-      const list = (await api("/addons"))?.addons || [];
-      const infos = await Promise.all(list.map((app) => api(`/addons/${app.slug}/info`).catch(() => null)));
-      const apps = infos.filter((info) => info?.ingress).map((info) => ({ slug: info.slug, name: info.name }));
-      return apps.sort((a, b) => a.name.localeCompare(b.name));
-    } catch {
-      return fromPanels();
+    const panels = Object.values(hass.panels || {});
+    const pages = panels
+      .filter((panel) => panel.component_name === "custom" && panel.url_path)
+      .map((panel) => ({ slug: `panel:${panel.url_path}`, name: panel.title || panel.url_path }));
+    let apps = panels
+      .filter((panel) => panel.component_name === "app" && panel.config?.addon)
+      .map((panel) => ({ slug: panel.config.addon, name: panel.title || panel.config.addon }));
+    if (hass.config?.components?.includes("hassio")) {
+      const api = (endpoint) => hass.callWS({ type: "supervisor/api", endpoint, method: "get" });
+      try {
+        const list = (await api("/addons"))?.addons || [];
+        const infos = await Promise.all(list.map((app) => api(`/addons/${app.slug}/info`).catch(() => null)));
+        apps = infos.filter((info) => info?.ingress).map((info) => ({ slug: info.slug, name: info.name }));
+      } catch {
+        // Liste aus der Seitenleiste genügt
+      }
     }
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    return [...pages.sort(byName), ...apps.sort(byName)];
   }
 
   _save(patch) {
@@ -2122,6 +2372,7 @@ if (!customElements.get(PICKER_TAG)) {
     preview: true,
   });
 
+  hookDefine();
   patchControls();
   const tick = () => {
     safely(applyColors);
@@ -2130,6 +2381,7 @@ if (!customElements.get(PICKER_TAG)) {
     safely(updateButtonGroups);
     safely(updateCards);
     safely(updateFrames);
+    safely(updateForeignElements);
   };
   window.addEventListener("resize", () =>
     requestAnimationFrame(() => {
