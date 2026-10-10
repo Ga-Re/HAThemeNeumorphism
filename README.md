@@ -5,6 +5,7 @@ Weiches „Soft UI“-Theme: Karten haben dieselbe Farbe wie der Hintergrund und
 - **Hell- und Dunkelmodus** in jedem Theme. Umgeschaltet wird wie gewohnt im Profil (Automatisch / Hell / Dunkel).
 - **Primärfarbe** frei wählbar: Buttons, ausgewählte Einträge, Symbole, Fortschrittsbalken.
 - **Akzentfarbe** frei wählbar: Schalter, Checkboxen, Hervorhebungen.
+- **Farbwähler-Karte** für das Dashboard: Farben live einstellen, ohne Dateien zu bearbeiten.
 
 ![Vorschau hell und dunkel](preview.png)
 
@@ -15,15 +16,49 @@ Weiches „Soft UI“-Theme: Karten haben dieselbe Farbe wie der Hintergrund und
    frontend:
      themes: !include_dir_merge_named themes
    ```
-2. **Über HACS:** ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/Ga-Re/HAThemeNeumorphism`, Typ „Theme“. Danach „Neumorphism“ herunterladen. HACS installiert die 10 abgestimmten Kombinationen.
+2. **Über HACS:** ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/Ga-Re/HAThemeNeumorphism`, Typ „Theme“. Danach „Neumorphism“ herunterladen.
 
-   **Oder von Hand:** eine der beiden Dateien nach `/config/themes/neumorphism.yaml` kopieren:
-   - `themes/neumorphism.yaml`: 10 abgestimmte Kombinationen, eine pro Primärfarbe. Für die meisten reicht das.
-   - `alle-kombinationen/neumorphism.yaml`: alle 100 Kombinationen aus Primär- und Akzentfarbe. Nötig für die Farbauswahl im Dashboard (siehe unten).
+   **Oder von Hand:** `themes/neumorphism.yaml` nach `/config/themes/neumorphism.yaml` kopieren.
 3. Home Assistant neu starten oder die Aktion `frontend.reload_themes` ausführen.
-4. **Profil → Theme**: ein „Neumorphism …“-Theme wählen und den Modus einstellen.
+4. **Profil → Theme**: „Neumorphism“ oder eine der fertigen Kombinationen wählen und den Modus einstellen.
 
-## Farben
+## Farben per Farbwähler einstellen
+
+![Farbwähler-Karte](colorpicker.png)
+
+Die Karte „Neumorphism Farben“ hat für Primär- und Akzentfarbe je einen Farbwähler, zehn Vorgaben zum Antippen und einen Knopf „Standard“, der zur Farbe des Themes zurückkehrt. Die Farbe ändert sich sofort, schon während du im Farbwähler ziehst.
+
+Einrichtung:
+
+1. `www/neumorphism-colors.js` nach `/config/www/neumorphism-colors.js` kopieren.
+2. In der `configuration.yaml` einbinden:
+   ```yaml
+   frontend:
+     themes: !include_dir_merge_named themes
+     extra_module_url:
+       - /local/neumorphism-colors.js?v=1
+   ```
+3. Die beiden Text-Helfer anlegen, in denen die Farben gespeichert werden. Entweder `packages/neumorphism_farben.yaml` nach `/config/packages/` kopieren (dafür muss `homeassistant: packages: !include_dir_named packages` gesetzt sein) oder unter *Einstellungen → Geräte & Dienste → Helfer → Text* von Hand anlegen, mit genau diesen Entitäts-IDs:
+   - `input_text.neumorphism_primaerfarbe`
+   - `input_text.neumorphism_akzentfarbe`
+4. Home Assistant neu starten.
+5. Auf einem Dashboard die Karte **„Neumorphism Farben“** hinzufügen, oder per YAML:
+   ```yaml
+   type: custom:neumorphism-color-card
+   title: Farben   # optional, leer lassen für keine Überschrift
+   ```
+
+Gut zu wissen:
+- Die Farben gelten für **alle Benutzer und Geräte** und bleiben nach einem Neustart erhalten.
+- Sie wirken nur, solange ein Neumorphism-Theme aktiv ist. Bei anderen Themes ändert das Modul nichts.
+- Ist ein Helfer leer, gilt die Farbe des gewählten Themes. Am einfachsten wählst du im Profil das Theme „Neumorphism“ und stellst die Farben nur noch über die Karte ein.
+- Nach einem Update der JS-Datei die Zahl in `?v=1` erhöhen, sonst lädt der Browser oder die App die alte Version aus dem Cache.
+
+## Fertige Farbkombinationen
+
+Ohne Farbwähler kannst du im Profil auch eine fertige Kombination wählen. Die Themes heißen `Neumorphism <Primärfarbe> + <Akzentfarbe>`:
+
+Blau + Orange, Indigo + Bernstein, Violett + Türkis, Rosa + Violett, Rot + Bernstein, Orange + Blau, Bernstein + Indigo, Grün + Rosa, Türkis + Orange, Graphit + Türkis.
 
 | Name | Hex |
 |---|---|
@@ -38,29 +73,9 @@ Weiches „Soft UI“-Theme: Karten haben dieselbe Farbe wie der Hintergrund und
 | Türkis | `#14a7a0` |
 | Graphit | `#5f7389` |
 
-Die Themes heißen `Neumorphism <Primärfarbe> + <Akzentfarbe>`, z. B. `Neumorphism Blau + Orange`.
+## Theme-Datei selbst erzeugen
 
-Die 10 abgestimmten Kombinationen: Blau + Orange, Indigo + Bernstein, Violett + Türkis, Rosa + Violett, Rot + Bernstein, Orange + Blau, Bernstein + Indigo, Grün + Rosa, Türkis + Orange, Graphit + Türkis.
-
-## Farben im Dashboard auswählen (optional)
-
-Home Assistant erlaubt eigene Primär- und Akzentfarben im Profil nur beim Standard-Theme. Mit dem Package in `packages/neumorphism_farbauswahl.yaml` bekommst du dafür zwei Auswahllisten, die du auf jedes Dashboard legen kannst:
-
-1. `alle-kombinationen/neumorphism.yaml` als Theme-Datei verwenden (Installation, Schritt 2).
-2. Packages aktivieren, falls noch nicht geschehen:
-   ```yaml
-   homeassistant:
-     packages: !include_dir_named packages
-   ```
-3. `packages/neumorphism_farbauswahl.yaml` nach `/config/packages/` kopieren und Home Assistant neu starten.
-4. Im Profil als Theme **„Backend-ausgewählt“** wählen.
-5. Die Entitäten `input_select.neumorphism_primaerfarbe` und `input_select.neumorphism_akzentfarbe` auf ein Dashboard legen, z. B. als Kachel oder in einer Entitäten-Karte.
-
-Bei jeder Änderung setzt eine Automation das passende Theme als Standard für Hell- und Dunkelmodus. Das gilt für alle Benutzer, die „Backend-ausgewählt“ eingestellt haben.
-
-## Eigene Farben
-
-Mit `generate.py` erzeugst du die Theme-Datei mit beliebigen Farben neu. Du brauchst nur Python 3 (ohne Zusatzpakete), am einfachsten auf dem eigenen Rechner.
+Mit `generate.py` erzeugst du die Theme-Datei neu, z. B. mit anderen Farbkombinationen oder anderer Effektstärke. Du brauchst nur Python 3 (ohne Zusatzpakete), am einfachsten auf dem eigenen Rechner.
 
 ```bash
 python3 generate.py --list                                  # Farbliste anzeigen
@@ -68,7 +83,7 @@ python3 generate.py --combo Grün:Orange                     # eine Kombination 
 python3 generate.py --combo "#0f9d58:#ffb300"               # eigene Hex-Farben
 python3 generate.py --combo "Mein Theme=#0f9d58:Rosa"       # mit eigenem Namen
 python3 generate.py --combo Blau:Orange --combo Rot:Graphit # mehrere auf einmal
-python3 generate.py --all --package packages/neumorphism_farbauswahl.yaml
+python3 generate.py --all                                   # alle 100 Kombinationen der Farbliste
 python3 generate.py --effekt normal                         # Schatteneffekt: dezent, normal oder stark
 ```
 
@@ -76,7 +91,7 @@ Der Schatteneffekt ist in den mitgelieferten Dateien auf **stark** gestellt. Mit
 
 Ohne `-o` landet das Ergebnis in `themes/neumorphism.yaml`. Danach die Datei wie oben kopieren und `frontend.reload_themes` ausführen.
 
-Hintergrund, Schatten, Textfarben und Rundungen stehen oben in `generate.py` (`MODES`, `CARD_RADIUS`, `DIALOG_RADIUS`). Eigene Farben kommen in `COLORS` und erscheinen dann auch in der Farbauswahl.
+Hintergrund, Schatten, Textfarben und Rundungen stehen oben in `generate.py` (`MODES`, `CARD_RADIUS`, `DIALOG_RADIUS`). Eigene Farben kommen in `COLORS`.
 
 ## Was das Theme anpasst
 

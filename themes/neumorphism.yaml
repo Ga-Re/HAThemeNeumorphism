@@ -5,7 +5,7 @@
 # Der Modus (hell/dunkel/automatisch) wird im Benutzerprofil eingestellt.
 # Effektstärke: stark
 
-"Neumorphism Blau + Orange":
+"Neumorphism":
   primary-color: "#3d7bfd"
   accent-color: "#ff8a3d"
   light-primary-color: "#afd5ff"
@@ -183,6 +183,35 @@
       label-badge-background-color: "var(--card-background-color)"
       ha-assist-chip-filled-container-color: "#333944"
       chip-background-color: "#333944"
+
+"Neumorphism Blau + Orange":
+  primary-color: "#3d7bfd"
+  accent-color: "#ff8a3d"
+  light-primary-color: "#afd5ff"
+  dark-primary-color: "#1b54d0"
+  darker-primary-color: "#002ca4"
+  text-primary-color: "#ffffff"
+  text-light-primary-color: "#212121"
+  text-accent-color: "#212121"
+  state-icon-color: "var(--primary-color)"
+  mdc-theme-secondary: "var(--accent-color)"
+  mdc-checkbox-checked-color: "var(--accent-color)"
+  switch-checked-color: "var(--accent-color)"
+  switch-checked-button-color: "var(--accent-color)"
+  switch-checked-track-color: "var(--accent-color)"
+  ha-color-on-primary-loud: "#ffffff"
+  ha-color-primary-05: "#0f003d"
+  ha-color-primary-10: "#0e0051"
+  ha-color-primary-20: "#00007a"
+  ha-color-primary-30: "#002ca4"
+  ha-color-primary-40: "#1b54d0"
+  ha-color-primary-50: "#3d7bfd"
+  ha-color-primary-60: "#639aff"
+  ha-color-primary-70: "#88b8ff"
+  ha-color-primary-80: "#afd5ff"
+  ha-color-primary-90: "#d6f2ff"
+  ha-color-primary-95: "#e9ffff"
+  modes: *neumorphism_modes
 
 "Neumorphism Indigo + Bernstein":
   primary-color: "#5c6bc0"

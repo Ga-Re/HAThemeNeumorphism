@@ -5,12 +5,11 @@ Erzeugt eine Theme-Datei mit Hell- und Dunkelmodus. Primär- und Akzentfarbe
 sind frei wählbar: entweder aus der Farbliste (Name) oder als Hex-Wert.
 
 Beispiele:
-  python3 generate.py                               # Standard-Auswahl (ein Theme pro Primärfarbe)
+  python3 generate.py                               # Standard-Auswahl ("Neumorphism" + ein Theme pro Primärfarbe)
   python3 generate.py --combo Blau:Orange           # genau eine Kombination
   python3 generate.py --combo "#3d7bfd:#ff8a3d"     # eigene Hex-Farben
   python3 generate.py --combo "Mein Theme=#3d7bfd:Grün"
   python3 generate.py --all                         # alle Kombinationen der Farbliste
-  python3 generate.py --all --package packages/neumorphism_farbauswahl.yaml
   python3 generate.py --list                        # Farbliste anzeigen
 
 Kein Zusatzpaket nötig, es reicht Python 3.8+.
@@ -322,55 +321,6 @@ def build_file(themes: list[tuple[str, str, str]], intensity: str = DEFAULT_INTE
     return "\n".join(lines)
 
 
-def build_package(names: list[str]) -> str:
-    options = "\n".join(f"      - {n}" for n in names)
-    return f"""# Farbauswahl für das Neumorphism-Theme
-# Erzeugt mit generate.py --all --package ...
-#
-# Zwei Auswahllisten (Primär- und Akzentfarbe). Bei jeder Änderung wird das
-# passende Theme als Standard-Theme von Home Assistant gesetzt, für Hell- und
-# Dunkelmodus. Damit es bei dir ankommt, im Profil als Theme
-# "Backend-ausgewählt" wählen.
-
-input_select:
-  neumorphism_primaerfarbe:
-    name: Neumorphism Primärfarbe
-    icon: mdi:palette
-    options:
-{options}
-  neumorphism_akzentfarbe:
-    name: Neumorphism Akzentfarbe
-    icon: mdi:palette-outline
-    options:
-{options}
-
-automation:
-  - id: neumorphism_farbauswahl
-    alias: Neumorphism Farbauswahl anwenden
-    mode: restart
-    triggers:
-      - trigger: homeassistant
-        event: start
-      - trigger: state
-        entity_id:
-          - input_select.neumorphism_primaerfarbe
-          - input_select.neumorphism_akzentfarbe
-    variables:
-      theme: >-
-        {THEME_PREFIX} {{{{ states('input_select.neumorphism_primaerfarbe') }}}}
-        + {{{{ states('input_select.neumorphism_akzentfarbe') }}}}
-    actions:
-      - action: frontend.set_theme
-        data:
-          name: "{{{{ theme }}}}"
-          mode: light
-      - action: frontend.set_theme
-        data:
-          name: "{{{{ theme }}}}"
-          mode: dark
-"""
-
-
 # --------------------------------------------------------------------------
 # Kommandozeile
 # --------------------------------------------------------------------------
@@ -408,8 +358,6 @@ def main(argv=None) -> int:
     parser.add_argument("--combo", action="append", default=[], metavar="[NAME=]PRIMÄR:AKZENT",
                         help="Farbkombination, Farbname oder #rrggbb (mehrfach möglich)")
     parser.add_argument("--all", action="store_true", help="alle Kombinationen der Farbliste erzeugen")
-    parser.add_argument("--package", type=Path, metavar="DATEI",
-                        help="zusätzlich ein Package mit Farbauswahl (input_select + Automation) schreiben")
     parser.add_argument("-o", "--output", type=Path, default=DEFAULT_OUTPUT, help="Ziel-Datei")
     parser.add_argument("--effekt", choices=list(INTENSITY), default=DEFAULT_INTENSITY,
                         help=f"Stärke des Schatteneffekts (Standard: {DEFAULT_INTENSITY})")
@@ -426,7 +374,9 @@ def main(argv=None) -> int:
         themes += [(f"{THEME_PREFIX} {p} + {a}", COLORS[p], COLORS[a]) for p in COLORS for a in COLORS]
     themes += [parse_combo(c) for c in args.combo]
     if not themes:
-        themes = [(f"{THEME_PREFIX} {p} + {a}", COLORS[p], COLORS[a]) for p, a in DEFAULT_COMBOS]
+        p, a = DEFAULT_COMBOS[0]
+        themes = [(THEME_PREFIX, COLORS[p], COLORS[a])]
+        themes += [(f"{THEME_PREFIX} {p} + {a}", COLORS[p], COLORS[a]) for p, a in DEFAULT_COMBOS]
 
     seen = set()
     themes = [t for t in themes if not (t[0] in seen or seen.add(t[0]))]
@@ -435,12 +385,6 @@ def main(argv=None) -> int:
     args.output.write_text(build_file(themes, args.effekt), encoding="utf-8")
     print(f"{len(themes)} Theme(s) geschrieben: {args.output}")
 
-    if args.package:
-        if not args.all:
-            print("Hinweis: Die Farbauswahl braucht alle Kombinationen, also --all verwenden.", file=sys.stderr)
-        args.package.parent.mkdir(parents=True, exist_ok=True)
-        args.package.write_text(build_package(list(COLORS)), encoding="utf-8")
-        print(f"Package geschrieben: {args.package}")
     return 0
 
 
