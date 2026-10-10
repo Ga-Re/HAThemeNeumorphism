@@ -44,6 +44,16 @@ type: custom:neumorphism-color-card
 title: Farben   # optional
 ```
 
+## Farbwähler erscheinen nicht
+
+Die Farbwähler kommen aus `neumorphism-colors.js`, nicht aus dem Theme. Fehlen sie, lädt Home Assistant die Datei meist nicht:
+
+1. Ist im Profil unter „Design“ wirklich ein **Neumorphism**-Theme gewählt? Bei „Standard-Design verwenden“ zeigt Home Assistant seine eigenen Farbwähler, unsere bleiben dann ausgeblendet.
+2. Liegt die Datei unter `/config/www/neumorphism-colors.js`? Test im Browser: `http://<home-assistant>:8123/local/neumorphism-colors.js?v=2` muss JavaScript-Code anzeigen, keine Fehlerseite. Gab es den Ordner `www` vorher noch nicht, muss Home Assistant einmal neu starten.
+3. Steht `extra_module_url` unter dem **einzigen** `frontend:`-Eintrag in der `configuration.yaml`? Ein zweiter `frontend:`-Block überschreibt den ersten. Nach der Änderung Home Assistant neu starten, ein YAML-Neuladen reicht nicht.
+4. In der Companion-App den Cache leeren: *Einstellungen → Companion-App → Fehlerbehebung → Frontend-Cache zurücksetzen*. Im Browser einmal hart neu laden (Strg/Cmd + Shift + R).
+5. Zur Kontrolle: Beim Bearbeiten eines Dashboards unter „Karte hinzufügen“ nach „Neumorphism Farben“ suchen. Taucht die Karte auf, ist das Modul geladen.
+
 ## Fertige Farbkombinationen
 
 Ohne Farbwähler kannst du im Profil auch eine fertige Kombination wählen. Die Themes heißen `Neumorphism <Primärfarbe> + <Akzentfarbe>`:
