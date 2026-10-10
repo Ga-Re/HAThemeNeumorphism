@@ -5,6 +5,7 @@ Ein weiches „Soft UI“-Design für Home Assistant, bei dem alles aus einem Gu
 - **Hell- und Dunkelmodus**, umgeschaltet wie gewohnt im Profil (Auto / Hell / Dunkel)
 - **Geformte Bedienelemente** in Kacheln, Karten und Detailansichten: Schalter, Schieber, Modus-Auswahl, Thermostat- und Luftbefeuchter-Regler, +/–-Knöpfe, Buttons, Eingabefelder
 - **Titelleiste ohne Kante**: Der Inhalt läuft beim Scrollen weich darunter aus
+- **Unterstützung für [M3 Cards](https://github.com/j0sp0r/m3-cards)**: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen, kräftig gefärbte Flächen behalten ihre Farbe
 - **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen
 - **Primär- und Akzentfarbe** per Farbwähler direkt im Profil
 - **Effektstärke** per Regler, von flach bis kräftig
@@ -82,7 +83,7 @@ Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit 
 
 ## Grenzen
 
-- Geformt werden die Bedienelemente von Home Assistant selbst. Eigene Karten aus HACS oder selbst geschriebene Karten bekommen die erhabene Kartenform (ohne Rand, mit Schatten), durchsichtige Karten bleiben unverändert. Ihre inneren Elemente bringen sie selbst mit, die bleiben flach.
+- Geformt werden die Bedienelemente von Home Assistant selbst. Eigene Karten aus HACS oder selbst geschriebene Karten bekommen die erhabene Kartenform (ohne Rand, mit Schatten), durchsichtige Karten bleiben unverändert. Ihre inneren Elemente bringen sie selbst mit, die bleiben flach. Ausnahme sind die M3 Cards, die gezielt unterstützt werden.
 - Neumorphism hat von Natur aus wenig Kontrast zwischen Karte und Hintergrund. Auf sehr hellen oder sehr dunklen Displays sind die Kartenränder schwächer zu sehen.
 - Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Home-Assistant-Updates kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10.
 

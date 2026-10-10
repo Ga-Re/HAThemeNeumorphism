@@ -15,7 +15,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.6.0";
+const VERSION = "3.7.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -721,6 +721,169 @@ function updateCustomCards() {
 }
 
 // ---------------------------------------------------------------------------
+// M3 Cards (github.com/j0sp0r/m3-cards)
+// ---------------------------------------------------------------------------
+//
+// Alle M3-Karten haben einen gemeinsamen Glas-Rahmen (.card-inner) in einer
+// durchsichtigen ha-card. Die Flächen darin (Chips, Symbolfelder, Knöpfe ...)
+// bekommen ihre Farbe per Inline-Stil. Die Flächen werden deshalb nach Farbe
+// und Form eingeordnet statt pro Karte gepflegt:
+//   - neutrale oder leicht getönte Fläche -> erhaben in der Kartenfarbe
+//   - kräftig gefärbte Fläche (aktiver Zustand) -> Farbe bleibt, erhaben
+//   - Fläche in einer Fläche, schmale Spur -> eingelassen
+
+const M3_TAG = /^m3-[a-z0-9-]+-card$/;
+const M3_STYLE = `
+  :host([nm-frame]) ha-card {
+    box-shadow: var(--neumorphism-card-shadow) !important;
+    border-radius: var(--nm-frame-radius, var(--ha-card-border-radius)) !important;
+  }
+  :host([nm-frame]) .card-inner {
+    border-color: transparent !important;
+    background: var(--card-background-color) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  [nm-raised] { background: var(--card-background-color) !important; box-shadow: ${RAISED} !important; }
+  [nm-accent] { box-shadow: ${RAISED} !important; }
+  [nm-inset] { background: var(--card-background-color) !important; box-shadow: ${INSET_S} !important; }
+`;
+const M3_ACCENT_DISTANCE = 90; // Abstand zur Kartenfarbe, ab dem eine Fläche als farbig gilt
+const m3Hosts = new Set();
+const m3Pending = new Set();
+let m3PaintKey = "";
+
+function parseColor(value) {
+  let m = value.match(/^rgba?\(([^)]+)\)/);
+  if (m) {
+    const [r, g, b, a = "1"] = m[1].split(/[\s,/]+/).filter(Boolean);
+    return { r: +r, g: +g, b: +b, a: +a };
+  }
+  m = value.match(/^color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.e-]+))?\)/);
+  if (m) return { r: m[1] * 255, g: m[2] * 255, b: m[3] * 255, a: m[4] === undefined ? 1 : +m[4] };
+  return null;
+}
+
+function scanM3(host) {
+  const root = host.shadowRoot;
+  if (!root) return;
+  const ATTRS = ["nm-raised", "nm-accent", "nm-inset"];
+  const elements = [...root.querySelectorAll("*")];
+  for (const el of elements) for (const attr of ATTRS) if (el.hasAttribute(attr)) el.removeAttribute(attr);
+  const inner = root.querySelector(".card-inner");
+  // In einer M3-Gruppe übernimmt die Gruppe den Rahmen
+  const inGroup = getComputedStyle(host).getPropertyValue("--m3-group-border").trim() !== "";
+  host.toggleAttribute("nm-frame", controlsActive && !!inner && !inGroup);
+  if (!controlsActive) return;
+  if (inner) host.style.setProperty("--nm-frame-radius", getComputedStyle(inner).borderTopLeftRadius);
+
+  const surface = parseColor(dropletPaint().fill) || { r: 0, g: 0, b: 0 };
+  const marks = [];
+  for (const el of elements) {
+    if (el === inner || el.localName === "ha-card" || el.closest("svg")) continue;
+    const css = getComputedStyle(el);
+    if (css.backgroundImage !== "none") continue; // Bilder, Verläufe
+    const bg = parseColor(css.backgroundColor);
+    if (!bg || bg.a < 0.05) continue;
+    const rect = el.getBoundingClientRect();
+    const mix = (c) => c * bg.a;
+    const blended = {
+      r: mix(bg.r) + surface.r * (1 - bg.a),
+      g: mix(bg.g) + surface.g * (1 - bg.a),
+      b: mix(bg.b) + surface.b * (1 - bg.a),
+    };
+    const accent = Math.hypot(blended.r - surface.r, blended.g - surface.g, blended.b - surface.b) > M3_ACCENT_DISTANCE;
+    // Schmale Spur (Schieber, Fortschritt): eingelassen; farbige Füllungen bleiben unverändert
+    if (rect.height >= 3 && rect.height <= 12 && rect.width >= 60 && rect.width > rect.height * 6) {
+      if (!accent) marks.push({ el, kind: "track" });
+      continue;
+    }
+    if (rect.width < 20 || rect.height < 14) continue; // Punkte, Griffe, Farbtupfer
+    if (parseFloat(css.borderTopLeftRadius) < 4) continue; // eckige Flächen sind keine Bausteine
+    marks.push({ el, kind: accent ? "accent" : "raised" });
+  }
+  const marked = new Set(marks.map((m) => m.el));
+  for (const mark of marks) {
+    if (mark.kind !== "raised") continue;
+    for (let p = mark.el.parentElement; p && p !== inner; p = p.parentElement) {
+      if (marked.has(p)) {
+        mark.kind = "inset";
+        break;
+      }
+    }
+  }
+  for (const mark of marks) mark.el.setAttribute(`nm-${mark.kind === "track" ? "inset" : mark.kind}`, "");
+}
+
+function scheduleM3(host) {
+  if (m3Pending.has(host)) return;
+  m3Pending.add(host);
+  requestAnimationFrame(() => {
+    m3Pending.delete(host);
+    try {
+      if (host.isConnected) scanM3(host);
+    } catch (err) {
+      console.warn("Neumorphism:", err);
+    }
+  });
+}
+
+function registerM3(host) {
+  if (m3Hosts.has(host)) return;
+  m3Hosts.add(host);
+  if (host.shadowRoot) {
+    adoptControlStyle(host.shadowRoot, "__m3");
+    new MutationObserver(() => scheduleM3(host)).observe(host.shadowRoot, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+  }
+  scheduleM3(host);
+}
+
+function patchM3Class(tag) {
+  const cls = customElements.get(tag);
+  if (!cls || !supportsSheets) return;
+  const proto = cls.prototype;
+  const original = proto.createRenderRoot;
+  if (typeof original === "function" && !Object.prototype.hasOwnProperty.call(proto, "__neumorphismPatched")) {
+    proto.createRenderRoot = function () {
+      const root = original.call(this);
+      queueMicrotask(() => registerM3(this));
+      return root;
+    };
+    proto.__neumorphismPatched = true;
+  }
+  for (const el of findAllDeep(tag)) registerM3(el);
+}
+
+function setupM3() {
+  if (!supportsSheets) return;
+  CONTROL_STYLES.__m3 = M3_STYLE;
+  // Karten, die nach diesem Modul geladen werden
+  const define = customElements.define.bind(customElements);
+  customElements.define = (name, cls, options) => {
+    define(name, cls, options);
+    if (M3_TAG.test(name)) patchM3Class(name);
+  };
+  // Karten, die schon geladen sind
+  for (const card of window.customCards || []) {
+    if (M3_TAG.test(card.type) && customElements.get(card.type)) patchM3Class(card.type);
+  }
+}
+
+/** Nach Theme-, Modus- oder Stärkewechsel alle M3-Karten neu einordnen. */
+function updateM3() {
+  const paint = dropletPaint();
+  const key = `${controlsActive}|${paint.fill}`;
+  if (key === m3PaintKey) return;
+  m3PaintKey = key;
+  for (const host of m3Hosts) if (host.isConnected) scheduleM3(host);
+}
+
+// ---------------------------------------------------------------------------
 // Farbwähler (im Profil und in der Karte)
 // ---------------------------------------------------------------------------
 
@@ -1028,6 +1191,7 @@ if (!customElements.get(PICKER_TAG)) {
   });
 
   patchControls();
+  setupM3();
   // Jeder Schritt für sich: Ein Fehler in einem Teil soll die anderen nicht aufhalten.
   const safely = (fn) => {
     try {
@@ -1042,6 +1206,7 @@ if (!customElements.get(PICKER_TAG)) {
     safely(updateDroplets);
     safely(updateButtonGroups);
     safely(updateCustomCards);
+    safely(updateM3);
   };
   window.addEventListener("resize", () =>
     requestAnimationFrame(() => {
