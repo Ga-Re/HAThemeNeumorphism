@@ -1,8 +1,9 @@
 # Neumorphism für Home Assistant
 
-Ein weiches „Soft UI“-Design für Home Assistant. Karten liegen eine Spur heller als der Hintergrund und heben sich über einen breiten, weichen Schatten unten rechts und einen hellen Schein oben links ab. Kopfzeile und Seitenleiste gehen in den Hintergrund über, Eingabefelder wirken eingelassen.
+Ein weiches „Soft UI“-Design für Home Assistant, bei dem alles aus einem Guss wirkt. Karten und Bedienelemente haben die Farbe des Hintergrunds und entstehen nur durch Licht und Schatten: Knöpfe, Kachel-Symbole und Regler treten erhaben hervor, Schieber, Auswahlleisten, Schalter und Eingabefelder sind eingelassen.
 
 - **Hell- und Dunkelmodus**, umgeschaltet wie gewohnt im Profil (Auto / Hell / Dunkel)
+- **Geformte Bedienelemente** in Kacheln, Karten und Detailansichten: Schalter, Schieber, Modus-Auswahl, Thermostat- und Luftbefeuchter-Regler, +/–-Knöpfe, Buttons, Eingabefelder
 - **Primär- und Akzentfarbe** per Farbwähler direkt im Profil
 - **Effektstärke** per Regler, von flach bis kräftig
 - Einstellungen werden **pro Benutzer** gespeichert und gelten auf allen Geräten
@@ -56,7 +57,16 @@ title: Design   # optional
 
 ## Für eigene Karten
 
-Das Theme stellt die Variable `--neumorphism-inset-shadow` bereit, einen eingedrückten Schatten passend zu Modus und Effektstärke. Zum Beispiel mit card-mod:
+Das Theme stellt Schatten-Variablen bereit, die zu Modus und Effektstärke passen:
+
+| Variable | Wirkung |
+|---|---|
+| `--neumorphism-raised-shadow` | erhaben, für Knöpfe und kleine Flächen |
+| `--neumorphism-raised-shadow-l` | stärker erhaben, für große runde Knöpfe |
+| `--neumorphism-inset-shadow` | eingelassen, für Spuren und Leisten |
+| `--neumorphism-inset-shadow-s` | leicht eingelassen, für Eingabefelder |
+
+Zum Beispiel mit card-mod:
 
 ```yaml
 card_mod:
@@ -70,9 +80,9 @@ Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit 
 
 ## Grenzen
 
-- Den „gedrückt“-Effekt beim Antippen und runde, erhabene Knöpfe kann ein Theme den Bedienelementen von Home Assistant nicht geben.
+- Geformt werden die Bedienelemente von Home Assistant selbst. Eigene Karten aus HACS (z. B. Mushroom oder Bubble Card) bringen eigene Bausteine mit und bekommen nur Farben und Kartenschatten, ihre inneren Elemente bleiben flach.
 - Neumorphism hat von Natur aus wenig Kontrast zwischen Karte und Hintergrund. Auf sehr hellen oder sehr dunklen Displays sind die Kartenränder schwächer zu sehen.
-- Für das Theme und die Einstellungen im Profil greift die Integration auf interne Teile des Home-Assistant-Frontends zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Home-Assistant-Updates kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10.
+- Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Home-Assistant-Updates kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10.
 
 ## Lizenz
 

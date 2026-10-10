@@ -5,6 +5,8 @@
  *   einen Regler für die Effektstärke, sobald das Theme "Neumorphism" gewählt ist.
  * - Stellt die Karte "custom:neumorphism-color-card" bereit (gleiche Einstellungen).
  * - Wendet die Einstellungen auf das aktive Theme an.
+ * - Formt die Bedienelemente von Home Assistant (Schalter, Schieber, Knöpfe,
+ *   Eingabefelder ...) erhaben oder eingelassen, damit alles aus einem Guss wirkt.
  *
  * Gespeichert wird in den Theme-Einstellungen des Benutzers (primaryColor,
  * accentColor, neumorphismStrength), dort wo Home Assistant auch die Farben
@@ -13,7 +15,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.1.0";
+const VERSION = "3.2.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -166,11 +168,12 @@ function neumorphismActive() {
 }
 
 function applyColors() {
+  const active = neumorphismActive();
+  setControlsActive(active);
   const stored = storedSettings();
   const primary = preview.primary || stored.primary;
   const accent = preview.accent || stored.accent;
   const strength = preview.strength ?? stored.strength;
-  const active = neumorphismActive();
   const key = active ? `${primary}|${accent}|${strength}` : "";
   if (key === applied) return;
   applied = key;
@@ -189,6 +192,150 @@ function applyColors() {
     .map(([name, value]) => `--${name}: ${value} !important;`)
     .join(" ");
   style.textContent = body ? `html { ${body} }` : "";
+}
+
+// ---------------------------------------------------------------------------
+// Bedienelemente erhaben oder eingelassen formen
+// ---------------------------------------------------------------------------
+
+// Bausteine aus dem Theme, skalieren mit der Effektstärke.
+const RAISED = "var(--neumorphism-raised-shadow)";
+const RAISED_L = "var(--neumorphism-raised-shadow-l)";
+const INSET = "var(--neumorphism-inset-shadow)";
+const INSET_S = "var(--neumorphism-inset-shadow-s)";
+const SURFACE = "var(--card-background-color)";
+const STRENGTH = "var(--neumorphism-strength, 1)";
+
+// Pro Element (Tag) zusätzliche Regeln für dessen Shadow DOM.
+const CONTROL_STYLES = {
+  // Knöpfe in Kacheln und Detailansichten (z. B. +/–, Modus, Szenen)
+  "ha-control-button": `
+    .button { background: ${SURFACE}; box-shadow: ${RAISED}; }
+    .button::before { opacity: max(0, calc((var(--control-button-background-opacity) - 0.2) * 1.25)) !important; }
+    .button:not(:disabled):active { box-shadow: ${INSET_S}; }
+  `,
+  // Ein/Aus-Schalter in Kacheln: eingelassene Spur, erhabener Griff
+  "ha-control-switch": `
+    .switch { box-shadow: ${INSET}; }
+    .switch .background { opacity: 0 !important; }
+    .switch[checked] .background { opacity: 0.12 !important; }
+    .switch .button { background-color: ${SURFACE} !important; color: var(--secondary-text-color); box-shadow: ${RAISED}; }
+    .switch[checked] .button { background-color: var(--control-switch-on-color) !important; color: white; }
+  `,
+  // Auswahlknöpfe (Modus, Stufen): eingelassene Leiste, gewählte Option erhaben
+  "ha-control-select": `
+    .container { box-shadow: ${INSET}; border-radius: var(--control-select-border-radius); }
+    .container::before { opacity: 0 !important; }
+    .option.selected { box-shadow: ${RAISED}; }
+  `,
+  // Schieber (Helligkeit, Position ...): eingelassene Spur
+  "ha-control-slider": `
+    .slider { box-shadow: ${INSET}; }
+    .slider .slider-track-background { opacity: 0 !important; }
+  `,
+  // Runder Regler (Thermostat, Luftbefeuchter): erhabener Ring
+  "ha-control-circular-slider": `
+    svg { filter:
+      drop-shadow(calc(3px * ${STRENGTH}) calc(3px * ${STRENGTH}) calc(4px * ${STRENGTH}) var(--neumorphism-shadow-dark))
+      drop-shadow(calc(-3px * ${STRENGTH}) calc(-3px * ${STRENGTH}) calc(4px * ${STRENGTH}) var(--neumorphism-shadow-light)); }
+    .background { stroke: ${SURFACE} !important; opacity: 1 !important; }
+  `,
+  // Runde Knöpfe mit Rahmen (z. B. +/– am Thermostat)
+  "ha-outlined-icon-button": `
+    :host { --md-outlined-icon-button-outline-width: 0px; --md-outlined-icon-button-outline-color: transparent; }
+    .icon-button { background: ${SURFACE}; box-shadow: ${RAISED_L}; }
+    .icon-button:active { box-shadow: ${INSET_S}; }
+  `,
+  // Symbol links in Kacheln
+  "ha-tile-icon": `
+    .container { box-shadow: ${RAISED}; }
+  `,
+  // Umschalter in Listen und Einstellungen
+  "ha-switch": `
+    .switch { box-shadow: ${INSET_S}; }
+  `,
+  // Eingabefelder und Auswahlfelder: eingelassen
+  "ha-input": `
+    wa-input::part(base) { box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-lg); }
+    :host([appearance="material"]:not(:focus-within)) wa-input::part(base)::after { opacity: 0; }
+  `,
+  "ha-picker-field": `
+    ha-combo-box-item { box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-lg) !important; }
+  `,
+  // Gewählter Eintrag in der Seitenleiste: eingelassen
+  "ha-sidebar": `
+    ha-list-item-button.selected { box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-md); }
+    ha-list-item-button.selected::before { opacity: 0 !important; }
+  `,
+};
+
+const supportsSheets =
+  typeof CSSStyleSheet !== "undefined" &&
+  "replaceSync" in CSSStyleSheet.prototype &&
+  "adoptedStyleSheets" in Document.prototype;
+const controlSheets = new Map();
+let controlsActive = false;
+
+function controlSheet(tag) {
+  let sheet = controlSheets.get(tag);
+  if (!sheet) {
+    sheet = new CSSStyleSheet();
+    sheet.replaceSync(controlsActive ? CONTROL_STYLES[tag] : "");
+    controlSheets.set(tag, sheet);
+  }
+  return sheet;
+}
+
+function adoptControlStyle(root, tag) {
+  if (!root || !root.adoptedStyleSheets) return;
+  const sheet = controlSheet(tag);
+  if (!root.adoptedStyleSheets.includes(sheet)) {
+    root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+  }
+}
+
+/** Ein gemeinsames Stylesheet pro Element: leeren genügt, um alles abzuschalten. */
+function setControlsActive(active) {
+  if (active === controlsActive) return;
+  controlsActive = active;
+  for (const [tag, sheet] of controlSheets) sheet.replaceSync(active ? CONTROL_STYLES[tag] : "");
+}
+
+function findAllDeep(selector) {
+  const found = [];
+  const stack = [document];
+  while (stack.length) {
+    const node = stack.pop();
+    found.push(...node.querySelectorAll(selector));
+    for (const el of node.querySelectorAll("*")) {
+      if (el.shadowRoot) stack.push(el.shadowRoot);
+    }
+  }
+  return found;
+}
+
+/**
+ * Hängt das Stylesheet an alle vorhandenen und künftigen Exemplare eines Elements.
+ * Lifecycle-Callbacks liest der Browser nur bei der Registrierung, deshalb wird
+ * createRenderRoot erweitert: Lit ruft es für jedes neue Exemplar auf.
+ */
+function patchControls() {
+  if (!supportsSheets) return;
+  for (const tag of Object.keys(CONTROL_STYLES)) {
+    customElements.whenDefined(tag).then(() => {
+      const proto = customElements.get(tag).prototype;
+      const original = proto.createRenderRoot;
+      if (typeof original === "function" && !Object.prototype.hasOwnProperty.call(proto, "__neumorphismPatched")) {
+        proto.createRenderRoot = function () {
+          const root = original.call(this);
+          adoptControlStyle(root, tag);
+          return root;
+        };
+        proto.__neumorphismPatched = true;
+      }
+      for (const el of findAllDeep(tag)) adoptControlStyle(el.shadowRoot, tag);
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -498,6 +645,7 @@ if (!customElements.get(PICKER_TAG)) {
     preview: true,
   });
 
+  patchControls();
   const tick = () => {
     applyColors();
     injectIntoProfile();
