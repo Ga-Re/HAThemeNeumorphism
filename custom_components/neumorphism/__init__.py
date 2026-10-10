@@ -1,7 +1,7 @@
 """Neumorphism-Theme mit Farbwählern für Home Assistant.
 
 Die Integration
-- registriert die Themes aus themes/neumorphism.yaml direkt im Frontend
+- registriert die Themes aus theme/neumorphism.yaml direkt im Frontend
   (kein Eintrag `frontend: themes:` in der configuration.yaml nötig),
 - liefert www/neumorphism-colors.js aus und lädt es auf jeder Seite
   (kein `extra_module_url` nötig).
@@ -20,7 +20,7 @@ from homeassistant.const import EVENT_THEMES_UPDATED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.util.yaml import load_yaml_dict
 
-from .const import DOMAIN, JS_FILE, STATIC_URL, THEMES_FILE, VERSION
+from .const import DOMAIN, JS_FILE, STATIC_URL, THEMES_DIR, THEMES_FILE, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ JS_URL = f"{STATIC_URL}/{JS_FILE}?v={VERSION}"
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Themes registrieren und Farbwähler-Skript laden."""
     themes: dict[str, Any] = await hass.async_add_executor_job(
-        load_yaml_dict, str(BASE_DIR / "themes" / THEMES_FILE)
+        load_yaml_dict, str(BASE_DIR / THEMES_DIR / THEMES_FILE)
     )
     data = hass.data.setdefault(DOMAIN, {})
 

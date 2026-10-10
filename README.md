@@ -88,7 +88,7 @@ python3 generate.py --effekt stark                          # Schatteneffekt: de
 
 Die mitgelieferte Datei nutzt **normal**. Mit `--effekt stark` werden die Schatten breiter und kräftiger, mit `--effekt dezent` kürzer und blasser.
 
-Ohne `-o` landet das Ergebnis in `custom_components/neumorphism/themes/neumorphism.yaml`, also in der Datei, die die Integration lädt. Danach den Ordner `custom_components/neumorphism` nach Home Assistant kopieren und die Integration neu laden. Achtung: Ein HACS-Update überschreibt diese Datei wieder. Eigene Varianten daher besser mit `-o meine-themes.yaml` erzeugen und klassisch über `frontend: themes: !include_dir_merge_named themes` einbinden.
+Ohne `-o` landet das Ergebnis in `custom_components/neumorphism/theme/neumorphism.yaml`, also in der Datei, die die Integration lädt. Danach den Ordner `custom_components/neumorphism` nach Home Assistant kopieren und die Integration neu laden. Achtung: Ein HACS-Update überschreibt diese Datei wieder. Eigene Varianten daher besser mit `-o meine-themes.yaml` erzeugen und klassisch über `frontend: themes: !include_dir_merge_named themes` einbinden.
 
 Hintergrund, Schatten, Textfarben und Rundungen stehen oben in `generate.py` (`MODES`, `CARD_RADIUS`, `DIALOG_RADIUS`). Eigene Farben kommen in `COLORS`.
 

@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_OUTPUT = HERE / "custom_components" / "neumorphism" / "themes" / "neumorphism.yaml"
+DEFAULT_OUTPUT = HERE / "custom_components" / "neumorphism" / "theme" / "neumorphism.yaml"
 THEME_PREFIX = "Neumorphism"
 
 # Farbliste: Name -> Hex. Die Namen erscheinen im Theme-Namen und in der Farbauswahl.
