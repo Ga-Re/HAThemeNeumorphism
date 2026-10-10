@@ -3,6 +3,7 @@
 # und die Datei neu erzeugen.
 #
 # Der Modus (hell/dunkel/automatisch) wird im Benutzerprofil eingestellt.
+# Effektstärke: stark
 
 "Neumorphism Blau + Blau":
   primary-color: "#3d7bfd"
@@ -49,16 +50,16 @@
       rgb-primary-text-color: "47, 58, 74"
       ha-card-header-color: "var(--primary-text-color)"
       # Karten: gleiche Farbe wie der Hintergrund, nur Schatten
-      ha-card-box-shadow: "8px 8px 16px rgba(163, 177, 198, 0.60), -8px -8px 16px rgba(255, 255, 255, 0.90)"
+      ha-card-box-shadow: "14px 14px 30px rgba(163, 177, 198, 0.98), -14px -14px 30px rgba(255, 255, 255, 1.00)"
       ha-card-border-width: "0px"
       ha-card-border-color: "transparent"
       ha-card-border-radius: "22px"
-      ha-box-shadow-s: "3px 3px 6px rgba(163, 177, 198, 0.60), -3px -3px 6px rgba(255, 255, 255, 0.90)"
-      ha-box-shadow-m: "6px 6px 12px rgba(163, 177, 198, 0.60), -6px -6px 12px rgba(255, 255, 255, 0.90)"
-      ha-box-shadow-l: "12px 12px 24px rgba(163, 177, 198, 0.60), -12px -12px 24px rgba(255, 255, 255, 0.90)"
-      bar-box-shadow: "4px 4px 10px rgba(163, 177, 198, 0.60), -4px -4px 10px rgba(255, 255, 255, 0.90)"
-      shadow-color: "rgba(163, 177, 198, 0.60)"
-      neumorphism-inset-shadow: "inset 3px 3px 6px rgba(163, 177, 198, 0.60), inset -3px -3px 6px rgba(255, 255, 255, 0.90)"
+      ha-box-shadow-s: "4px 4px 8px rgba(163, 177, 198, 0.98), -4px -4px 8px rgba(255, 255, 255, 1.00)"
+      ha-box-shadow-m: "8px 8px 16px rgba(163, 177, 198, 0.98), -8px -8px 16px rgba(255, 255, 255, 1.00)"
+      ha-box-shadow-l: "16px 16px 32px rgba(163, 177, 198, 0.98), -16px -16px 32px rgba(255, 255, 255, 1.00)"
+      bar-box-shadow: "5px 5px 14px rgba(163, 177, 198, 0.98), -5px -5px 14px rgba(255, 255, 255, 1.00)"
+      shadow-color: "rgba(163, 177, 198, 0.98)"
+      neumorphism-inset-shadow: "inset 5px 5px 11px rgba(163, 177, 198, 0.98), inset -5px -5px 11px rgba(255, 255, 255, 1.00)"
       divider-color: "rgba(47, 58, 74, 0.08)"
       outline-color: "rgba(47, 58, 74, 0.08)"
       outline-hover-color: "rgba(47, 58, 74, 0.16)"
@@ -74,7 +75,7 @@
       # Dialoge
       ha-dialog-surface-background: "var(--card-background-color)"
       ha-dialog-border-radius: "28px"
-      dialog-box-shadow: "14px 14px 28px rgba(163, 177, 198, 0.60), -14px -14px 28px rgba(255, 255, 255, 0.90)"
+      dialog-box-shadow: "19px 19px 38px rgba(163, 177, 198, 0.98), -19px -19px 38px rgba(255, 255, 255, 1.00)"
       mdc-dialog-scrim-color: "rgba(228, 233, 240, 0.55)"
       ha-dialog-scrim-backdrop-filter: "blur(6px)"
       # Eingabefelder wirken eingelassen
@@ -92,7 +93,7 @@
       ha-switch-thumb-background-color: "#f5f7fa"
       ha-switch-checked-background-color: "var(--accent-color)"
       ha-switch-checked-thumb-background-color: "#f5f7fa"
-      ha-switch-thumb-box-shadow: "2px 2px 4px rgba(163, 177, 198, 0.60), -2px -2px 4px rgba(255, 255, 255, 0.90)"
+      ha-switch-thumb-box-shadow: "3px 3px 5px rgba(163, 177, 198, 0.98), -3px -3px 5px rgba(255, 255, 255, 1.00)"
       switch-unchecked-track-color: "#cdd5e0"
       switch-unchecked-button-color: "#f5f7fa"
       slider-track-color: "#cdd5e0"
@@ -109,14 +110,14 @@
       chip-background-color: "#d9dfe8"
     dark:
       # Flächen
-      primary-background-color: "#272b33"
-      secondary-background-color: "#2f343d"
-      clear-background-color: "#272b33"
-      card-background-color: "#272b33"
+      primary-background-color: "#2b3039"
+      secondary-background-color: "#333944"
+      clear-background-color: "#2b3039"
+      card-background-color: "#2b3039"
       ha-card-background: "var(--card-background-color)"
-      ha-color-surface-default: "#272b33"
-      ha-color-surface-low: "#272b33"
-      ha-color-surface-lower: "#2f343d"
+      ha-color-surface-default: "#2b3039"
+      ha-color-surface-low: "#2b3039"
+      ha-color-surface-lower: "#333944"
       # Schrift
       primary-text-color: "#e3e7ee"
       secondary-text-color: "#9aa3b2"
@@ -124,16 +125,16 @@
       rgb-primary-text-color: "227, 231, 238"
       ha-card-header-color: "var(--primary-text-color)"
       # Karten: gleiche Farbe wie der Hintergrund, nur Schatten
-      ha-card-box-shadow: "8px 8px 16px rgba(0, 0, 0, 0.50), -8px -8px 16px rgba(255, 255, 255, 0.05)"
-      ha-card-border-width: "0px"
-      ha-card-border-color: "transparent"
+      ha-card-box-shadow: "14px 14px 30px rgba(0, 0, 0, 0.78), -14px -14px 30px rgba(255, 255, 255, 0.12)"
+      ha-card-border-width: "1px"
+      ha-card-border-color: "rgba(255, 255, 255, 0.035)"
       ha-card-border-radius: "22px"
-      ha-box-shadow-s: "3px 3px 6px rgba(0, 0, 0, 0.50), -3px -3px 6px rgba(255, 255, 255, 0.05)"
-      ha-box-shadow-m: "6px 6px 12px rgba(0, 0, 0, 0.50), -6px -6px 12px rgba(255, 255, 255, 0.05)"
-      ha-box-shadow-l: "12px 12px 24px rgba(0, 0, 0, 0.50), -12px -12px 24px rgba(255, 255, 255, 0.05)"
-      bar-box-shadow: "4px 4px 10px rgba(0, 0, 0, 0.50), -4px -4px 10px rgba(255, 255, 255, 0.05)"
-      shadow-color: "rgba(0, 0, 0, 0.50)"
-      neumorphism-inset-shadow: "inset 3px 3px 6px rgba(0, 0, 0, 0.50), inset -3px -3px 6px rgba(255, 255, 255, 0.05)"
+      ha-box-shadow-s: "4px 4px 8px rgba(0, 0, 0, 0.78), -4px -4px 8px rgba(255, 255, 255, 0.12)"
+      ha-box-shadow-m: "8px 8px 16px rgba(0, 0, 0, 0.78), -8px -8px 16px rgba(255, 255, 255, 0.12)"
+      ha-box-shadow-l: "16px 16px 32px rgba(0, 0, 0, 0.78), -16px -16px 32px rgba(255, 255, 255, 0.12)"
+      bar-box-shadow: "5px 5px 14px rgba(0, 0, 0, 0.78), -5px -5px 14px rgba(255, 255, 255, 0.12)"
+      shadow-color: "rgba(0, 0, 0, 0.78)"
+      neumorphism-inset-shadow: "inset 5px 5px 11px rgba(0, 0, 0, 0.78), inset -5px -5px 11px rgba(255, 255, 255, 0.12)"
       divider-color: "rgba(227, 231, 238, 0.08)"
       outline-color: "rgba(227, 231, 238, 0.08)"
       outline-hover-color: "rgba(227, 231, 238, 0.16)"
@@ -149,12 +150,12 @@
       # Dialoge
       ha-dialog-surface-background: "var(--card-background-color)"
       ha-dialog-border-radius: "28px"
-      dialog-box-shadow: "14px 14px 28px rgba(0, 0, 0, 0.50), -14px -14px 28px rgba(255, 255, 255, 0.05)"
+      dialog-box-shadow: "19px 19px 38px rgba(0, 0, 0, 0.78), -19px -19px 38px rgba(255, 255, 255, 0.12)"
       mdc-dialog-scrim-color: "rgba(15, 17, 21, 0.55)"
       ha-dialog-scrim-backdrop-filter: "blur(6px)"
       # Eingabefelder wirken eingelassen
-      input-fill-color: "#2f343d"
-      input-disabled-fill-color: "#272b33"
+      input-fill-color: "#333944"
+      input-disabled-fill-color: "#2b3039"
       input-ink-color: "var(--primary-text-color)"
       input-label-ink-color: "var(--secondary-text-color)"
       input-idle-line-color: "transparent"
@@ -167,7 +168,7 @@
       ha-switch-thumb-background-color: "#3a404a"
       ha-switch-checked-background-color: "var(--accent-color)"
       ha-switch-checked-thumb-background-color: "#3a404a"
-      ha-switch-thumb-box-shadow: "2px 2px 4px rgba(0, 0, 0, 0.50), -2px -2px 4px rgba(255, 255, 255, 0.05)"
+      ha-switch-thumb-box-shadow: "3px 3px 5px rgba(0, 0, 0, 0.78), -3px -3px 5px rgba(255, 255, 255, 0.12)"
       switch-unchecked-track-color: "#1f2228"
       switch-unchecked-button-color: "#3a404a"
       slider-track-color: "#1f2228"
@@ -180,8 +181,8 @@
       markdown-code-background-color: "var(--secondary-background-color)"
       code-editor-background-color: "var(--secondary-background-color)"
       label-badge-background-color: "var(--card-background-color)"
-      ha-assist-chip-filled-container-color: "#2f343d"
-      chip-background-color: "#2f343d"
+      ha-assist-chip-filled-container-color: "#333944"
+      chip-background-color: "#333944"
 
 "Neumorphism Blau + Indigo":
   primary-color: "#3d7bfd"

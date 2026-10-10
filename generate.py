@@ -63,8 +63,9 @@ MODES = {
     "light": {
         "background": "#e4e9f0",
         "background_alt": "#d9dfe8",
-        "shadow_dark": "rgba(163, 177, 198, 0.60)",
-        "shadow_light": "rgba(255, 255, 255, 0.90)",
+        "shadow_dark": ("163, 177, 198", 0.75),
+        "shadow_light": ("255, 255, 255", 1.0),
+        "card_border": ("0px", "transparent"),
         "text": "#2f3a4a",
         "text_secondary": "#6b7789",
         "text_disabled": "#a3adbb",
@@ -74,10 +75,11 @@ MODES = {
         "scrim": "rgba(228, 233, 240, 0.55)",
     },
     "dark": {
-        "background": "#272b33",
-        "background_alt": "#2f343d",
-        "shadow_dark": "rgba(0, 0, 0, 0.50)",
-        "shadow_light": "rgba(255, 255, 255, 0.05)",
+        "background": "#2b3039",
+        "background_alt": "#333944",
+        "shadow_dark": ("0, 0, 0", 0.60),
+        "shadow_light": ("255, 255, 255", 0.09),
+        "card_border": ("1px", "rgba(255, 255, 255, 0.035)"),
         "text": "#e3e7ee",
         "text_secondary": "#9aa3b2",
         "text_disabled": "#5d6573",
@@ -87,6 +89,14 @@ MODES = {
         "scrim": "rgba(15, 17, 21, 0.55)",
     },
 }
+
+# Effektstärke: (Faktor für Schattenabstand/-weichheit, Faktor für Deckkraft)
+INTENSITY = {
+    "dezent": (0.7, 0.7),
+    "normal": (1.0, 1.0),
+    "stark": (1.35, 1.3),
+}
+DEFAULT_INTENSITY = "stark"
 
 CARD_RADIUS = "22px"
 DIALOG_RADIUS = "28px"
@@ -169,9 +179,15 @@ def text_on(value: str) -> str:
 # Theme-Aufbau
 # --------------------------------------------------------------------------
 
-def mode_vars(m: dict) -> list[tuple[str, str]]:
-    shadow = lambda d, b: f"{d}px {d}px {b}px {m['shadow_dark']}, -{d}px -{d}px {b}px {m['shadow_light']}"  # noqa: E731
-    inset = f"inset 3px 3px 6px {m['shadow_dark']}, inset -3px -3px 6px {m['shadow_light']}"
+def mode_vars(m: dict, intensity: str = DEFAULT_INTENSITY) -> list[tuple[str, str]]:
+    size, strength = INTENSITY[intensity]
+    rgba = lambda c: f"rgba({c[0]}, {min(1.0, c[1] * strength):.2f})"  # noqa: E731
+    dark, light = rgba(m["shadow_dark"]), rgba(m["shadow_light"])
+
+    def shadow(d: float, b: float, inset: str = "") -> str:
+        d, b = round(d * size), round(b * size)
+        return f"{inset}{d}px {d}px {b}px {dark}, {inset}-{d}px -{d}px {b}px {light}"
+
     return [
         ("# Flächen", None),
         ("primary-background-color", m["background"]),
@@ -189,16 +205,16 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("rgb-primary-text-color", m["rgb_ink"]),
         ("ha-card-header-color", "var(--primary-text-color)"),
         ("# Karten: gleiche Farbe wie der Hintergrund, nur Schatten", None),
-        ("ha-card-box-shadow", shadow(8, 16)),
-        ("ha-card-border-width", "0px"),
-        ("ha-card-border-color", "transparent"),
+        ("ha-card-box-shadow", shadow(10, 22)),
+        ("ha-card-border-width", m["card_border"][0]),
+        ("ha-card-border-color", m["card_border"][1]),
         ("ha-card-border-radius", CARD_RADIUS),
         ("ha-box-shadow-s", shadow(3, 6)),
         ("ha-box-shadow-m", shadow(6, 12)),
         ("ha-box-shadow-l", shadow(12, 24)),
         ("bar-box-shadow", shadow(4, 10)),
-        ("shadow-color", m["shadow_dark"]),
-        ("neumorphism-inset-shadow", inset),
+        ("shadow-color", dark),
+        ("neumorphism-inset-shadow", shadow(4, 8, "inset ")),
         ("divider-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-hover-color", f"rgba({m['rgb_ink']}, 0.16)"),
@@ -282,13 +298,14 @@ def emit_vars(lines: list[str], items, indent: int) -> None:
             lines.append(f'{pad}{key}: "{value}"')
 
 
-def build_file(themes: list[tuple[str, str, str]]) -> str:
+def build_file(themes: list[tuple[str, str, str]], intensity: str = DEFAULT_INTENSITY) -> str:
     lines = [
         "# Neumorphism-Theme für Home Assistant (Hell- und Dunkelmodus)",
         "# Erzeugt mit generate.py. Änderungen am besten dort vornehmen",
         "# und die Datei neu erzeugen.",
         "#",
         "# Der Modus (hell/dunkel/automatisch) wird im Benutzerprofil eingestellt.",
+        f"# Effektstärke: {intensity}",
         "",
     ]
     for index, (name, primary, accent) in enumerate(themes):
@@ -298,7 +315,7 @@ def build_file(themes: list[tuple[str, str, str]]) -> str:
             lines.append("  modes: &neumorphism_modes")
             for mode in ("light", "dark"):
                 lines.append(f"    {mode}:")
-                emit_vars(lines, mode_vars(MODES[mode]), 6)
+                emit_vars(lines, mode_vars(MODES[mode], intensity), 6)
         else:
             lines.append("  modes: *neumorphism_modes")
         lines.append("")
@@ -394,6 +411,8 @@ def main(argv=None) -> int:
     parser.add_argument("--package", type=Path, metavar="DATEI",
                         help="zusätzlich ein Package mit Farbauswahl (input_select + Automation) schreiben")
     parser.add_argument("-o", "--output", type=Path, default=DEFAULT_OUTPUT, help="Ziel-Datei")
+    parser.add_argument("--effekt", choices=list(INTENSITY), default=DEFAULT_INTENSITY,
+                        help=f"Stärke des Schatteneffekts (Standard: {DEFAULT_INTENSITY})")
     parser.add_argument("--list", action="store_true", help="Farbliste anzeigen")
     args = parser.parse_args(argv)
 
@@ -413,7 +432,7 @@ def main(argv=None) -> int:
     themes = [t for t in themes if not (t[0] in seen or seen.add(t[0]))]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(build_file(themes), encoding="utf-8")
+    args.output.write_text(build_file(themes, args.effekt), encoding="utf-8")
     print(f"{len(themes)} Theme(s) geschrieben: {args.output}")
 
     if args.package:

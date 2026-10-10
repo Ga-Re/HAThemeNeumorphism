@@ -69,7 +69,10 @@ python3 generate.py --combo "#0f9d58:#ffb300"               # eigene Hex-Farben
 python3 generate.py --combo "Mein Theme=#0f9d58:Rosa"       # mit eigenem Namen
 python3 generate.py --combo Blau:Orange --combo Rot:Graphit # mehrere auf einmal
 python3 generate.py --all --package packages/neumorphism_farbauswahl.yaml
+python3 generate.py --effekt normal                         # Schatteneffekt: dezent, normal oder stark
 ```
+
+Der Schatteneffekt ist in den mitgelieferten Dateien auf **stark** gestellt. Mit `--effekt normal` oder `--effekt dezent` werden die Schatten kürzer und blasser.
 
 Ohne `-o` landet das Ergebnis in `themes/neumorphism.yaml`. Danach die Datei wie oben kopieren und `frontend.reload_themes` ausführen.
 
