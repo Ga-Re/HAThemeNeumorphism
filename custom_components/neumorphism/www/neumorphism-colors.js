@@ -15,7 +15,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.4.0";
+const VERSION = "3.5.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -270,6 +270,11 @@ const CONTROL_STYLES = {
     ha-combo-box-item { box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-lg) !important; }
   `,
   // Symbol-Knöpfe sind flach, erhaben werden sie erst als Gruppe in der Titelleiste
+  // Buttons, die mit Nachbarn eine gemeinsame Form haben (siehe updateButtonGroups)
+  "ha-button": `
+    :host([neumorphism-merged]) { position: relative; z-index: 1; }
+    :host([neumorphism-merged]) .button { box-shadow: none !important; }
+  `,
   "ha-icon-button": `
     ha-button { --ha-button-box-shadow: none; }
   `,
@@ -369,6 +374,7 @@ function patchControls() {
           const root = original.call(this);
           adoptControlStyle(root, tag);
           if (DROPLET_GROUPS[tag]) dropletHosts.add(this);
+          if (tag === "ha-button") buttonHosts.add(this);
           return root;
         };
         proto.__neumorphismPatched = true;
@@ -376,6 +382,7 @@ function patchControls() {
       for (const el of findAllDeep(tag)) {
         adoptControlStyle(el.shadowRoot, tag);
         if (DROPLET_GROUPS[tag]) dropletHosts.add(el);
+        if (tag === "ha-button") buttonHosts.add(el);
       }
     });
   }
@@ -412,6 +419,8 @@ const DROPLET_MARGIN = 24; // Platz für die Schatten rund um die Form
 const DROPLET_INSET = 4; // Kreise etwas kleiner als die Knopffläche
 const DROPLET_NECK = 0.5; // halbe Halsbreite im Verhältnis zum Radius
 const dropletHosts = new Set();
+const buttonHosts = new Set();
+const BUTTON_GAP = 24; // Buttons mit höchstens diesem Abstand laufen zusammen
 let dropletProbe = null;
 
 /** Sichtbare Fläche eines Elements; Hüllen mit display: contents (z. B. Menüs) über ihren Auslöser. */
@@ -449,9 +458,15 @@ function dropletPaint() {
 
 const fmt = (n) => (Math.round(n * 100) / 100).toString();
 
-/** Kreis als Pfad im Uhrzeigersinn (für eine gemeinsame Füllung ohne Nähte). */
-const circlePath = (cx, cy, r) =>
-  `M${fmt(cx - r)} ${fmt(cy)}A${fmt(r)} ${fmt(r)} 0 1 1 ${fmt(cx + r)} ${fmt(cy)}A${fmt(r)} ${fmt(r)} 0 1 1 ${fmt(cx - r)} ${fmt(cy)}Z`;
+/** Kreis oder Pille als Pfad im Uhrzeigersinn (für eine gemeinsame Füllung ohne Nähte). */
+function capsulePath(left, right, cy, r) {
+  const a = left + r;
+  const b = Math.max(a, right - r);
+  return (
+    `M${fmt(a)} ${fmt(cy - r)}H${fmt(b)}A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(b)} ${fmt(cy + r)}` +
+    `H${fmt(a)}A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(a)} ${fmt(cy - r)}Z`
+  );
+}
 
 /** Eingeschnürte Brücke zwischen zwei Kreisen: Hohlkehlen tangential an beide Kreise. */
 function bridgePath(x1, x2, cy, r) {
@@ -517,28 +532,35 @@ function updateDroplets() {
         existing?.remove();
         return;
       }
-      drawDroplet(existing, parent, group.anchor, items, index);
+      drawDroplet(existing, parent, group.anchor, items, index, DROPLET_INSET);
     });
   }
 }
 
-function drawDroplet(existing, parent, anchor, items, index) {
+/**
+ * Zeichnet die Form hinter einer Reihe von Elementen in ihr (positioniertes) Elternelement.
+ * Jedes Element wird zu einer Pille (bei quadratischen Knöpfen ein Kreis), benachbarte
+ * Pillen werden an ihren zugewandten Enden mit einem Tropfen-Hals verbunden.
+ */
+function drawDroplet(existing, parent, anchor, items, group, inset) {
   const box = parent.getBoundingClientRect();
-  const circles = items.map((r) => ({
-    cx: r.left + r.width / 2 - box.left,
-    cy: r.top + r.height / 2 - box.top,
-    r: Math.min(r.width, r.height) / 2 - DROPLET_INSET,
-  }));
-  const left = Math.min(...circles.map((c) => c.cx - c.r)) - DROPLET_MARGIN;
-  const top = Math.min(...circles.map((c) => c.cy - c.r)) - DROPLET_MARGIN;
-  const width = Math.max(...circles.map((c) => c.cx + c.r)) + DROPLET_MARGIN - left;
-  const height = Math.max(...circles.map((c) => c.cy + c.r)) + DROPLET_MARGIN - top;
-  const local = circles.map((c) => ({ ...c, cx: c.cx - left, cy: c.cy - top }));
-  const shapes = local.map((c) => circlePath(c.cx, c.cy, c.r));
+  const offsetX = box.left + parent.clientLeft - parent.scrollLeft;
+  const offsetY = box.top + parent.clientTop - parent.scrollTop;
+  const pills = items.map((rect) => {
+    const r = Math.min(rect.width, rect.height) / 2 - inset;
+    return { left: rect.left + inset - offsetX, right: rect.right - inset - offsetX, cy: rect.top + rect.height / 2 - offsetY, r };
+  });
+  const left = Math.min(...pills.map((p) => p.left)) - DROPLET_MARGIN;
+  const top = Math.min(...pills.map((p) => p.cy - p.r)) - DROPLET_MARGIN;
+  const width = Math.max(...pills.map((p) => p.right)) + DROPLET_MARGIN - left;
+  const height = Math.max(...pills.map((p) => p.cy + p.r)) + DROPLET_MARGIN - top;
+  const local = pills.map((p) => ({ ...p, left: p.left - left, right: p.right - left, cy: p.cy - top }));
+  const shapes = local.map((p) => capsulePath(p.left, p.right, p.cy, p.r));
   for (let i = 1; i < local.length; i++) {
     const a = local[i - 1];
     const b = local[i];
-    shapes.push(bridgePath(a.cx, b.cx, (a.cy + b.cy) / 2, Math.min(a.r, b.r)));
+    const r = Math.min(a.r, b.r);
+    shapes.push(bridgePath(a.right - a.r, b.left + b.r, (a.cy + b.cy) / 2, r));
   }
   const paint = dropletPaint();
   const key = `${fmt(left)}|${fmt(top)}|${shapes.join("")}|${paint.dark}|${paint.light}|${paint.fill}|${paint.strength}`;
@@ -547,12 +569,12 @@ function drawDroplet(existing, parent, anchor, items, index) {
   if (!droplet) {
     droplet = document.createElement("div");
     droplet.className = "neumorphism-droplet";
-    droplet.dataset.group = String(index);
+    droplet.dataset.group = String(group);
     droplet.setAttribute("aria-hidden", "true");
     droplet.style.cssText = "position:absolute;pointer-events:none;z-index:0;background-repeat:no-repeat;background-size:100% 100%;";
   }
   if (droplet.parentElement !== parent || droplet.nextSibling !== anchor) parent.insertBefore(droplet, anchor);
-  if (droplet.dataset.key === key) return;
+  if (droplet.dataset.key === key) return droplet;
   droplet.dataset.key = key;
   Object.assign(droplet.style, {
     left: `${left}px`,
@@ -561,6 +583,76 @@ function drawDroplet(existing, parent, anchor, items, index) {
     height: `${height}px`,
     backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(dropletSvg(width, height, shapes, paint))}")`,
   });
+  return droplet;
+}
+
+/**
+ * Buttons, die direkt nebeneinander liegen (z. B. „Profil bearbeiten“ und „Abmelden“),
+ * bekommen statt eigener Schatten eine gemeinsame Tropfenform.
+ */
+const buttonDroplets = new Map(); // Elternelement -> gezeichnete Formen
+
+function updateButtonGroups() {
+  if (buttonHosts.size > 2000) for (const btn of buttonHosts) if (!btn.isConnected) buttonHosts.delete(btn);
+  const byParent = new Map();
+  if (controlsActive) {
+    for (const btn of buttonHosts) {
+      if (!btn.isConnected || !btn.parentElement) continue;
+      // Symbol-Knöpfe sind flach; ihre Gruppen in der Titelleiste zeichnet updateDroplets
+      if (btn.getRootNode().host?.localName === "ha-icon-button") continue;
+      const list = byParent.get(btn.parentElement) || [];
+      list.push(btn);
+      byParent.set(btn.parentElement, list);
+    }
+  }
+
+  const merged = new Set();
+  const used = new Map();
+  for (const [parent, buttons] of byParent) {
+    if (buttons.length < 2) continue;
+    const entries = buttons
+      .map((btn) => ({ btn, rect: btn.getBoundingClientRect() }))
+      .filter((e) => e.rect.width > 0 && e.rect.height > 0)
+      .sort((a, b) => a.rect.left - b.rect.left);
+    // Reihen: gleiche Höhe und Zeile, kleiner Abstand
+    const runs = [];
+    for (const entry of entries) {
+      const run = runs[runs.length - 1];
+      const last = run?.[run.length - 1];
+      const sameRow =
+        last &&
+        Math.abs(last.rect.top + last.rect.height / 2 - (entry.rect.top + entry.rect.height / 2)) < 4 &&
+        Math.abs(last.rect.height - entry.rect.height) < 4 &&
+        entry.rect.left - last.rect.right <= BUTTON_GAP &&
+        entry.rect.left - last.rect.right >= -1;
+      if (sameRow) run.push(entry);
+      else runs.push([entry]);
+    }
+    const drawn = [];
+    runs.filter((run) => run.length > 1).forEach((run, index) => {
+      if (getComputedStyle(parent).position === "static") {
+        parent.style.position = "relative";
+        parent.dataset.neumorphismPositioned = "";
+      }
+      const existing = buttonDroplets.get(parent)?.[index];
+      drawn.push(drawDroplet(existing, parent, run[0].btn, run.map((e) => e.rect), `b${index}`, 0));
+      for (const e of run) merged.add(e.btn);
+    });
+    if (drawn.length) used.set(parent, drawn);
+  }
+
+  // Aufräumen: nicht mehr benötigte Formen und Markierungen entfernen
+  for (const [parent, droplets] of buttonDroplets) {
+    const keep = used.get(parent) || [];
+    for (const d of droplets) if (!keep.includes(d)) d.remove();
+    if (!keep.length && parent.dataset.neumorphismPositioned !== undefined) {
+      parent.style.position = "";
+      delete parent.dataset.neumorphismPositioned;
+    }
+  }
+  buttonDroplets.clear();
+  for (const [parent, droplets] of used) buttonDroplets.set(parent, droplets);
+  for (const btn of buttonHosts) btn.toggleAttribute("neumorphism-merged", merged.has(btn));
 }
 
 // ---------------------------------------------------------------------------
@@ -875,8 +967,14 @@ if (!customElements.get(PICKER_TAG)) {
     applyColors();
     injectIntoProfile();
     updateDroplets();
+    updateButtonGroups();
   };
-  window.addEventListener("resize", () => requestAnimationFrame(updateDroplets));
+  window.addEventListener("resize", () =>
+    requestAnimationFrame(() => {
+      updateDroplets();
+      updateButtonGroups();
+    })
+  );
   // Theme- oder Moduswechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.
   new MutationObserver(tick).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
   window.addEventListener("location-changed", () => setTimeout(tick, 100));
