@@ -55,50 +55,53 @@ DEFAULT_COMBOS = [
     ("Graphit", "Türkis"),
 ]
 
-# Grundflächen und Schatten pro Modus. Neumorphism lebt davon, dass Karten
-# dieselbe Farbe wie der Hintergrund haben und nur über zwei Schatten
-# (hell oben links, dunkel unten rechts) aus der Fläche "herauswachsen".
+# Grundflächen und Schatten pro Modus, angelehnt an klassisches Soft UI:
+# Karten liegen eine Spur heller als der Hintergrund und heben sich über einen
+# weichen, breiten Schatten unten rechts und einen hellen Schein oben links ab.
+# Eingelassene Flächen (Eingabefelder, Auswahl) sind etwas dunkler.
 MODES = {
     "light": {
-        "background": "#e4e9f0",
-        "background_alt": "#d9dfe8",
-        "shadow_dark": ("163, 177, 198", 0.75),
-        "shadow_light": ("255, 255, 255", 1.0),
+        "background": "#d9e2f4",
+        "surface": "#e6ecf9",
+        "inset": "#d2dcf0",
+        "shadow_dark": ("143, 160, 201", 0.50),
+        "shadow_light": ("255, 255, 255", 0.85),
         "card_border": ("0px", "transparent"),
-        "text": "#2f3a4a",
-        "text_secondary": "#6b7789",
-        "text_disabled": "#a3adbb",
-        "rgb_ink": "47, 58, 74",
-        "track": "#cdd5e0",
-        "thumb": "#f5f7fa",
-        "scrim": "rgba(228, 233, 240, 0.55)",
+        "text": "#3f4a63",
+        "text_secondary": "#7d88a3",
+        "text_disabled": "#a9b3c9",
+        "rgb_ink": "63, 74, 99",
+        "track": "#cbd5ea",
+        "thumb": "#f3f6fd",
+        "scrim": "rgba(217, 226, 244, 0.55)",
     },
     "dark": {
-        "background": "#2b3039",
-        "background_alt": "#333944",
-        "shadow_dark": ("0, 0, 0", 0.60),
-        "shadow_light": ("255, 255, 255", 0.09),
-        "card_border": ("1px", "rgba(255, 255, 255, 0.035)"),
-        "text": "#e3e7ee",
-        "text_secondary": "#9aa3b2",
-        "text_disabled": "#5d6573",
-        "rgb_ink": "227, 231, 238",
-        "track": "#1f2228",
-        "thumb": "#3a404a",
-        "scrim": "rgba(15, 17, 21, 0.55)",
+        "background": "#20242c",
+        "surface": "#282d37",
+        "inset": "#22262e",
+        "shadow_dark": ("0, 0, 0", 0.55),
+        "shadow_light": ("150, 166, 204", 0.14),
+        "card_border": ("1px", "rgba(255, 255, 255, 0.03)"),
+        "text": "#e4e8f1",
+        "text_secondary": "#9aa4b8",
+        "text_disabled": "#5c6578",
+        "rgb_ink": "228, 232, 241",
+        "track": "#1a1d23",
+        "thumb": "#3b4251",
+        "scrim": "rgba(10, 12, 16, 0.55)",
     },
 }
 
 # Effektstärke: (Faktor für Schattenabstand/-weichheit, Faktor für Deckkraft)
 INTENSITY = {
-    "dezent": (0.7, 0.7),
+    "dezent": (0.65, 0.7),
     "normal": (1.0, 1.0),
-    "stark": (1.35, 1.3),
+    "stark": (1.3, 1.25),
 }
-DEFAULT_INTENSITY = "stark"
+DEFAULT_INTENSITY = "normal"
 
-CARD_RADIUS = "22px"
-DIALOG_RADIUS = "28px"
+CARD_RADIUS = "28px"
+DIALOG_RADIUS = "32px"
 
 
 # --------------------------------------------------------------------------
@@ -190,30 +193,30 @@ def mode_vars(m: dict, intensity: str = DEFAULT_INTENSITY) -> list[tuple[str, st
     return [
         ("# Flächen", None),
         ("primary-background-color", m["background"]),
-        ("secondary-background-color", m["background_alt"]),
+        ("secondary-background-color", m["inset"]),
         ("clear-background-color", m["background"]),
-        ("card-background-color", m["background"]),
+        ("card-background-color", m["surface"]),
         ("ha-card-background", "var(--card-background-color)"),
-        ("ha-color-surface-default", m["background"]),
+        ("ha-color-surface-default", m["surface"]),
         ("ha-color-surface-low", m["background"]),
-        ("ha-color-surface-lower", m["background_alt"]),
+        ("ha-color-surface-lower", m["inset"]),
         ("# Schrift", None),
         ("primary-text-color", m["text"]),
         ("secondary-text-color", m["text_secondary"]),
         ("disabled-text-color", m["text_disabled"]),
         ("rgb-primary-text-color", m["rgb_ink"]),
         ("ha-card-header-color", "var(--primary-text-color)"),
-        ("# Karten: gleiche Farbe wie der Hintergrund, nur Schatten", None),
-        ("ha-card-box-shadow", shadow(10, 22)),
+        ("# Karten: weicher Schatten unten rechts, heller Schein oben links", None),
+        ("ha-card-box-shadow", shadow(12, 32)),
         ("ha-card-border-width", m["card_border"][0]),
         ("ha-card-border-color", m["card_border"][1]),
         ("ha-card-border-radius", CARD_RADIUS),
-        ("ha-box-shadow-s", shadow(3, 6)),
-        ("ha-box-shadow-m", shadow(6, 12)),
-        ("ha-box-shadow-l", shadow(12, 24)),
-        ("bar-box-shadow", shadow(4, 10)),
+        ("ha-box-shadow-s", shadow(4, 10)),
+        ("ha-box-shadow-m", shadow(8, 20)),
+        ("ha-box-shadow-l", shadow(14, 36)),
+        ("bar-box-shadow", shadow(6, 16)),
         ("shadow-color", dark),
-        ("neumorphism-inset-shadow", shadow(4, 8, "inset ")),
+        ("neumorphism-inset-shadow", shadow(5, 12, "inset ")),
         ("divider-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-hover-color", f"rgba({m['rgb_ink']}, 0.16)"),
@@ -229,11 +232,17 @@ def mode_vars(m: dict, intensity: str = DEFAULT_INTENSITY) -> list[tuple[str, st
         ("# Dialoge", None),
         ("ha-dialog-surface-background", "var(--card-background-color)"),
         ("ha-dialog-border-radius", DIALOG_RADIUS),
-        ("dialog-box-shadow", shadow(14, 28)),
+        ("dialog-box-shadow", shadow(18, 48)),
         ("mdc-dialog-scrim-color", m["scrim"]),
         ("ha-dialog-scrim-backdrop-filter", "blur(6px)"),
         ("# Eingabefelder wirken eingelassen", None),
-        ("input-fill-color", m["background_alt"]),
+        ("ha-color-form-background", m["inset"]),
+        ("ha-color-form-background-hover", m["inset"]),
+        ("ha-color-form-background-disabled", m["background"]),
+        ("ha-color-border-neutral-loud", f"rgba({m['rgb_ink']}, 0.18)"),
+        ("ha-color-border-neutral-normal", f"rgba({m['rgb_ink']}, 0.14)"),
+        ("ha-color-border-neutral-quiet", f"rgba({m['rgb_ink']}, 0.08)"),
+        ("input-fill-color", m["inset"]),
         ("input-disabled-fill-color", m["background"]),
         ("input-ink-color", "var(--primary-text-color)"),
         ("input-label-ink-color", "var(--secondary-text-color)"),
@@ -247,21 +256,21 @@ def mode_vars(m: dict, intensity: str = DEFAULT_INTENSITY) -> list[tuple[str, st
         ("ha-switch-thumb-background-color", m["thumb"]),
         ("ha-switch-checked-background-color", "var(--accent-color)"),
         ("ha-switch-checked-thumb-background-color", m["thumb"]),
-        ("ha-switch-thumb-box-shadow", shadow(2, 4)),
+        ("ha-switch-thumb-box-shadow", shadow(2, 5)),
         ("switch-unchecked-track-color", m["track"]),
         ("switch-unchecked-button-color", m["thumb"]),
         ("slider-track-color", m["track"]),
         ("scrollbar-thumb-color", m["track"]),
         ("# Tabellen, Code, Badges", None),
-        ("table-header-background-color", "var(--primary-background-color)"),
-        ("table-row-background-color", "var(--primary-background-color)"),
+        ("table-header-background-color", "var(--card-background-color)"),
+        ("table-row-background-color", "var(--card-background-color)"),
         ("table-row-alternative-background-color", "var(--secondary-background-color)"),
         ("data-table-background-color", "var(--card-background-color)"),
         ("markdown-code-background-color", "var(--secondary-background-color)"),
         ("code-editor-background-color", "var(--secondary-background-color)"),
         ("label-badge-background-color", "var(--card-background-color)"),
-        ("ha-assist-chip-filled-container-color", m["background_alt"]),
-        ("chip-background-color", m["background_alt"]),
+        ("ha-assist-chip-filled-container-color", m["inset"]),
+        ("chip-background-color", m["inset"]),
     ]
 
 

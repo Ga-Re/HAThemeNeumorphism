@@ -1,20 +1,23 @@
 /*
  * Neumorphism-Farben für Home Assistant
  *
- * 1. Überschreibt Primär- und Akzentfarbe des aktiven Neumorphism-Themes mit den
- *    Werten aus input_text.neumorphism_primaerfarbe / input_text.neumorphism_akzentfarbe.
- * 2. Stellt die Karte "custom:neumorphism-color-card" mit Farbwählern bereit.
+ * - Zeigt im Profil unter "Design" Farbwähler für Primär- und Akzentfarbe,
+ *   sobald ein Neumorphism-Theme gewählt ist.
+ * - Stellt die Karte "custom:neumorphism-color-card" bereit (gleiche Farbwähler).
+ * - Wendet die gewählten Farben auf das aktive Neumorphism-Theme an.
+ *
+ * Die Farben stehen in den Theme-Einstellungen des Benutzers (primaryColor /
+ * accentColor), dort wo Home Assistant sie auch beim Standard-Theme ablegt.
  *
  * Einbinden (configuration.yaml):
  *   frontend:
  *     extra_module_url:
- *       - /local/neumorphism-colors.js?v=1
+ *       - /local/neumorphism-colors.js?v=2
  */
 
-const VERSION = "1.0.0";
-const PRIMARY_ENTITY = "input_text.neumorphism_primaerfarbe";
-const ACCENT_ENTITY = "input_text.neumorphism_akzentfarbe";
+const VERSION = "2.0.0";
 const STYLE_ID = "neumorphism-colors";
+const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
 const MARKER_VAR = "--neumorphism-inset-shadow";
 
@@ -129,11 +132,22 @@ function colorVars(primary, accent) {
 }
 
 // ---------------------------------------------------------------------------
-// Farben anwenden
+// Farben lesen, speichern, anwenden
 // ---------------------------------------------------------------------------
 
 const normalize = (value) => (typeof value === "string" && HEX_RE.test(value.trim()) ? value.trim().toLowerCase() : "");
-const getHass = () => document.querySelector("home-assistant")?.hass;
+const getRoot = () => document.querySelector("home-assistant");
+const getHass = () => getRoot()?.hass;
+
+function storedColors(hass = getHass()) {
+  const theme = hass?.selectedTheme || {};
+  return { primary: normalize(theme.primaryColor), accent: normalize(theme.accentColor) };
+}
+
+/** Speichert wie das Profil von Home Assistant: pro Benutzer in den Theme-Einstellungen. */
+function saveColors(patch) {
+  getRoot()?.dispatchEvent(new CustomEvent("settheme", { detail: patch, bubbles: true, composed: true }));
+}
 
 // Vorschau beim Ziehen im Farbwähler, bevor der Wert gespeichert ist.
 const preview = { primary: "", accent: "" };
@@ -144,9 +158,9 @@ function neumorphismActive() {
 }
 
 function applyColors() {
-  const states = getHass()?.states || {};
-  const primary = preview.primary || normalize(states[PRIMARY_ENTITY]?.state);
-  const accent = preview.accent || normalize(states[ACCENT_ENTITY]?.state);
+  const stored = storedColors();
+  const primary = preview.primary || stored.primary;
+  const accent = preview.accent || stored.accent;
   const active = neumorphismActive();
   const key = active ? `${primary}|${accent}` : "";
   if (key === applied) return;
@@ -166,23 +180,174 @@ function applyColors() {
   style.textContent = body ? `html { ${body} }` : "";
 }
 
-// Theme-Wechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.
-new MutationObserver(() => applyColors()).observe(document.documentElement, {
-  attributes: true,
-  attributeFilter: ["style"],
-});
-// Zustandsänderungen der Helfer (auch von anderen Geräten). Ein Vergleich pro Sekunde kostet praktisch nichts.
-setInterval(applyColors, 1000);
-applyColors();
+// ---------------------------------------------------------------------------
+// Farbwähler (im Profil und in der Karte)
+// ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Karte mit Farbwählern
-// ---------------------------------------------------------------------------
+function texts(hass) {
+  const de = (hass?.language || navigator.language || "").toLowerCase().startsWith("de");
+  const loc = (key, fallback) => hass?.localize?.(key) || fallback;
+  return {
+    colors: de ? "Farben" : "Colors",
+    primary: loc("ui.panel.profile.themes.primary_color", de ? "Primärfarbe" : "Primary color"),
+    accent: loc("ui.panel.profile.themes.accent_color", de ? "Akzentfarbe" : "Accent color"),
+    reset: loc("ui.panel.profile.themes.reset", de ? "Zurücksetzen" : "Reset"),
+    primaryHint: de ? "Buttons, Symbole, Auswahl" : "Buttons, icons, selection",
+    accentHint: de ? "Schalter, Hervorhebungen" : "Switches, highlights",
+    fromTheme: de ? "aus dem Theme" : "from theme",
+    perUser: de ? "Gilt für deinen Benutzer." : "Applies to your user.",
+    inactive: de
+      ? "Wähle im Profil ein Neumorphism-Theme, dann wirken diese Farben."
+      : "Select a Neumorphism theme in your profile to use these colors.",
+  };
+}
 
 const ROWS = [
-  { key: "primary", entity: PRIMARY_ENTITY, label: "Primärfarbe", hint: "Buttons, Symbole, Auswahl", cssVar: "--primary-color" },
-  { key: "accent", entity: ACCENT_ENTITY, label: "Akzentfarbe", hint: "Schalter, Hervorhebungen", cssVar: "--accent-color" },
+  { key: "primary", setting: "primaryColor", cssVar: "--primary-color" },
+  { key: "accent", setting: "accentColor", cssVar: "--accent-color" },
 ];
+
+class NeumorphismColorPicker extends HTMLElement {
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  _render() {
+    if (!this._hass || !this.isConnected) return;
+    if (!this.shadowRoot) this._build();
+    this._update();
+  }
+
+  _build() {
+    const root = this.attachShadow({ mode: "open" });
+    root.innerHTML = `
+      <style>
+        :host { display: block; }
+        :host([in-profile]) { padding: 4px var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
+        :host([in-profile][inactive]) { display: none; }
+        .headline { color: var(--primary-text-color); font-size: var(--ha-font-size-m, 14px);
+          font-weight: var(--ha-font-weight-medium, 500); padding: 8px 0 4px; }
+        :host(:not([in-profile])) .headline { display: none; }
+        .info { color: var(--secondary-text-color); font-size: 0.85rem; line-height: 1.4; }
+        .info.warning { color: var(--warning-color); padding-bottom: 8px; }
+        .rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 32px; }
+        .row { display: flex; align-items: center; gap: 16px; padding: 12px 0 10px; }
+        .text { flex: 1; min-width: 0; }
+        .label { color: var(--primary-text-color); font-size: 1rem; }
+        .hint { color: var(--secondary-text-color); font-size: 0.85rem; margin-top: 2px; }
+        .value { color: var(--secondary-text-color); font-family: var(--ha-font-family-code, monospace);
+          font-size: 0.8rem; margin-top: 4px; }
+        .picker { width: 56px; height: 56px; flex: none; border-radius: 50%; padding: 7px; box-sizing: border-box;
+          background: var(--card-background-color); box-shadow: var(--ha-box-shadow-m); }
+        input[type="color"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 100%;
+          border: none; padding: 0; border-radius: 50%; background: none; cursor: pointer; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+        input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
+        .presets { display: flex; flex-wrap: wrap; gap: 10px; padding: 2px 2px 8px; }
+        .dot { width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; cursor: pointer;
+          box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
+        .dot.selected { outline: 2px solid var(--primary-text-color); }
+        .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; }
+        button.reset { border: none; background: var(--card-background-color); color: var(--primary-color);
+          border-radius: 999px; padding: 9px 18px; font: inherit; font-size: 0.9rem; cursor: pointer;
+          box-shadow: var(--ha-box-shadow-s); }
+        button.reset:active, .dot:active { box-shadow: var(--neumorphism-inset-shadow, none); }
+        button.reset[hidden] { display: none; }
+      </style>
+      <div class="headline"></div>
+      <div class="info warning" hidden></div>
+      <div class="rows">
+        ${ROWS.map(
+          (row) => `
+          <div class="block" data-key="${row.key}">
+            <div class="row">
+              <div class="picker"><input type="color"></div>
+              <div class="text">
+                <div class="label"></div>
+                <div class="hint"></div>
+                <div class="value"></div>
+              </div>
+            </div>
+            <div class="presets">
+              ${PRESETS.map(([name, hex]) => `<button class="dot" title="${name}" data-color="${hex}" style="background:${hex}"></button>`).join("")}
+            </div>
+          </div>`
+        ).join("")}
+      </div>
+      <div class="footer">
+        <span class="info per-user"></span>
+        <button class="reset"></button>
+      </div>`;
+
+    for (const row of ROWS) {
+      const block = root.querySelector(`.block[data-key="${row.key}"]`);
+      const input = block.querySelector("input");
+      // Während des Ziehens nur anzeigen, gespeichert wird beim Loslassen.
+      input.addEventListener("input", () => {
+        preview[row.key] = input.value;
+        applyColors();
+      });
+      input.addEventListener("change", () => this._save({ [row.setting]: input.value }));
+      for (const dot of block.querySelectorAll(".dot")) {
+        dot.addEventListener("click", () => this._save({ [row.setting]: dot.dataset.color }));
+      }
+    }
+    root.querySelector(".reset").addEventListener("click", () =>
+      this._save({ primaryColor: undefined, accentColor: undefined })
+    );
+  }
+
+  _save(patch) {
+    saveColors(patch);
+    preview.primary = "";
+    preview.accent = "";
+    applyColors();
+    this._render();
+  }
+
+  _update() {
+    const root = this.shadowRoot;
+    const t = texts(this._hass);
+    const active = neumorphismActive();
+    const stored = storedColors(this._hass);
+    this.toggleAttribute("inactive", !active);
+
+    root.querySelector(".headline").textContent = t.colors;
+    const warning = root.querySelector(".warning");
+    warning.hidden = active;
+    warning.textContent = t.inactive;
+    root.querySelector(".per-user").textContent = t.perUser;
+    const reset = root.querySelector(".reset");
+    reset.textContent = t.reset;
+    reset.hidden = !stored.primary && !stored.accent;
+
+    const css = getComputedStyle(document.documentElement);
+    for (const row of ROWS) {
+      const block = root.querySelector(`.block[data-key="${row.key}"]`);
+      const input = block.querySelector("input");
+      const value = stored[row.key];
+      const shown = preview[row.key] || value || normalize(css.getPropertyValue(row.cssVar)) || "#3d7bfd";
+      if (root.activeElement !== input) input.value = shown;
+      input.setAttribute("aria-label", t[row.key]);
+      block.querySelector(".label").textContent = t[row.key];
+      block.querySelector(".hint").textContent = t[`${row.key}Hint`];
+      block.querySelector(".value").textContent = value || t.fromTheme;
+      for (const dot of block.querySelectorAll(".dot")) {
+        dot.classList.toggle("selected", dot.dataset.color === value);
+      }
+    }
+  }
+}
 
 class NeumorphismColorCard extends HTMLElement {
   static getStubConfig() {
@@ -190,13 +355,14 @@ class NeumorphismColorCard extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { title: "Farben", ...config };
-    this._built = false;
+    this._config = { title: "", ...config };
+    if (this.shadowRoot) this._update();
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._built) this._build();
+    if (!this.shadowRoot) this._build();
+    this._picker.hass = hass;
     this._update();
   }
 
@@ -205,125 +371,71 @@ class NeumorphismColorCard extends HTMLElement {
   }
 
   getGridOptions() {
-    return { columns: 6, min_columns: 6, rows: "auto" };
+    return { columns: 12, min_columns: 6, rows: "auto" };
   }
 
   _build() {
-    this._built = true;
-    const root = this.shadowRoot || this.attachShadow({ mode: "open" });
+    const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>
-        ha-card { padding: 16px 20px 20px; }
-        h2 { margin: 0 0 12px; font-size: var(--ha-card-header-font-size, 1.25rem); font-weight: var(--ha-font-weight-normal, 400); color: var(--ha-card-header-color, var(--primary-text-color)); }
-        .row { display: flex; align-items: center; gap: 16px; padding: 12px 0; }
-        .block + .block { border-top: 1px solid var(--divider-color); margin-top: 8px; }
-        .text { flex: 1; min-width: 0; }
-        .label { color: var(--primary-text-color); font-size: 1rem; }
-        .hint { color: var(--secondary-text-color); font-size: 0.85rem; margin-top: 2px; }
-        .value { color: var(--secondary-text-color); font-family: var(--ha-font-family-code, monospace); font-size: 0.85rem; margin-top: 4px; }
-        .picker { position: relative; width: 52px; height: 52px; flex: none; border-radius: 50%;
-          box-shadow: var(--ha-box-shadow-m); padding: 6px; box-sizing: border-box; background: var(--card-background-color); }
-        input[type="color"] { -webkit-appearance: none; appearance: none; width: 100%; height: 100%; border: none;
-          padding: 0; border-radius: 50%; background: none; cursor: pointer; }
-        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
-        input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
-        .presets { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 0 4px; }
-        .dot { width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; cursor: pointer;
-          box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
-        .dot.selected { outline: 2px solid var(--primary-text-color); }
-        button.reset { border: none; background: var(--card-background-color); color: var(--secondary-text-color);
-          border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 0.85rem; cursor: pointer;
-          box-shadow: var(--ha-box-shadow-s); }
-        button.reset:active, .dot:active { box-shadow: var(--neumorphism-inset-shadow, none); }
-        button.reset[hidden] { display: none; }
-        .warning { color: var(--warning-color); font-size: 0.9rem; line-height: 1.4; }
-        code { font-size: 0.85rem; }
+        ha-card { padding: 16px 20px 16px; }
+        h2 { margin: 0 0 4px; font-size: var(--ha-card-header-font-size, 1.25rem);
+          font-weight: var(--ha-font-weight-normal, 400); color: var(--ha-card-header-color, var(--primary-text-color)); }
       </style>
-      <ha-card>
-        <h2></h2>
-        <div class="warning" hidden></div>
-        ${ROWS.map(
-          (row) => `
-          <div class="block" data-key="${row.key}">
-            <div class="row">
-              <div class="picker"><input type="color" aria-label="${row.label}"></div>
-              <div class="text">
-                <div class="label">${row.label}</div>
-                <div class="hint">${row.hint}</div>
-                <div class="value"></div>
-              </div>
-              <button class="reset" title="Farbe aus dem Theme verwenden">Standard</button>
-            </div>
-            <div class="presets">
-              ${PRESETS.map(([name, hex]) => `<button class="dot" title="${name}" data-color="${hex}" style="background:${hex}"></button>`).join("")}
-            </div>
-          </div>`
-        ).join("")}
-      </ha-card>`;
-
-    for (const row of ROWS) {
-      const block = root.querySelector(`.block[data-key="${row.key}"]`);
-      const input = block.querySelector("input");
-      // Während des Ziehens nur lokal anzeigen, gespeichert wird beim Loslassen.
-      input.addEventListener("input", () => {
-        preview[row.key] = input.value;
-        applyColors();
-      });
-      input.addEventListener("change", () => this._save(row, input.value));
-      block.querySelector(".reset").addEventListener("click", () => this._save(row, ""));
-      for (const dot of block.querySelectorAll(".dot")) {
-        dot.addEventListener("click", () => this._save(row, dot.dataset.color));
-      }
-    }
-  }
-
-  async _save(row, value) {
-    preview[row.key] = value;
-    applyColors();
-    try {
-      await this._hass.callService("input_text", "set_value", { entity_id: row.entity, value });
-    } finally {
-      preview[row.key] = "";
-      applyColors();
-    }
+      <ha-card><h2></h2><${PICKER_TAG}></${PICKER_TAG}></ha-card>`;
+    this._picker = root.querySelector(PICKER_TAG);
   }
 
   _update() {
-    const root = this.shadowRoot;
-    root.querySelector("h2").textContent = this._config.title || "";
-    root.querySelector("h2").hidden = !this._config.title;
-
-    const missing = ROWS.filter((row) => !this._hass.states[row.entity]).map((row) => row.entity);
-    const warning = root.querySelector(".warning");
-    warning.hidden = missing.length === 0;
-    warning.innerHTML = missing.length
-      ? `Es fehlen die Helfer ${missing.map((e) => `<code>${e}</code>`).join(" und ")}. ` +
-        "Lege sie als Text-Helfer an oder nutze das Package aus dem Repository."
-      : "";
-    const themeActive = neumorphismActive();
-
-    for (const row of ROWS) {
-      const block = root.querySelector(`.block[data-key="${row.key}"]`);
-      const stored = normalize(this._hass.states[row.entity]?.state);
-      const shown = preview[row.key] || stored || normalize(getComputedStyle(document.documentElement).getPropertyValue(row.cssVar).trim()) || "#3d7bfd";
-      const input = block.querySelector("input");
-      if (root.activeElement !== input) input.value = shown;
-      input.disabled = !this._hass.states[row.entity];
-      block.querySelector(".value").textContent = stored
-        ? stored
-        : themeActive
-          ? "aus dem Theme"
-          : "Neumorphism-Theme ist nicht aktiv";
-      block.querySelector(".reset").hidden = !stored;
-      for (const dot of block.querySelectorAll(".dot")) {
-        dot.classList.toggle("selected", dot.dataset.color === stored);
-      }
-    }
+    const h2 = this.shadowRoot.querySelector("h2");
+    const title = this._config?.title || texts(this._hass).colors;
+    h2.textContent = title;
   }
 }
 
-if (!customElements.get("neumorphism-color-card")) {
+// ---------------------------------------------------------------------------
+// Einbau ins Profil: unter Design-Auswahl und Design-Modus
+// ---------------------------------------------------------------------------
+
+function findDeep(selector) {
+  const stack = [document];
+  while (stack.length) {
+    const node = stack.pop();
+    const found = node.querySelector(selector);
+    if (found) return found;
+    for (const el of node.querySelectorAll("*")) {
+      if (el.shadowRoot) stack.push(el.shadowRoot);
+    }
+  }
+  return null;
+}
+
+let profilePicker = null;
+
+function injectIntoProfile() {
+  if (!location.pathname.startsWith("/profile")) return;
+  if (profilePicker?.isConnected) {
+    profilePicker.hass = getHass();
+    return;
+  }
+  // Neuere Versionen: ha-theme-settings, ältere: ha-pick-theme-row.
+  const host = findDeep("ha-theme-settings") || findDeep("ha-pick-theme-row");
+  if (!host?.shadowRoot) return;
+  profilePicker = host.shadowRoot.querySelector(PICKER_TAG);
+  if (!profilePicker) {
+    profilePicker = document.createElement(PICKER_TAG);
+    profilePicker.setAttribute("in-profile", "");
+    host.shadowRoot.appendChild(profilePicker);
+  }
+  profilePicker.hass = getHass();
+}
+
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
+
+if (!customElements.get(PICKER_TAG)) {
+  customElements.define(PICKER_TAG, NeumorphismColorPicker);
   customElements.define("neumorphism-color-card", NeumorphismColorCard);
   window.customCards = window.customCards || [];
   window.customCards.push({
@@ -332,5 +444,17 @@ if (!customElements.get("neumorphism-color-card")) {
     description: "Primär- und Akzentfarbe des Neumorphism-Themes per Farbwähler einstellen.",
     preview: true,
   });
+
+  const tick = () => {
+    applyColors();
+    injectIntoProfile();
+  };
+  // Theme- oder Moduswechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.
+  new MutationObserver(tick).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  window.addEventListener("location-changed", () => setTimeout(tick, 100));
+  // Fängt Änderungen von anderen Geräten und späte Seitenaufbauten ab. Kostet praktisch nichts.
+  setInterval(tick, 1000);
+  tick();
+
   console.info(`%c NEUMORPHISM-COLORS %c ${VERSION} `, "background:#3d7bfd;color:#fff", "");
 }
