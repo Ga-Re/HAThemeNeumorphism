@@ -15,7 +15,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "3.2.0";
+const VERSION = "3.3.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -205,6 +205,13 @@ const INSET = "var(--neumorphism-inset-shadow)";
 const INSET_S = "var(--neumorphism-inset-shadow-s)";
 const SURFACE = "var(--card-background-color)";
 const STRENGTH = "var(--neumorphism-strength, 1)";
+// Mehrere Knöpfe teilen sich eine erhabene Form.
+const PILL = `border-radius: 999px; box-shadow: ${RAISED};`;
+// Statt einer Kante läuft der Inhalt unter der Titelleiste weich aus.
+const HEADER_BG = "var(--app-header-background-color, var(--primary-background-color))";
+const HEADER_FADE = `content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 32px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, ${HEADER_BG}, color-mix(in srgb, ${HEADER_BG} 65%, transparent) 35%, transparent);`;
 
 // Pro Element (Tag) zusätzliche Regeln für dessen Shadow DOM.
 const CONTROL_STYLES = {
@@ -261,6 +268,41 @@ const CONTROL_STYLES = {
   `,
   "ha-picker-field": `
     ha-combo-box-item { box-shadow: ${INSET_S}; border-radius: var(--ha-border-radius-lg) !important; }
+  `,
+  // Symbol-Knöpfe sind flach, erhaben werden sie erst als Gruppe in der Titelleiste
+  "ha-icon-button": `
+    ha-button { --ha-button-box-shadow: none; }
+  `,
+  // Menü- und Zurück-Knopf: einzelne erhabene Kreise
+  "ha-menu-button": `
+    :host { border-radius: 50%; box-shadow: ${RAISED}; }
+  `,
+  "ha-icon-button-arrow-prev": `
+    :host { border-radius: 50%; box-shadow: ${RAISED}; }
+  `,
+  // Titelleisten: keine Linie, kein Schatten, Knöpfe rechts als gemeinsame Pille
+  "hui-root": `
+    .header { box-shadow: none !important; }
+    .header::after { ${HEADER_FADE} }
+    .toolbar { border-bottom: none !important; }
+    .action-items:has(> :not([hidden])) { ${PILL} }
+  `,
+  "ha-top-app-bar-fixed": `
+    .row, .sub-row { border-bottom: none !important; }
+    .top-app-bar, .top-app-bar.scrolled:not(.pane-header) { box-shadow: none !important; }
+    .top-app-bar::after { ${HEADER_FADE} }
+    #actions slot[name="actionItems"] { display: flex; align-items: center; ${PILL} }
+  `,
+  "hass-subpage": `
+    .toolbar { position: relative; z-index: 2; }
+    .toolbar::after { ${HEADER_FADE} }
+    .toolbar-content { border-bottom: none !important; }
+    slot[name="toolbar-icon"] { display: flex; align-items: center; ${PILL} }
+  `,
+  "hass-tabs-subpage": `
+    .toolbar { border-bottom: none !important; position: relative; z-index: 2; }
+    .toolbar::after { ${HEADER_FADE} }
+    #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${PILL} }
   `,
   // Gewählter Eintrag in der Seitenleiste: eingelassen
   "ha-sidebar": `
