@@ -69,14 +69,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
+      # In einer eigenen Umgebung: nur dort kann Home Assistant beim Start Pakete nachinstallieren
       - name: Home Assistant und Browser installieren
         run: |
-          python -m pip install --upgrade pip
+          python -m venv venv
+          . venv/bin/activate
+          pip install --upgrade pip
           pip install homeassistant playwright
           python -m playwright install --with-deps chromium
           python -c "import importlib.metadata as m; print('Home Assistant', m.version('homeassistant'))"
       - name: Rauchtest
-        run: python tests/smoke_test.py
+        run: |
+          . venv/bin/activate
+          python tests/smoke_test.py
       - name: Bilder und Log
         if: always()
         uses: actions/upload-artifact@v4

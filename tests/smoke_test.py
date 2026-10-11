@@ -119,8 +119,9 @@ def onboard() -> str:
         if time.time() - start > 900:
             raise RuntimeError("Home Assistant läuft nicht vollständig an")
         time.sleep(5)
-    print(f"Home Assistant {config.get('version')} läuft, Wiederherstellungsmodus: {config.get('recovery_mode')}, "
-          f"Neumorphism geladen: {'neumorphism' in config.get('components', [])}", flush=True)
+    print(f"Home Assistant {config.get('version')} läuft", flush=True)
+    if config.get("recovery_mode"):
+        raise RuntimeError("Home Assistant ist im Wiederherstellungsmodus (siehe Log), eigene Integrationen sind aus")
     flow = request("/api/config/config_entries/flow", {"handler": "neumorphism"}, token)
     result = request(f"/api/config/config_entries/flow/{flow['flow_id']}", {}, token)
     check("Integration eingerichtet", result.get("type") == "create_entry", result.get("type", ""))
