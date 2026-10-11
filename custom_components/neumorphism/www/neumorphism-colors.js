@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "7.1.0";
+const VERSION = "7.1.1";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -1781,6 +1781,7 @@ function updateFrame(iframe, host, haCss) {
     const haPage = ["ha-svg-icon", "ha-icon-button", "ha-card"].some((tag) => registry?.get(tag));
     if (!haPage && doc.readyState !== "complete") return; // Bausteine werden noch geladen
     if (haPage) {
+      safely(() => localBrandIcons(doc.defaultView));
       if (scopes.has(doc)) resetScope(scopes.get(doc));
       const css = controlsActive && !settings().appsOff.includes(key) ? haCss : "";
       setFrameStyle(doc, css + (css ? HA_FRAME_EXTRA : ""));
@@ -1794,6 +1795,92 @@ function updateFrame(iframe, host, haCss) {
 // Ältere Home-Assistant-Bausteine in HACS (eigene Kopie im eingebetteten Fenster)
 const HA_FRAME_EXTRA = `
   :root, body { --md-assist-chip-outline-color: transparent; --md-sys-color-outline: transparent; }`;
+
+// ---------------------------------------------------------------------------
+// Symbole in HACS über Home Assistant laden
+// ---------------------------------------------------------------------------
+//
+// HACS lädt die Symbole der Integrationen von brands.home-assistant.io. Dort kommen keine
+// eigenen Integrationen mehr hinzu: Seit Home Assistant 2026.3 bringen sie ihr Symbol im
+// Ordner brand/ selbst mit, und Home Assistant liefert es unter /api/brands/... aus (für alle
+// anderen wie bisher aus der zentralen Sammlung, mit demselben Platzhalter). In HACS werden
+// die Adressen deshalb auf Home Assistant umgestellt, für alle Integrationen. Ältere
+// Versionen ohne diese Schnittstelle bleiben unverändert.
+
+const BRANDS_CDN = /^https:\/\/brands\.home-assistant\.io\/(?:_\/)?([a-z0-9_]+)\/((?:dark_)?(?:icon|logo)(?:@2x)?\.png)$/;
+const BRANDS_TOKEN_AGE = 20 * 60 * 1000; // Home Assistant wechselt den Schlüssel alle 30 Minuten
+const brands = { token: "", time: 0, pending: false };
+const brandOriginals = new WeakMap(); // Bild -> ursprüngliche Adresse (falls Home Assistant es nicht liefert)
+const brandWatched = new WeakSet();
+
+function refreshBrandsToken() {
+  const hass = getHass();
+  if (!hass?.callWS || brands.pending || Date.now() - brands.time < BRANDS_TOKEN_AGE) return;
+  brands.pending = true;
+  hass.callWS({ type: "brands/access_token" }).then(
+    (result) => Object.assign(brands, { token: result?.token || "", time: Date.now(), pending: false }),
+    () => Object.assign(brands, { time: Date.now(), pending: false }) // ältere Version: später erneut
+  );
+}
+
+const localBrandUrl = (url) => {
+  const match = brands.token && typeof url === "string" && url.match(BRANDS_CDN);
+  return match ? `/api/brands/integration/${match[1]}/${match[2]}?token=${brands.token}` : null;
+};
+
+/**
+ * Bilder von Zuständen im Hauptfenster, z. B. die Updates aus HACS in den Einstellungen:
+ * HACS gibt ihnen die Adresse von brands.home-assistant.io.
+ */
+function hookStateBadges() {
+  customElements.whenDefined("state-badge").then(() => {
+    const proto = customElements.get("state-badge").prototype;
+    if (Object.prototype.hasOwnProperty.call(proto, "__neumorphismBrands")) return;
+    const updated = proto.updated;
+    proto.updated = function (...args) {
+      const result = updated?.apply(this, args);
+      const match = this.style.backgroundImage.match(/^url\("?(https:\/\/brands\.home-assistant\.io\/[^")]+)"?\)$/);
+      const local = match && localBrandUrl(match[1]);
+      if (local) this.style.backgroundImage = `url("${local}")`;
+      return result;
+    };
+    proto.__neumorphismBrands = true;
+  });
+}
+
+/** Stellt Bilder von brands.home-assistant.io im Fenster win auf Home Assistant um. */
+function localBrandIcons(win) {
+  refreshBrandsToken();
+  if (!brands.token) return;
+  if (!win.__neumorphismBrands) {
+    win.__neumorphismBrands = true;
+    // Bausteine setzen die Bildadresse als Attribut, auch beim Wiederverwenden von Zeilen
+    const setAttribute = win.Element.prototype.setAttribute;
+    const restore = (ev) => {
+      const original = brandOriginals.get(ev.target);
+      if (original) setAttribute.call(ev.target, "src", original);
+      brandOriginals.delete(ev.target);
+    };
+    win.Element.prototype.setAttribute = function (name, value) {
+      if (name === "src" && this.localName === "img") {
+        const local = localBrandUrl(value);
+        if (local) {
+          if (!brandWatched.has(this)) this.addEventListener("error", restore);
+          brandWatched.add(this);
+          brandOriginals.set(this, value);
+          return setAttribute.call(this, name, local);
+        }
+      }
+      return setAttribute.call(this, name, value);
+    };
+  }
+  // Schon angezeigte Bilder (einmal pro Schlüssel)
+  if (win.__neumorphismBrandsToken === brands.token) return;
+  win.__neumorphismBrandsToken = brands.token;
+  for (const img of findAllDeep('img[src^="https://brands.home-assistant.io/"]', win.document)) {
+    img.setAttribute("src", img.getAttribute("src"));
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Fremde Oberflächen: Add-ons, Seiten von Integrationen, alles nicht von Home Assistant
@@ -3199,6 +3286,7 @@ function injectIntoProfile() {
 // ---------------------------------------------------------------------------
 
 function tick() {
+  safely(refreshBrandsToken);
   safely(applySettings);
   safely(injectIntoProfile);
   safely(updateDroplets);
@@ -3221,6 +3309,7 @@ if (!customElements.get(PICKER_TAG)) {
 
   hookDefine();
   patchControls();
+  hookStateBadges();
   window.addEventListener("resize", () =>
     requestAnimationFrame(() => {
       safely(updateDroplets);

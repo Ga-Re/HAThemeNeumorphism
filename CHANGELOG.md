@@ -1,5 +1,9 @@
 # Änderungen
 
+## 7.1.1
+
+- Symbole in HACS und in der Update-Liste der Einstellungen: Sie kommen jetzt über Home Assistant aus dem Ordner `brand/` der Integration statt aus der zentralen Sammlung, die keine eigenen Integrationen mehr aufnimmt. Gilt für alle installierten Integrationen mit eigenem Symbol, ab Home Assistant 2026.3
+
 ## 7.1.0
 
 - Sektionen können jetzt auch herausgehoben sein: Die Karten jeder Sektion liegen auf einer erhabenen Platte (Profil → Sektionen → *Herausgehoben*, in Aktionen `sections: raised`)

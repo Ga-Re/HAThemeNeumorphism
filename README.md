@@ -136,6 +136,8 @@ Alles, was nicht von Home Assistant selbst stammt, wird automatisch erkannt und 
 
 Sieht etwas damit nicht gut aus, kannst du es im Profil unter **Add-ons und Integrationen** abwählen, es behält dann sein eigenes Aussehen. Die Liste zum Abwählen sehen nur Administratoren. *Aus* schaltet die Anpassung für alle ab.
 
+**Symbole in HACS**: HACS holt die Symbole der Integrationen aus der zentralen Sammlung von Home Assistant. Dort kommen keine eigenen Integrationen mehr hinzu, sie bringen ihr Symbol seit Home Assistant 2026.3 selbst mit. Deshalb lädt HACS die Symbole hier über Home Assistant, ebenso die Update-Liste in den Einstellungen. So erscheinen sie für alle installierten Integrationen, die eines mitbringen, auch für Neumorphism. Mit Home Assistant vor 2026.3 bleibt es beim Platzhalter.
+
 ### Als Dashboard-Karte
 
 Dieselben Einstellungen gibt es als Karte für ein Dashboard, praktisch etwa auf einem Wandtablet. Beim Bearbeiten des Dashboards unter „Karte hinzufügen“ nach **„Neumorphism Farben“** suchen, oder per YAML:
