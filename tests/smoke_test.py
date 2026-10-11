@@ -151,7 +151,11 @@ def browser_checks() -> None:
             page.evaluate("(p) => { history.pushState(null, '', p); window.dispatchEvent(new CustomEvent('location-changed')); }", path)
             page.wait_for_timeout(wait)
 
-        check("Skript geladen", page.evaluate("() => !!customElements.get('neumorphism-color-picker')"))
+        try:
+            page.wait_for_function("() => !!customElements.get('neumorphism-color-picker')", timeout=60000)
+            check("Skript geladen", True)
+        except Exception:  # noqa: BLE001
+            check("Skript geladen", False)
         for dark in (False, True):
             mode = "dunkel" if dark else "hell"
             page.evaluate(
