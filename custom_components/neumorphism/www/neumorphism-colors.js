@@ -19,7 +19,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "6.2.1";
+const VERSION = "6.2.2";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -612,12 +612,18 @@ function headerTabsGroup(root) {
   const actionRects = actions ? [...actions.children].flatMap(itemRects).sort((a, b) => a.left - b.left) : [];
   const t = inner.getBoundingClientRect();
   if (!t.width) return null;
-  // Gleiche Maße wie die Pille in der Reiterleiste (9px oben/unten, 2px seitlich), plus DROPLET_INSET
+  // Senkrecht auf Text und Symbol zentriert, nicht auf den Reiter: Home Assistant gibt ihm oben
+  // mehr Innenabstand als unten. Seitlich 2px Rand, plus DROPLET_INSET (zieht drawDroplet wieder ab).
+  const range = document.createRange();
+  range.selectNodeContents(active);
+  const content = range.getBoundingClientRect();
+  const cy = content.height ? (content.top + content.bottom) / 2 : (t.top + t.bottom) / 2;
+  const half = Math.min(18, t.height / 2 - 6);
   const pill = {
     left: t.left + 2 - DROPLET_INSET,
     right: t.right - 2 + DROPLET_INSET,
-    top: t.top + 9 - DROPLET_INSET,
-    bottom: t.bottom - 9 + DROPLET_INSET,
+    top: cy - half - DROPLET_INSET,
+    bottom: cy + half + DROPLET_INSET,
     clipLeft: navRects[0] ? navRects[0].left + navRects[0].width / 2 : undefined,
     clipRight: actionRects[0] ? actionRects[0].left + actionRects[0].width / 2 : undefined,
     dynamic: true, // verbindet sich erst bei Berührung (siehe dropletNeck)
