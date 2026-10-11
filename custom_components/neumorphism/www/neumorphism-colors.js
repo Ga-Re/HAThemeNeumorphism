@@ -19,7 +19,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "6.1.0";
+const VERSION = "6.1.1";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -243,6 +243,8 @@ function applyColors() {
 // Bausteine aus dem Theme, skalieren mit der Effektstärke.
 const RAISED = "var(--neumorphism-raised-shadow)";
 const RAISED_L = "var(--neumorphism-raised-shadow-l)";
+// Kleiner Schatten für Pillen in schmalen Leisten (passt in die Leiste, wird nicht abgeschnitten)
+const RAISED_S = "var(--neumorphism-raised-shadow-s, var(--neumorphism-raised-shadow))";
 const INSET = "var(--neumorphism-inset-shadow)";
 const INSET_S = "var(--neumorphism-inset-shadow-s)";
 const SURFACE = "var(--card-background-color)";
@@ -332,7 +334,7 @@ const CONTROL_STYLES = {
   `,
   // Titelleisten: keine Linie, kein Schatten, Knöpfe rechts als gemeinsame Pille
   "hui-root": `
-    .header { box-shadow: none !important; }
+    .header { box-shadow: none !important; overflow-x: clip; }
     .header::after { ${HEADER_FADE} }
     .edit-mode .header::after { background: linear-gradient(to bottom, var(--app-header-edit-background-color), transparent); }
     .toolbar { border-bottom: none !important; position: relative; }
@@ -341,19 +343,20 @@ const CONTROL_STYLES = {
   "ha-top-app-bar-fixed": `
     .row, .sub-row { border-bottom: none !important; }
     .top-app-bar, .top-app-bar.scrolled:not(.pane-header) { box-shadow: none !important; }
+    .top-app-bar { overflow-x: clip; }
     .top-app-bar::after { ${HEADER_FADE} }
     #actions, #navigation { position: relative; }
     #actions slot[name="actionItems"], slot[name="navigationIcon"] { display: flex; align-items: center; ${GROUP} }
   `,
   "hass-subpage": `
-    .toolbar { position: relative; z-index: 2; }
+    .toolbar { position: relative; z-index: 2; overflow-x: clip; }
     .toolbar::after { ${HEADER_FADE} }
     .toolbar-content { border-bottom: none !important; position: relative; }
     slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
     .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${GROUP} }
   `,
   "hass-tabs-subpage": `
-    .toolbar { border-bottom: none !important; position: relative; z-index: 2; }
+    .toolbar { border-bottom: none !important; position: relative; z-index: 2; overflow-x: clip; }
     .toolbar::after { ${HEADER_FADE} }
     .toolbar-content, #toolbar-icon { position: relative; }
     #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
@@ -364,17 +367,20 @@ const CONTROL_STYLES = {
   "ha-tab": `
     div { isolation: isolate; }
     :host(:not([narrow])[active]) div { border-bottom: none !important; }
-    :host([active]) div::after { content: ""; position: absolute; inset: 8px 10px; z-index: -1;
-      border-radius: ${PILL}; background: ${SURFACE}; box-shadow: ${RAISED}; }
-    :host([narrow][active]) div::after { inset: 6px 4px; border-radius: 18px; }
+    :host([active]) div::after { content: ""; position: absolute; inset: 9px 8px; z-index: -1;
+      border-radius: ${PILL}; background: ${SURFACE}; box-shadow: ${RAISED_S}; }
+    :host([narrow][active]) div::after { inset: 7px 4px; border-radius: 18px; }
   `,
   "ha-tab-group": `
     :host { --track-color: transparent !important; --indicator-color: transparent !important; }
     .indicator { display: none !important; }
   `,
+  // Die Pille liegt in der Reiterfläche, ohne sie zu vergrößern: sonst wird die Reiterleiste
+  // höher als die Titelleiste, lässt sich verschieben und schneidet den Schatten ab.
   "ha-tab-group-tab": `
-    .tab { border-radius: ${PILL}; margin: 10px 4px; }
-    :host([active]) .tab { background: ${SURFACE}; box-shadow: ${RAISED}; }
+    .tab { position: relative; isolation: isolate; }
+    :host([active]) .tab::before { content: ""; position: absolute; inset: 9px 2px; z-index: -1;
+      border-radius: ${PILL}; background: ${SURFACE}; box-shadow: ${RAISED_S}; }
   `,
   // Filter- und Auswahl-Chips: erhaben statt umrandet
   "ha-assist-chip": `
@@ -703,7 +709,10 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
     shapes.push(bridgePath(a.right - a.r, b.left + b.r, (a.cy + b.cy) / 2, r));
   }
   const paint = dropletPaint();
-  const key = `${fmt(left)}|${fmt(top)}|${shapes.join("")}|${paint.dark}|${paint.light}|${paint.fill}|${paint.strength}`;
+  // Am rechten Bildschirmrand enden: Was darüber hinausragt, macht die Leiste seitlich verschiebbar
+  const viewRight = parent.ownerDocument.documentElement.clientWidth - offsetX;
+  const shown = Math.max(0, Math.min(width, viewRight - left));
+  const key = `${fmt(left)}|${fmt(top)}|${fmt(shown)}|${shapes.join("")}|${paint.dark}|${paint.light}|${paint.fill}|${paint.strength}`;
 
   let droplet = existing;
   if (!droplet) {
@@ -711,7 +720,7 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
     droplet.className = "neumorphism-droplet";
     droplet.dataset.group = String(group);
     droplet.setAttribute("aria-hidden", "true");
-    droplet.style.cssText = "position:absolute;pointer-events:none;z-index:0;background-repeat:no-repeat;background-size:100% 100%;";
+    droplet.style.cssText = "position:absolute;pointer-events:none;z-index:0;background-repeat:no-repeat;background-position:0 0;";
   }
   if (droplet.parentElement !== parent || droplet.nextSibling !== anchor) parent.insertBefore(droplet, anchor);
   if (droplet.dataset.key === key) return droplet;
@@ -719,8 +728,9 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
   Object.assign(droplet.style, {
     left: `${left}px`,
     top: `${top}px`,
-    width: `${width}px`,
+    width: `${shown}px`,
     height: `${height}px`,
+    backgroundSize: `${width}px ${height}px`,
     backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(dropletSvg(width, height, shapes, paint))}")`,
   });
   return droplet;

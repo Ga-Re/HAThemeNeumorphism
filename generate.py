@@ -218,6 +218,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("neumorphism-shadow-light", light),
         ("neumorphism-raised-shadow", shadow(4, 9)),
         ("neumorphism-raised-shadow-l", shadow(7, 16)),
+        ("neumorphism-raised-shadow-s", shadow(3, 6)),
         ("neumorphism-inset-shadow", shadow(4, 9, inset=True)),
         ("neumorphism-inset-shadow-s", shadow(2, 5, inset=True)),
         ("ha-button-box-shadow", shadow(3, 7)),
