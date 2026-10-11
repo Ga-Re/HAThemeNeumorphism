@@ -113,6 +113,12 @@ def onboard() -> str:
             request(f"/api/onboarding/{step}", data, token)
         except urllib.error.HTTPError as err:
             print(f"Hinweis: Einrichtungsschritt {step}: {err.code}")
+    # Beim ersten Start lädt Home Assistant noch Pakete nach: warten, bis es ganz läuft
+    start = time.time()
+    while request("/api/config", token=token).get("state") != "RUNNING":
+        if time.time() - start > 900:
+            raise RuntimeError("Home Assistant läuft nicht vollständig an")
+        time.sleep(5)
     flow = request("/api/config/config_entries/flow", {"handler": "neumorphism"}, token)
     result = request(f"/api/config/config_entries/flow/{flow['flow_id']}", {}, token)
     check("Integration eingerichtet", result.get("type") == "create_entry", result.get("type", ""))

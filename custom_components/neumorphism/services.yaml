@@ -14,14 +14,14 @@ set_style:
         select:
           translation_key: background
           options:
-            - standard
-            - gray
-            - warm
-            - sand
-            - mint
-            - rose
-            - blue
-            - primary
+            - "standard"
+            - "gray"
+            - "warm"
+            - "sand"
+            - "mint"
+            - "rose"
+            - "blue"
+            - "primary"
     strength:
       required: false
       selector:
@@ -36,27 +36,27 @@ set_style:
         select:
           translation_key: light_direction
           options:
-            - top_left
-            - top
-            - top_right
-            - sun
+            - "top_left"
+            - "top"
+            - "top_right"
+            - "sun"
     surface:
       required: false
       selector:
         select:
           translation_key: surface
           options:
-            - flat
-            - convex
-            - concave
+            - "flat"
+            - "convex"
+            - "concave"
     contrast:
       required: false
       selector:
         select:
           translation_key: contrast
           options:
-            - normal
-            - high
+            - "normal"
+            - "high"
     roundness:
       required: false
       selector:
@@ -72,10 +72,10 @@ set_style:
         select:
           translation_key: font
           options:
-            - standard
-            - round
-            - modern
-            - legible
+            - "standard"
+            - "round"
+            - "modern"
+            - "legible"
     font_size:
       required: false
       selector:
@@ -91,18 +91,18 @@ set_style:
         select:
           translation_key: density
           options:
-            - compact
-            - normal
-            - airy
+            - "compact"
+            - "normal"
+            - "airy"
     sections:
       required: false
       selector:
         select:
           translation_key: sections
           options:
-            - open
-            - well
-            - raised
+            - "open"
+            - "well"
+            - "raised"
     pressed:
       required: false
       selector:
@@ -117,17 +117,17 @@ set_style:
         select:
           translation_key: grain
           options:
-            - off
-            - fine
-            - strong
+            - "off"
+            - "fine"
+            - "strong"
     charts:
       required: false
       selector:
         select:
           translation_key: charts
           options:
-            - theme
-            - standard
+            - "theme"
+            - "standard"
     animations:
       required: false
       selector:
@@ -143,26 +143,26 @@ set_style:
           multiple: true
           translation_key: evening
           options:
-            - warm
-            - flat
-            - dark
+            - "warm"
+            - "flat"
+            - "dark"
     custom_cards:
       required: false
       selector:
         select:
           translation_key: custom_cards
           options:
-            - full
-            - frame
-            - off
+            - "full"
+            - "frame"
+            - "off"
     addons:
       required: false
       selector:
         select:
           translation_key: addons
           options:
-            - full
-            - off
+            - "full"
+            - "off"
 reset_style:
   fields:
     settings:
@@ -172,24 +172,24 @@ reset_style:
           multiple: true
           translation_key: settings
           options:
-            - primary_color
-            - accent_color
-            - background
-            - strength
-            - light_direction
-            - surface
-            - contrast
-            - roundness
-            - font
-            - font_size
-            - density
-            - sections
-            - pressed
-            - emboss
-            - grain
-            - charts
-            - animations
-            - glow
-            - evening
-            - custom_cards
-            - addons
+            - "primary_color"
+            - "accent_color"
+            - "background"
+            - "strength"
+            - "light_direction"
+            - "surface"
+            - "contrast"
+            - "roundness"
+            - "font"
+            - "font_size"
+            - "density"
+            - "sections"
+            - "pressed"
+            - "emboss"
+            - "grain"
+            - "charts"
+            - "animations"
+            - "glow"
+            - "evening"
+            - "custom_cards"
+            - "addons"

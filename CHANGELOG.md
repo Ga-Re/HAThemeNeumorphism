@@ -1,5 +1,9 @@
 # Änderungen
 
+## 8.0.1
+
+- Aktion „Stil festlegen“: Die Auswahl für Körnung, Eigene Karten und Add-ons zeigt wieder alle Werte (An/Aus wurden falsch gelesen)
+
 ## 8.0.0
 
 **Optik**
