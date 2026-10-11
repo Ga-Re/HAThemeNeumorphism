@@ -19,7 +19,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "6.2.0";
+const VERSION = "6.2.1";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -620,6 +620,7 @@ function headerTabsGroup(root) {
     bottom: t.bottom - 9 + DROPLET_INSET,
     clipLeft: navRects[0] ? navRects[0].left + navRects[0].width / 2 : undefined,
     clipRight: actionRects[0] ? actionRects[0].left + actionRects[0].width / 2 : undefined,
+    dynamic: true, // verbindet sich erst bei Berührung (siehe dropletNeck)
   };
   pill.width = pill.right - pill.left;
   pill.height = pill.bottom - pill.top;
@@ -681,10 +682,22 @@ function capsulePath(x0, x1, cy, r, left = x0, right = x1) {
   return d + "Z";
 }
 
+/**
+ * Halsbreite (halbe Höhe) zwischen zwei Tropfen mit Mittelpunktabstand dist und Radiensumme
+ * sum: null, solange sie sich nicht berühren. Danach füllt der Hals zuerst nur die Kerbe am
+ * Schnittpunkt und wird mit wachsender Überlappung stetig breiter, ohne Sprung.
+ */
+function dropletNeck(dist, sum, r) {
+  const overlap = sum - dist;
+  const half = dist / 2;
+  if (overlap <= 0 || half <= 0) return null;
+  const notch = Math.sqrt(Math.max(0, r * r - half * half)); // Höhe des Schnittpunkts
+  return notch + (r - notch) * 0.6 * (1 - Math.exp(-overlap / r));
+}
+
 /** Eingeschnürte Brücke zwischen zwei Kreisen: Hohlkehlen tangential an beide Kreise. */
-function bridgePath(x1, x2, cy, r) {
+function bridgePath(x1, x2, cy, r, h = DROPLET_NECK * r) {
   const a = (x2 - x1) / 2;
-  const h = DROPLET_NECK * r;
   if (a <= 0 || a > 2 * r) return "";
   const R = (a * a + h * h - r * r) / (2 * (r - h));
   if (!(R > 0)) return "";
@@ -781,7 +794,7 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
     const left = rect.clipLeft === undefined ? x0 : Math.max(x0, rect.clipLeft - offsetX);
     const right = rect.clipRight === undefined ? x1 : Math.min(x1, rect.clipRight - offsetX);
     if (right - left < 0.5) continue;
-    pills.push({ x0, x1, left, right, cy: rect.top + rect.height / 2 - offsetY, r, flatLeft: left > x0, flatRight: right < x1 });
+    pills.push({ x0, x1, left, right, cy: rect.top + rect.height / 2 - offsetY, r, dynamic: !!rect.dynamic });
   }
   if (!pills.length) {
     existing?.remove();
@@ -804,9 +817,16 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
   for (let i = 1; i < local.length; i++) {
     const a = local[i - 1];
     const b = local[i];
-    if (a.flatRight || b.flatLeft) continue; // liegt schon unter dem Knopf
     const r = Math.min(a.r, b.r);
-    shapes.push(bridgePath(a.x1 - a.r, b.x0 + b.r, (a.cy + b.cy) / 2, r));
+    const ca = a.x1 - a.r; // Mittelpunkte der einander zugewandten Enden
+    const cb = b.x0 + b.r;
+    if (a.dynamic || b.dynamic) {
+      // Bewegte Pille: wie Wassertropfen erst ab der Berührung verbunden, der Hals wächst stetig mit
+      const neck = dropletNeck(cb - ca, a.r + b.r, r);
+      if (neck) shapes.push(bridgePath(ca, cb, (a.cy + b.cy) / 2, r, neck));
+    } else {
+      shapes.push(bridgePath(ca, cb, (a.cy + b.cy) / 2, r));
+    }
   }
   const paint = dropletPaint();
   // Am rechten Bildschirmrand enden: Was darüber hinausragt, macht die Leiste seitlich verschiebbar
