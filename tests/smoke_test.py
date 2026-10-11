@@ -115,10 +115,12 @@ def onboard() -> str:
             print(f"Hinweis: Einrichtungsschritt {step}: {err.code}")
     # Beim ersten Start lädt Home Assistant noch Pakete nach: warten, bis es ganz läuft
     start = time.time()
-    while request("/api/config", token=token).get("state") != "RUNNING":
+    while (config := request("/api/config", token=token)).get("state") != "RUNNING":
         if time.time() - start > 900:
             raise RuntimeError("Home Assistant läuft nicht vollständig an")
         time.sleep(5)
+    print(f"Home Assistant {config.get('version')} läuft, Wiederherstellungsmodus: {config.get('recovery_mode')}, "
+          f"Neumorphism geladen: {'neumorphism' in config.get('components', [])}", flush=True)
     flow = request("/api/config/config_entries/flow", {"handler": "neumorphism"}, token)
     result = request(f"/api/config/config_entries/flow/{flow['flow_id']}", {}, token)
     check("Integration eingerichtet", result.get("type") == "create_entry", result.get("type", ""))
@@ -210,8 +212,14 @@ def main() -> int:
         log_path = config / "home-assistant.log"
         if log_path.exists():
             shutil.copy(log_path, OUTPUT / "home-assistant.log")
-            errors = [line for line in log_path.read_text(errors="replace").splitlines() if "neumorphism" in line.lower() and ("ERROR" in line or "Traceback" in line)]
+            lines = log_path.read_text(errors="replace").splitlines()
+            errors = [line for line in lines if "neumorphism" in line.lower() and ("ERROR" in line or "Traceback" in line)]
             check("Keine Fehler der Integration im Log", not errors, " | ".join(errors[:3]))
+            if failures:
+                # Zur Fehlersuche: Fehler und Warnungen aus dem Log von Home Assistant
+                print("--- Log von Home Assistant (Fehler, Warnungen, Neumorphism) ---")
+                for line in [l for l in lines if any(k in l for k in ("ERROR", "CRITICAL", "WARNING", "neumorphism", "recovery"))][:80]:
+                    print(line[:300])
     print("Fehlgeschlagen: " + ", ".join(failures) if failures else "Alle Prüfungen bestanden")
     return 1 if failures else 0
 
