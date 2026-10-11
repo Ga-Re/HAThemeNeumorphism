@@ -19,7 +19,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "6.0.0";
+const VERSION = "6.1.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -39,7 +39,10 @@ const PRESETS = [
 ];
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
+// Effektstärke als Faktor für alle Schatten: 1 ist der Standard, negativ kehrt den Effekt um
+// (erhaben wird eingelassen und umgekehrt). Der Regler zeigt -100 bis +100, also Faktor * 50.
 const STRENGTH_MAX = 2;
+const STRENGTH_SCALE = 50;
 
 // ---------------------------------------------------------------------------
 // Farbrechnung (sRGB <-> OKLCH), wie im Home-Assistant-Frontend
@@ -174,7 +177,7 @@ const getHass = () => getRoot()?.hass;
 
 const clampStrength = (value) => {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.min(STRENGTH_MAX, Math.max(0, number)) : null;
+  return Number.isFinite(number) ? Math.min(STRENGTH_MAX, Math.max(-STRENGTH_MAX, number)) : null;
 };
 
 function storedSettings(hass = getHass()) {
@@ -623,21 +626,33 @@ const rgbaParts = (color) => {
   return [`rgb(${r},${g},${b})`, Number(a)];
 };
 
+/** Form mit Schatten: erhaben, bei negativer Effektstärke eingelassen (Schatten innen). */
 function dropletSvg(width, height, shapes, paint) {
-  const s = paint.strength;
+  const s = Math.abs(paint.strength);
   const [dark, darkA] = rgbaParts(paint.dark);
   const [light, lightA] = rgbaParts(paint.light);
   const d = shapes.join("");
+  const shade = (source, dx, color, alpha, result) =>
+    `<feOffset in="${source}" dx="${fmt(dx * s)}" dy="${fmt(dx * s)}" result="${result}o"/>` +
+    `<feFlood flood-color="${color}" flood-opacity="${alpha}"/><feComposite in2="${result}o" operator="in" result="${result}"/>`;
+  const filter =
+    paint.strength >= 0
+      ? `<feGaussianBlur in="SourceAlpha" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
+        shade("b", 4, dark, darkA, "d") +
+        shade("b", -4, light, lightA, "l") +
+        `<feMerge><feMergeNode in="d"/><feMergeNode in="l"/><feMergeNode in="SourceGraphic"/></feMerge>`
+      : // Innenschatten: Umgebung der Form weichzeichnen, versetzen und auf die Form beschneiden
+        `<feComponentTransfer in="SourceAlpha" result="inv"><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>` +
+        `<feGaussianBlur in="inv" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
+        shade("b", 4, dark, darkA, "d0") +
+        `<feComposite in="d0" in2="SourceAlpha" operator="in" result="d"/>` +
+        shade("b", -4, light, lightA, "l0") +
+        `<feComposite in="l0" in2="SourceAlpha" operator="in" result="l"/>` +
+        `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="d"/><feMergeNode in="l"/></feMerge>`;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-    `<defs><filter id="s" x="-50%" y="-50%" width="200%" height="200%">` +
-    `<feGaussianBlur in="SourceAlpha" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
-    `<feOffset in="b" dx="${fmt(4 * s)}" dy="${fmt(4 * s)}" result="o1"/>` +
-    `<feFlood flood-color="${dark}" flood-opacity="${darkA}"/><feComposite in2="o1" operator="in" result="d"/>` +
-    `<feOffset in="b" dx="${fmt(-4 * s)}" dy="${fmt(-4 * s)}" result="o2"/>` +
-    `<feFlood flood-color="${light}" flood-opacity="${lightA}"/><feComposite in2="o2" operator="in" result="l"/>` +
-    `<feMerge><feMergeNode in="d"/><feMergeNode in="l"/><feMergeNode in="SourceGraphic"/></feMerge>` +
-    `</filter></defs><path filter="url(#s)" fill="${paint.fill}" d="${d}"/></svg>`
+    `<defs><filter id="s" x="-50%" y="-50%" width="200%" height="200%">${filter}</filter></defs>` +
+    `<path filter="url(#s)" fill="${paint.fill}" d="${d}"/></svg>`
   );
 }
 
@@ -1937,7 +1952,10 @@ function texts(hass) {
     accentHint: de ? "Schalter, Hervorhebungen" : "Switches, highlights",
     fromTheme: de ? "aus dem Theme" : "from theme",
     strength: de ? "Effektstärke" : "Effect strength",
-    strengthHint: de ? "Tiefe der Schatten, von flach bis kräftig" : "Depth of the shadows, from flat to strong",
+    strengthHint: de
+      ? "Positiv: erhaben wie gewohnt. 0: flach. Negativ: umgekehrt, Erhabenes wird eingelassen und Eingelassenes erhaben."
+      : "Positive: raised as usual. 0: flat. Negative: inverted, raised becomes inset and inset becomes raised.",
+    inverted: de ? "umgekehrt" : "inverted",
     flat: de ? "flach" : "flat",
     cards: de ? "Eigene Karten" : "Custom cards",
     cardsHint: de
@@ -2018,16 +2036,17 @@ class NeumorphismColorPicker extends HTMLElement {
         .strength { padding: 16px 0 2px; }
         .strength-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
         input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; margin: 6px 0 0;
-          background: transparent; cursor: pointer; --fill: 50%; }
-        input[type="range"]::-webkit-slider-runnable-track { height: 10px; border-radius: 5px;
-          background: linear-gradient(to right, var(--primary-color) var(--fill), var(--secondary-background-color) var(--fill));
+          background: transparent; cursor: pointer; --from: 50%; --to: 50%;
+          --track: linear-gradient(to right, transparent calc(50% - 1px), var(--divider-color) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+            linear-gradient(to right, var(--secondary-background-color) var(--from), var(--primary-color) var(--from) var(--to),
+              var(--secondary-background-color) var(--to)); }
+        input[type="range"]::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: var(--track);
           box-shadow: var(--neumorphism-inset-shadow, none); }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 28px; height: 28px;
           margin-top: -9px; border: none; border-radius: 50%; box-shadow: var(--ha-box-shadow-s);
           background: radial-gradient(circle, var(--primary-color) 0 5px, var(--card-background-color) 6px); }
-        input[type="range"]::-moz-range-track { height: 10px; border-radius: 5px; background: var(--secondary-background-color);
+        input[type="range"]::-moz-range-track { height: 10px; border-radius: 5px; background: var(--track);
           box-shadow: var(--neumorphism-inset-shadow, none); }
-        input[type="range"]::-moz-range-progress { height: 10px; border-radius: 5px; background: var(--primary-color); }
         input[type="range"]::-moz-range-thumb { width: 28px; height: 28px; border: none; border-radius: 50%;
           box-shadow: var(--ha-box-shadow-s);
           background: radial-gradient(circle, var(--primary-color) 0 5px, var(--card-background-color) 6px); }
@@ -2078,7 +2097,7 @@ class NeumorphismColorPicker extends HTMLElement {
       </div>
       <div class="strength">
         <div class="strength-head"><span class="label s-label"></span><span class="value s-value"></span></div>
-        <input type="range" min="0" max="${STRENGTH_MAX * 100}" step="5">
+        <input type="range" min="${-STRENGTH_MAX * STRENGTH_SCALE}" max="${STRENGTH_MAX * STRENGTH_SCALE}" step="5">
         <div class="hint s-hint"></div>
       </div>
       <div class="cards-mode">
@@ -2117,11 +2136,11 @@ class NeumorphismColorPicker extends HTMLElement {
     }
     const range = root.querySelector('input[type="range"]');
     range.addEventListener("input", () => {
-      preview.strength = Number(range.value) / 100;
+      preview.strength = Number(range.value) / STRENGTH_SCALE;
       applyColors();
       this._update();
     });
-    range.addEventListener("change", () => this._save({ neumorphismStrength: Number(range.value) / 100 }));
+    range.addEventListener("change", () => this._save({ neumorphismStrength: Number(range.value) / STRENGTH_SCALE }));
     for (const button of root.querySelectorAll(".segmented.cards button")) {
       button.addEventListener("click", () => this._save({ neumorphismCards: button.dataset.mode }));
     }
@@ -2250,13 +2269,17 @@ class NeumorphismColorPicker extends HTMLElement {
 
     const strength = preview.strength ?? stored.strength ?? 1;
     const range = root.querySelector('input[type="range"]');
-    if (root.activeElement !== range) range.value = String(Math.round(strength * 100));
-    range.style.setProperty("--fill", `${(Number(range.value) / (STRENGTH_MAX * 100)) * 100}%`);
+    if (root.activeElement !== range) range.value = String(Math.round(strength * STRENGTH_SCALE));
+    // Füllung von der Mitte (0, flach) bis zum Wert, nach links für umgekehrt
+    const position = ((Number(range.value) / (STRENGTH_MAX * STRENGTH_SCALE)) * 50 + 50).toFixed(1);
+    range.style.setProperty("--from", `${Math.min(50, position)}%`);
+    range.style.setProperty("--to", `${Math.max(50, position)}%`);
     range.setAttribute("aria-label", t.strength);
     root.querySelector(".s-label").textContent = t.strength;
     root.querySelector(".s-hint").textContent = t.strengthHint;
+    const shown = Math.round(strength * STRENGTH_SCALE);
     root.querySelector(".s-value").textContent =
-      strength === 0 ? `0 % (${t.flat})` : `${Math.round(strength * 100)} %`;
+      shown === 0 ? `0 (${t.flat})` : shown > 0 ? `+${shown}` : `−${-shown} (${t.inverted})`;
 
     const css = getComputedStyle(document.documentElement);
     for (const row of ROWS) {

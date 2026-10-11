@@ -12,7 +12,7 @@ Das Design gilt überall: auf den Dashboards, in allen Seiten von Home Assistant
 - **Auch eigene Karten** aus HACS oder selbst geschrieben, etwa [M3 Cards](https://github.com/j0sp0r/m3-cards), Mushroom, Button Card oder Bubble Card: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen
 - **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen
 - **Primär- und Akzentfarbe** per Farbwähler direkt im Profil
-- **Effektstärke** per Regler, von flach bis kräftig
+- **Effektstärke** per Regler von −100 bis +100, im negativen Bereich umgekehrt: Erhabenes wird eingelassen und Eingelassenes erhaben
 - Einstellungen werden **pro Benutzer** gespeichert und gelten auf allen Geräten
 - Installation über **HACS**, ohne Dateien zu kopieren und ohne Einträge in der `configuration.yaml`
 
@@ -38,7 +38,7 @@ Sobald im Profil das Theme „Neumorphism“ gewählt ist, erscheinen im Bereich
 
 - **Primärfarbe**: Buttons, Symbole, ausgewählte Einträge, Fortschrittsbalken
 - **Akzentfarbe**: Schalter, Checkboxen, Hervorhebungen
-- **Effektstärke**: 0 % ist flach ohne Schatten, 100 % der Standard, 200 % besonders kräftig
+- **Effektstärke**: von −100 bis +100. +50 ist der Standard, +100 besonders kräftig, 0 flach ohne Schatten. Negative Werte kehren den Effekt um: Karten, Knöpfe und Symbole werden eingelassen, Schieber, Auswahlleisten und Eingabefelder erhaben. Je weiter ins Negative, desto kräftiger
 - **Eigene Karten**: *Vollständig*, *Nur Rahmen* oder *Aus* (siehe unten)
 - **Add-ons und Integrationen**: *Angepasst* oder *Aus*, einzelne lassen sich abwählen (siehe unten)
 
@@ -92,7 +92,7 @@ title: Design   # optional
 
 ## Für eigene Karten
 
-Das Theme stellt Schatten-Variablen bereit, die zu Modus und Effektstärke passen:
+Das Theme stellt Schatten-Variablen bereit, die zu Modus und Effektstärke passen, auch zur umgekehrten:
 
 | Variable | Wirkung |
 |---|---|

@@ -58,8 +58,14 @@ MODES = {
 }
 
 # Effektstärke: Alle Schatten werden mit dieser Variable multipliziert (Abstand,
-# Weichheit und Deckkraft). Den Wert setzt der Regler im Profil, Standard ist 1.
+# Weichheit und Deckkraft). Den Wert setzt der Regler im Profil, Standard ist 1,
+# erlaubt sind -2 bis 2. Negative Werte kehren den Effekt um: Erhabenes wird
+# eingelassen und Eingelassenes erhaben. Dafür hat jeder Schatten beide Formen,
+# die jeweils unpassende ist auf null skaliert.
 STRENGTH = "var(--neumorphism-strength, 1)"
+POSITIVE = f"max(0, {STRENGTH})"
+NEGATIVE = f"max(0, -1 * {STRENGTH})"
+MAGNITUDE = f"max({STRENGTH}, -1 * {STRENGTH})"
 
 CARD_RADIUS = "28px"
 DIALOG_RADIUS = "32px"
@@ -161,15 +167,24 @@ def text_on(value: str) -> str:
 # --------------------------------------------------------------------------
 
 def mode_vars(m: dict) -> list[tuple[str, str]]:
-    rgba = lambda c: f"rgba({c[0]}, calc({c[1]} * {STRENGTH}))"  # noqa: E731
-    dark, light = rgba(m["shadow_dark"]), rgba(m["shadow_light"])
-    px = lambda v: f"calc({v}px * {STRENGTH})"  # noqa: E731
+    rgba = lambda c, k: f"rgba({c[0]}, calc({c[1]} * {k}))"  # noqa: E731
+    px = lambda v, k: f"calc({v}px * {k})"  # noqa: E731
+    dark, light = rgba(m["shadow_dark"], MAGNITUDE), rgba(m["shadow_light"], MAGNITUDE)
 
-    def shadow(d: float, b: float, inset: str = "") -> str:
+    def layer(d: float, b: float, k: str, inset: bool) -> str:
+        pre = "inset " if inset else ""
         return (
-            f"{inset}{px(d)} {px(d)} {px(b)} {dark}, "
-            f"{inset}{px(-d)} {px(-d)} {px(b)} {light}"
+            f"{pre}{px(d, k)} {px(d, k)} {px(b, k)} {rgba(m['shadow_dark'], k)}, "
+            f"{pre}{px(-d, k)} {px(-d, k)} {px(b, k)} {rgba(m['shadow_light'], k)}"
         )
+
+    def shadow(d: float, b: float, inset: bool = False) -> str:
+        """Erhaben (oder eingelassen), bei negativer Effektstärke umgekehrt."""
+        return f"{layer(d, b, POSITIVE, inset)}, {layer(d, b, NEGATIVE, not inset)}"
+
+    def floating(d: float, b: float) -> str:
+        """Dialoge schweben immer über der Seite."""
+        return layer(d, b, MAGNITUDE, False)
 
     return [
         ("# Flächen", None),
@@ -203,8 +218,8 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("neumorphism-shadow-light", light),
         ("neumorphism-raised-shadow", shadow(4, 9)),
         ("neumorphism-raised-shadow-l", shadow(7, 16)),
-        ("neumorphism-inset-shadow", shadow(4, 9, "inset ")),
-        ("neumorphism-inset-shadow-s", shadow(2, 5, "inset ")),
+        ("neumorphism-inset-shadow", shadow(4, 9, inset=True)),
+        ("neumorphism-inset-shadow-s", shadow(2, 5, inset=True)),
         ("ha-button-box-shadow", shadow(3, 7)),
         ("divider-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-color", f"rgba({m['rgb_ink']}, 0.08)"),
@@ -223,7 +238,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("# Dialoge", None),
         ("ha-dialog-surface-background", "var(--card-background-color)"),
         ("ha-dialog-border-radius", DIALOG_RADIUS),
-        ("dialog-box-shadow", shadow(18, 48)),
+        ("dialog-box-shadow", floating(18, 48)),
         ("mdc-dialog-scrim-color", m["scrim"]),
         ("ha-dialog-scrim-backdrop-filter", "blur(6px)"),
         ("# Eingabefelder wirken eingelassen", None),
