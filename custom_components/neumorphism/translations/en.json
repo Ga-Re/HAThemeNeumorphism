@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Neumorphism",
-        "description": "Provides the theme “Neumorphism” and adds all settings to the Theme section of your profile: colors, background, effect strength, light direction, surface, roundness, font and more. Afterwards select the theme “Neumorphism” in your profile."
+        "description": "Provides the theme “Neumorphism” and adds all settings to the Theme section of your profile: presets, colors, background, effect strength, light, surface, roundness, font and more. Afterwards select the theme “Neumorphism” in your profile."
       }
     },
     "abort": {
@@ -25,9 +25,16 @@
           "contrast": "Contrast",
           "roundness": "Roundness",
           "font": "Font",
+          "font_size": "Font size",
+          "density": "Spacing",
           "sections": "Sections",
+          "pressed": "State as depth",
+          "emboss": "Embossing",
+          "grain": "Grain",
+          "charts": "Charts",
           "animations": "Animations",
           "glow": "Glow of active devices",
+          "evening": "Evening mode",
           "custom_cards": "Custom cards",
           "addons": "Add-ons and integrations"
         },
@@ -36,14 +43,21 @@
           "accent_color": "Switches and highlights. As #rrggbb.",
           "background": "Tint of the surfaces.",
           "strength": "-100 to 100. Positive raised, 0 flat, negative inverted.",
-          "light_direction": "Where the light comes from; shadows fall on the opposite side.",
+          "light_direction": "Where the light comes from; shadows fall on the opposite side. “Follow the sun” follows the position of the sun.",
           "surface": "Raised surfaces even, convex or concave.",
           "contrast": "High: stronger text, lines and shadows and a fine edge around every surface.",
           "roundness": "0 to 200 percent of the usual roundness; 0 is square.",
-          "font": "Rounded: Nunito, shipped with the integration.",
+          "font": "Rounded (Nunito), Modern (Inter) or Legible (Atkinson Hyperlegible), shipped with the integration.",
+          "font_size": "85 to 130 percent.",
+          "density": "Compact, normal or airy.",
           "sections": "In section dashboards, the cards of each section in an inset well or on a raised plate.",
+          "pressed": "Devices that are on appear pressed (inset), devices that are off raised.",
+          "emboss": "Headings and large icons look pressed into the material.",
+          "grain": "Fine texture on all surfaces.",
+          "charts": "In theme colors with an inset area or as in Home Assistant.",
           "animations": "Buttons sink in when pressed, switches and selections glide.",
           "glow": "Devices that are on glow softly in their state color.",
+          "evening": "What changes between sunset and sunrise; empty: nothing.",
           "custom_cards": "Cards from HACS or self-written.",
           "addons": "Add-on interfaces and integration pages in the same design."
         }
@@ -70,7 +84,8 @@
       "options": {
         "top_left": "Top left",
         "top": "Top",
-        "top_right": "Top right"
+        "top_right": "Top right",
+        "sun": "Follow the sun"
       }
     },
     "surface": {
@@ -89,7 +104,16 @@
     "font": {
       "options": {
         "standard": "Standard",
-        "round": "Rounded"
+        "round": "Rounded",
+        "modern": "Modern",
+        "legible": "Legible"
+      }
+    },
+    "density": {
+      "options": {
+        "compact": "Compact",
+        "normal": "Normal",
+        "airy": "Airy"
       }
     },
     "sections": {
@@ -97,6 +121,18 @@
         "open": "Open",
         "well": "Inset",
         "raised": "Raised"
+      }
+    },
+    "pressed": {
+      "options": {
+        "on": "On",
+        "off": "Off"
+      }
+    },
+    "emboss": {
+      "options": {
+        "on": "On",
+        "off": "Off"
       }
     },
     "animations": {
@@ -109,6 +145,26 @@
       "options": {
         "on": "On",
         "off": "Off"
+      }
+    },
+    "grain": {
+      "options": {
+        "off": "Off",
+        "fine": "Fine",
+        "strong": "Strong"
+      }
+    },
+    "charts": {
+      "options": {
+        "theme": "Theme colors",
+        "standard": "As Home Assistant"
+      }
+    },
+    "evening": {
+      "options": {
+        "warm": "Warmer",
+        "flat": "Flatter",
+        "dark": "Dark"
       }
     },
     "custom_cards": {
@@ -135,9 +191,16 @@
         "contrast": "Contrast",
         "roundness": "Roundness",
         "font": "Font",
+        "font_size": "Font size",
+        "density": "Spacing",
         "sections": "Sections",
+        "pressed": "State as depth",
+        "emboss": "Embossing",
+        "grain": "Grain",
+        "charts": "Charts",
         "animations": "Animations",
         "glow": "Glow of active devices",
+        "evening": "Evening mode",
         "custom_cards": "Custom cards",
         "addons": "Add-ons and integrations"
       }
@@ -166,7 +229,7 @@
         },
         "light_direction": {
           "name": "Light direction",
-          "description": "Where the light comes from; shadows fall on the opposite side."
+          "description": "Where the light comes from; shadows fall on the opposite side. “Follow the sun” follows the position of the sun."
         },
         "surface": {
           "name": "Surface",
@@ -182,11 +245,35 @@
         },
         "font": {
           "name": "Font",
-          "description": "Rounded: Nunito, shipped with the integration."
+          "description": "Rounded (Nunito), Modern (Inter) or Legible (Atkinson Hyperlegible), shipped with the integration."
+        },
+        "font_size": {
+          "name": "Font size",
+          "description": "85 to 130 percent."
+        },
+        "density": {
+          "name": "Spacing",
+          "description": "Compact, normal or airy."
         },
         "sections": {
           "name": "Sections",
           "description": "In section dashboards, the cards of each section in an inset well or on a raised plate."
+        },
+        "pressed": {
+          "name": "State as depth",
+          "description": "Devices that are on appear pressed (inset), devices that are off raised."
+        },
+        "emboss": {
+          "name": "Embossing",
+          "description": "Headings and large icons look pressed into the material."
+        },
+        "grain": {
+          "name": "Grain",
+          "description": "Fine texture on all surfaces."
+        },
+        "charts": {
+          "name": "Charts",
+          "description": "In theme colors with an inset area or as in Home Assistant."
         },
         "animations": {
           "name": "Animations",
@@ -195,6 +282,10 @@
         "glow": {
           "name": "Glow of active devices",
           "description": "Devices that are on glow softly in their state color."
+        },
+        "evening": {
+          "name": "Evening mode",
+          "description": "What changes between sunset and sunrise; empty: nothing."
         },
         "custom_cards": {
           "name": "Custom cards",

@@ -5,9 +5,11 @@ Die Integration
   (kein Eintrag `frontend: themes:` in der configuration.yaml nötig),
 - liefert www/neumorphism-colors.js aus und lädt es auf jeder Seite
   (kein `extra_module_url` nötig),
-- hält den Standard für alle Benutzer (Optionen der Integration) und Vorgaben aus
-  Automationen (Aktionen neumorphism.set_style und neumorphism.reset_style) bereit;
-  das Frontend erhält beides über die WebSocket-Schnittstelle neumorphism/subscribe.
+- hält den Standard für alle Benutzer (Optionen der Integration), den Stil einzelner
+  Dashboards und Vorgaben aus Automationen (Aktionen neumorphism.set_style und
+  neumorphism.reset_style) bereit; das Frontend erhält alles über die WebSocket-Schnittstelle
+  neumorphism/subscribe,
+- sammelt kurze Berichte der Geräte für die Diagnose (diagnostics.py).
 """
 
 from __future__ import annotations
@@ -59,10 +61,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     data = hass.data.setdefault(DOMAIN, {})
     store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.style")
     stored = await store.async_load() or {}
-    data.update(store=store, style=clean(stored.get("style") or {}), defaults={})
+    dashboards = {url: clean(values) for url, values in (stored.get("dashboards") or {}).items() if isinstance(values, dict)}
+    data.update(store=store, style=clean(stored.get("style") or {}), dashboards=dashboards, defaults={}, reports={})
 
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_set_defaults)
+    websocket_api.async_register_command(hass, ws_set_dashboard)
+    websocket_api.async_register_command(hass, ws_report)
 
     async def set_style(call: ServiceCall) -> None:
         """Vorgaben für alle Benutzer und Geräte, bis sie aufgehoben werden."""
@@ -82,13 +87,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def _async_style_changed(hass: HomeAssistant) -> None:
     data = hass.data[DOMAIN]
-    await data["store"].async_save({"style": data["style"]})
+    await data["store"].async_save({"style": data["style"], "dashboards": data["dashboards"]})
     async_dispatcher_send(hass, SIGNAL_SETTINGS)
 
 
 def _frontend_settings(hass: HomeAssistant) -> dict[str, Any]:
     data = hass.data.get(DOMAIN, {})
-    return {"defaults": to_frontend(data.get("defaults", {})), "style": to_frontend(data.get("style", {}))}
+    return {
+        "defaults": to_frontend(data.get("defaults", {})),
+        "style": to_frontend(data.get("style", {})),
+        "dashboards": {url: to_frontend(values) for url, values in data.get("dashboards", {}).items()},
+    }
 
 
 @websocket_api.websocket_command({vol.Required("type"): "neumorphism/subscribe"})
@@ -117,6 +126,44 @@ def ws_set_defaults(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Neumorphism is not set up")
         return
     hass.config_entries.async_update_entry(entry, options=from_frontend(msg["defaults"]))
+    connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "neumorphism/set_dashboard",
+        vol.Required("url_path"): cv.string,
+        vol.Required("settings"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_set_dashboard(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Eigener Stil für ein Dashboard (gilt für alle Benutzer auf diesem Dashboard)."""
+    data = hass.data[DOMAIN]
+    settings = from_frontend(msg["settings"])
+    dashboards = {url: values for url, values in data["dashboards"].items() if url != msg["url_path"]}
+    if settings:
+        dashboards[msg["url_path"]] = settings
+    data["dashboards"] = dashboards
+    await _async_style_changed(hass)
+    connection.send_result(msg["id"])
+
+
+REPORTS_MAX = 10
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "neumorphism/report", vol.Required("device"): cv.string, vol.Required("report"): dict}
+)
+@callback
+def ws_report(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Kurzer Bericht eines Geräts (Version, Einstellungen, erkannte Karten und Add-ons) für die Diagnose."""
+    reports: dict[str, Any] = hass.data[DOMAIN]["reports"]
+    reports.pop(msg["device"], None)
+    reports[msg["device"]] = {"user_is_admin": connection.user.is_admin, **msg["report"]}
+    while len(reports) > REPORTS_MAX:
+        reports.pop(next(iter(reports)))
     connection.send_result(msg["id"])
 
 

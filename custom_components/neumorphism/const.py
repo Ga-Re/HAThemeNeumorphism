@@ -1,7 +1,7 @@
 """Konstanten für die Neumorphism-Integration."""
 
 DOMAIN = "neumorphism"
-VERSION = "7.1.1"
+VERSION = "8.0.0"
 
 STATIC_URL = "/neumorphism_static"
 JS_FILE = "neumorphism-colors.js"

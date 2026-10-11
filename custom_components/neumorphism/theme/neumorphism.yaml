@@ -83,6 +83,7 @@
       outline-hover-color: "rgba(61, 70, 87, 0.16)"
       # Kopfzeile und Seitenleiste verschmelzen mit dem Hintergrund
       app-header-background-color: "var(--primary-background-color)"
+      app-theme-color: "var(--primary-background-color)"
       app-header-text-color: "var(--primary-text-color)"
       app-header-border-bottom: "none"
       app-header-edit-background-color: "var(--secondary-background-color)"
@@ -199,6 +200,7 @@
       outline-hover-color: "rgba(227, 230, 236, 0.16)"
       # Kopfzeile und Seitenleiste verschmelzen mit dem Hintergrund
       app-header-background-color: "var(--primary-background-color)"
+      app-theme-color: "var(--primary-background-color)"
       app-header-text-color: "var(--primary-text-color)"
       app-header-border-bottom: "none"
       app-header-edit-background-color: "var(--secondary-background-color)"

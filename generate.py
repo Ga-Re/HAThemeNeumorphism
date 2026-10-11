@@ -277,6 +277,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("outline-hover-color", f"rgba({m['rgb_ink']}, 0.16)"),
         ("# Kopfzeile und Seitenleiste verschmelzen mit dem Hintergrund", None),
         ("app-header-background-color", "var(--primary-background-color)"),
+        ("app-theme-color", "var(--primary-background-color)"),
         ("app-header-text-color", "var(--primary-text-color)"),
         ("app-header-border-bottom", "none"),
         ("app-header-edit-background-color", "var(--secondary-background-color)"),

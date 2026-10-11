@@ -11,12 +11,16 @@ Das Design gilt überall: auf den Dashboards, in allen Seiten von Home Assistant
 - **Alles andere automatisch**: Seiten von Integrationen (z. B. WashData, Vacuum Agent), HACS und die Oberflächen von Add-ons (z. B. ESPHome, Zigbee2MQTT, Node-RED, File editor) bekommen dasselbe Design, im Dunkelmodus auch dunkel. Ohne Anpassungen für einzelne Integrationen oder Add-ons, deshalb auch für künftige
 - **Auch eigene Karten** aus HACS oder selbst geschrieben, etwa [M3 Cards](https://github.com/j0sp0r/m3-cards), Mushroom, Button Card oder Bubble Card: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen
 - **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen. Die gewählte Ansicht in der Titelleiste läuft beim Wischen wie ein Tropfen in die Knöpfe hinein, die übrigen Ansichten blenden an den Rändern weich aus
-- **Aktive Geräte leuchten** sanft in ihrer Zustandsfarbe, **Knöpfe sinken beim Drücken ein**, Schalter und Auswahl gleiten
-- **Alles einstellbar im Profil**: Primär- und Akzentfarbe, Farbton des Hintergrunds, Effektstärke von −100 bis +100 (im negativen Bereich umgekehrt), Lichtrichtung, gewölbte oder gemuldete Oberfläche, Kontrast, Rundung, runde Schrift, Sektionen eingelassen oder herausgehoben
-- Einstellungen gelten **pro Benutzer** auf allen Geräten oder **nur für ein Gerät**, etwa ein Wandtablet, auch mit festem Hell- oder Dunkelmodus
-- **Standard für alle Benutzer** legt der Administrator fest, **Automationen** können den Stil ändern (z. B. abends wärmer und flacher)
-- **Sparmodus** für schwache Geräte
-- Installation über **HACS** mit Versionen und Änderungsprotokoll, ohne Dateien zu kopieren und ohne Einträge in der `configuration.yaml`
+- **Aktive Geräte leuchten** sanft in ihrer Zustandsfarbe oder erscheinen **gedrückt wie ein eingerasteter Taster**, **Knöpfe sinken beim Drücken ein**, Schalter und Auswahl gleiten
+- **Vorlagen** per Klick, eigene speichern und als Code teilen
+- **Alles einstellbar im Profil**: Primär- und Akzentfarbe, Farbton des Hintergrunds, Effektstärke von −100 bis +100 (im negativen Bereich umgekehrt), Lichtrichtung bis hin zum **Licht nach der Sonne**, gewölbte oder gemuldete Oberfläche, Kontrast, **Prägung**, **Körnung**, Rundung, vier Schriften, Schriftgröße, Abstände, Sektionen eingelassen oder herausgehoben, **Diagramme in Themenfarben**
+- **Abendmodus**: ab Sonnenuntergang wärmer, flacher oder dunkel
+- Einstellungen gelten **pro Benutzer** auf allen Geräten, **nur für ein Gerät** (etwa ein Wandtablet, auch mit festem Hell- oder Dunkelmodus) oder **für ein Dashboard**
+- **Standard für alle Benutzer** legt der Administrator fest, **Automationen** können den Stil ändern
+- **Statusleiste** von Browser und App in der Hintergrundfarbe
+- **Barrierefrei**: Schrift auf jedem Hintergrund mindestens mit Kontrast nach WCAG AA, deutlich sichtbarer Fokus bei Bedienung per Tastatur
+- **Sparsam**: Geprüft wird nur, wenn sich etwas ändert; dazu ein **Sparmodus** für schwache Geräte
+- Installation über **HACS** mit Versionen und Änderungsprotokoll, ohne Dateien zu kopieren und ohne Einträge in der `configuration.yaml`. Jede Version wird automatisch geprüft, jede Woche auch gegen die neueste Version von Home Assistant
 
 ![Vorschau hell und dunkel](preview.png)
 
@@ -38,27 +42,41 @@ Updates kommen über HACS, mit Versionsnummer und Änderungen (siehe [CHANGELOG]
 
 Sobald im Profil das Theme „Neumorphism“ gewählt ist, erscheinen im Bereich „Design“ unter dem Design-Modus alle Einstellungen. Änderungen sind sofort zu sehen, Farben und Regler schon während des Ziehens.
 
+**Vorlagen**
+- Fertige Stile per Klick: *Klassisch*, *Warm & weich*, *Kontrastreich*, *Flach & modern*, *Mint* und *Papier*. Sie stellen das Aussehen auf einmal ein, Bereiche und Abendmodus bleiben. Danach lässt sich alles weiter anpassen
+- **Als Vorlage speichern** legt das aktuelle Aussehen unter einem Namen ab, auf allen Geräten deines Benutzers
+- **Code kopieren** und **Code einfügen** übertragen ein Aussehen zu einem anderen Benutzer, einer anderen Installation oder in die Community. Der Code beginnt mit `NEUMORPHISM-1:`
+
 **Farben**
 - **Primärfarbe**: Buttons, Symbole, ausgewählte Einträge, Fortschrittsbalken
 - **Akzentfarbe**: Schalter, Checkboxen, Hervorhebungen
 - **Hintergrund**: Farbton aller Flächen, *Standard* (kühles Grau), *Grau*, *Warm*, *Sand*, *Mint*, *Rosé*, *Blau* oder passend zur *Primärfarbe*. Hell und dunkel jeweils in der passenden Helligkeit
+- **Diagramme**: *Themenfarben* färbt Verlauf, Statistik und andere Diagramme passend zu Primär- und Akzentfarbe und lässt ihre Fläche ein; *Wie Home Assistant* lässt sie unverändert
 
 Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
 
 **Licht und Tiefe**
 - **Effektstärke**: von −100 bis +100. +50 ist der Standard, +100 besonders kräftig, 0 flach ohne Schatten. Negative Werte kehren den Effekt um: Karten, Knöpfe und Symbole werden eingelassen, Schieber, Auswahlleisten und Eingabefelder erhaben. Je weiter ins Negativ, desto kräftiger
-- **Lichtrichtung**: *Oben links*, *Oben* oder *Oben rechts*. Die Schatten liegen auf der Gegenseite
+- **Lichtrichtung**: *Oben links*, *Oben*, *Oben rechts* oder *Sonne*. Die Schatten liegen auf der Gegenseite. Mit *Sonne* wandert das Licht mit dem Sonnenstand aus Home Assistant: morgens von links, mittags von oben, abends von rechts, nachts von oben
 - **Oberfläche**: erhabene Flächen *flach*, *gewölbt* wie ein Kissen oder *gemuldet* wie eine Schale
 - **Kontrast**: *Hoch* macht Schrift, Linien und Schatten kräftiger und legt eine feine Kante um jede Fläche, für helle Umgebungen oder bessere Lesbarkeit
+- **Zustand als Tiefe**: Eingeschaltete Geräte erscheinen gedrückt wie ein eingerasteter Taster, ausgeschaltete erhaben, in Kacheln, Schaltflächen und Abzeichen
+- **Prägung**: Überschriften und große Symbole wirken ins Material geprägt
+- **Körnung**: *Fein* oder *Kräftig* legt eine feine Struktur wie Papier oder Stoff über alle Flächen
 
 **Form und Schrift**
 - **Rundung**: 0 % (eckig) bis 200 % der üblichen Rundung von Karten, Dialogen, Knöpfen und Feldern
-- **Schrift**: *Standard* oder *Rund* (Nunito, liegt der Integration bei, nichts wird aus dem Internet geladen)
+- **Schriftgröße**: 85 % bis 130 %
+- **Schrift**: *Standard*, *Rund* (Nunito), *Modern* (Inter) oder *Gut lesbar* (Atkinson Hyperlegible). Die Schriften liegen der Integration bei, nichts wird aus dem Internet geladen
+- **Abstände**: *Kompakt* passt mehr auf kleine Bildschirme, *Luftig* wirkt ruhiger auf großen
 - **Sektionen**: in Dashboards mit Sektionen *Frei* wie gewohnt, *Eingelassen* (die Karten jeder Sektion liegen in einer Mulde) oder *Herausgehoben* (die Karten liegen auf einer erhabenen Platte)
 
 **Bewegung**
-- **Animationen**: Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten, die gewählte Ansicht erscheint weich. Ist im System „Bewegung reduzieren“ eingeschaltet, bleibt alles still
+- **Animationen**: Knöpfe und Kacheln sinken beim Drücken ein, Schalter und Auswahl gleiten, die gewählte Ansicht erscheint weich. Ist im System „Bewegung reduzieren“ eingeschaltet, bleibt alles still
 - **Leuchten aktiver Geräte**: Eingeschaltete Geräte leuchten sanft in ihrer Zustandsfarbe, in Kacheln, Schaltflächen, Abzeichen, Listen und an Schaltern
+
+**Abendmodus**
+- Zwischen Sonnenuntergang und Sonnenaufgang *wärmer* (Hintergrund Warm), *flacher* (halbe Effektstärke) und/oder *dunkel* (Dunkelmodus), beliebig kombiniert. Nichts gewählt heißt aus. Braucht die Integration „Sonne“, die in Home Assistant üblicherweise eingerichtet ist
 
 **Bereiche**
 - **Eigene Karten**: *Vollständig*, *Nur Rahmen* oder *Aus* (siehe unten)
@@ -68,12 +86,15 @@ Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
 
 ![Oben links: gewölbt mit Licht von oben. Oben rechts: Sand, dunkel, hoher Kontrast. Unten links: Mint mit runder Schrift und wenig Rundung. Unten rechts: Sektionen eingelassen, Hintergrund passend zur Primärfarbe, dunkel](styles.png)
 
-### Für meinen Benutzer oder nur für dieses Gerät
+![Vorlage Papier: Zustand als Tiefe, Prägung und kräftige Körnung](paper.png)
+
+### Für meinen Benutzer, nur für dieses Gerät oder für ein Dashboard
 
 Oben in den Einstellungen wählst du, wofür gespeichert wird:
 
 - **Meinen Benutzer**: gilt auf allen Geräten, auf denen du angemeldet bist. Andere Benutzer stellen ihre eigenen Einstellungen ein.
 - **Nur dieses Gerät**: gilt nur in diesem Browser oder dieser App, zum Beispiel für ein Wandtablet, das mit demselben Benutzer angemeldet ist. Es beginnt mit den Einstellungen deines Benutzers. Zurück auf *Meinen Benutzer* gilt wieder alles vom Benutzer.
+- **Ein Dashboard** (nur Administratoren): Das gewählte Dashboard bekommt einen eigenen Stil für alle, die es öffnen, etwa das Wandtablet-Dashboard in Sand mit großer Rundung. Es gelten nur die Werte, die du dort änderst; sie gehen auf diesem Dashboard den Einstellungen von Benutzern und Geräten vor. *Zurücksetzen* entfernt den eigenen Stil wieder. Bequem geht das auch mit der Dashboard-Karte (siehe unten) direkt auf dem Dashboard.
 
 Unter **Dieses Gerät** gibt es außerdem:
 
@@ -99,7 +120,7 @@ actions:
       glow: true
 ```
 
-Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`), `sections` (`open`, `well`, `raised`), `animations` und `glow` (`true`/`false`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
+Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`, `sun`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`, `modern`, `legible`), `font_size` (85 bis 130), `density` (`compact`, `normal`, `airy`), `sections` (`open`, `well`, `raised`), `pressed`, `emboss`, `animations` und `glow` (`true`/`false`), `grain` (`off`, `fine`, `strong`), `charts` (`theme`, `standard`), `evening` (Liste aus `warm`, `flat`, `dark`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
 
 Die Vorgaben gelten, auch über einen Neustart hinweg, bis **`neumorphism.reset_style`** sie aufhebt, ganz oder nur einzelne:
 
@@ -162,6 +183,8 @@ title: Design   # optional
 
 **Ein Gerät reagiert träge**: Unter *Dieses Gerät* den **Sparmodus** einschalten.
 
+**Fehler melden**: *Einstellungen → Geräte & Dienste → Neumorphism → ⋮ → Diagnose herunterladen* und die Datei an das [Issue](https://github.com/Ga-Re/HAThemeNeumorphism/issues) hängen. Sie enthält Version, Einstellungen und kurze Berichte der Geräte, die Home Assistant zuletzt geöffnet haben (Browser, erkannte eigene Karten und Add-ons, letzte Fehlermeldungen), aber keine Namen oder Passwörter.
+
 ## Für eigene Karten
 
 Das Theme stellt Schatten-Variablen bereit, die zu Modus und Effektstärke passen, auch zur umgekehrten:
@@ -194,8 +217,9 @@ Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit 
 - Eigene Karten und Add-ons werden nach Farbe und Form eingeordnet, nicht nach ihrer Bedeutung. Grafiken, die eine Karte oder ein Add-on selbst zeichnet (z. B. gewellte Schieber, Diagramme), bleiben unverändert.
 - Nicht erreichbar sind Seiten auf einer anderen Adresse: Add-ons, die sich in einem neuen Tab oder über einen eigenen Port öffnen, und Webseiten anderer Geräte. Das verhindert der Browser. Ebenso nicht die Anmeldeseite und die eigenen Einstellungsseiten der Companion-App.
 - Neumorphism hat von Natur aus wenig Kontrast zwischen Karte und Hintergrund. Auf sehr hellen oder sehr dunklen Displays sind die Kartenränder schwächer zu sehen; dann hilft **Kontrast: Hoch**.
-- Leuchten und Animationen kennen nur die Bausteine von Home Assistant (Kacheln, Schaltflächen, Abzeichen, Listen, Schalter), nicht die von eigenen Karten.
-- Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends, von HACS und der Add-ons zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Updates von Home Assistant, HACS oder einem Add-on kann eine Anpassung nötig sein. Getestet mit Home Assistant 2026.10, HACS 2.0.5, WashData 0.5.8, Vacuum Agent 2.2.5 und den Oberflächen von ESPHome Device Builder 1.23, Zigbee2MQTT 2.14 (Windfront), Node-RED 5.0 und File editor (HASS Configurator 0.6).
+- Leuchten, Zustand als Tiefe und Animationen kennen nur die Bausteine von Home Assistant (Kacheln, Schaltflächen, Abzeichen, Listen, Schalter), nicht die von eigenen Karten.
+- Die Körnung liegt über der Seite, Dialoge liegen darüber und bleiben glatt.
+- Für das Theme, die Einstellungen im Profil und das Formen der Bedienelemente greift die Integration auf interne Teile des Home-Assistant-Frontends, von HACS und der Add-ons zu, für die es keine offizielle Schnittstelle gibt. Nach größeren Updates von Home Assistant, HACS oder einem Add-on kann eine Anpassung nötig sein; ein automatischer Test gegen die jeweils neueste Version von Home Assistant läuft deshalb jede Woche. Getestet mit Home Assistant 2026.10, HACS 2.0.5, WashData 0.5.8, Vacuum Agent 2.2.5 und den Oberflächen von ESPHome Device Builder 1.23, Zigbee2MQTT 2.14 (Windfront), Node-RED 5.0 und File editor (HASS Configurator 0.6).
 
 ## Lizenz
 

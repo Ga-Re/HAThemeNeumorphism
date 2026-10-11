@@ -1,0 +1,21 @@
+2026-10-11 17:49:01.946 WARNING (SyncWorker_0) [homeassistant.loader] We found a custom integration neumorphism which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+2026-10-11 17:49:02.061 WARNING (MainThread) [aiohttp_fast_zlib] zlib_ng and isal are not available, falling back to zlib, performance will be degraded.
+2026-10-11 17:49:03.003 ERROR (ImportExecutor_0) [homeassistant.components.camera.img_util] Error loading libturbojpeg; Camera snapshot performance will be sub-optimal
+Traceback (most recent call last):
+  File "/tmp/claude-0/-home-user/37c15abf-0acf-554b-adf7-180b7c729ee5/scratchpad/havenv/lib/python3.14/site-packages/homeassistant/components/camera/img_util.py", line 91, in __init__
+    TurboJPEGSingleton.__instance = TurboJPEG()
+                                    ~~~~~~~~~^^
+  File "/tmp/claude-0/-home-user/37c15abf-0acf-554b-adf7-180b7c729ee5/scratchpad/havenv/lib/python3.14/site-packages/turbojpeg.py", line 301, in __init__
+    self.__find_turbojpeg() if lib_path is None else lib_path)
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/claude-0/-home-user/37c15abf-0acf-554b-adf7-180b7c729ee5/scratchpad/havenv/lib/python3.14/site-packages/turbojpeg.py", line 996, in __find_turbojpeg
+    raise RuntimeError(
+    ...<2 lines>...
+        'e.g. jpeg = TurboJPEG(lib_path)')
+RuntimeError: Unable to locate turbojpeg library automatically. You may specify the turbojpeg library path manually.
+e.g. jpeg = TurboJPEG(lib_path)
+2026-10-11 17:49:03.128 WARNING (MainThread) [homeassistant.components.device_tracker.legacy] The legacy device tracker platform demo.device_tracker is being set up; legacy device trackers are deprecated and will be removed in Home Assistant Core 2027.5, please migrate to an integration which uses a modern config entry based device tracker
+2026-10-11 17:49:03.770 ERROR (MainThread) [metno] Access to https://aa015h6buqvih86i1.api.met.no/weatherapi/locationforecast/2.0/complete returned error 'ClientConnectorDNSError'
+2026-10-11 17:49:05.578 WARNING (SyncWorker_7) [homeassistant.helpers.service] Unable to parse services.yaml for the neumorphism integration: expected str at 'set_style.fields.grain.selector.options[0]'
+2026-10-11 17:49:08.984 ERROR (MainThread) [metno] Access to https://aa015h6buqvih86i1.api.met.no/weatherapi/locationforecast/2.0/complete returned error 'ClientConnectorDNSError'
+2026-10-11 17:49:19.185 ERROR (MainThread) [metno] Access to https://aa015h6buqvih86i1.api.met.no/weatherapi/locationforecast/2.0/complete returned error 'ClientConnectorDNSError'

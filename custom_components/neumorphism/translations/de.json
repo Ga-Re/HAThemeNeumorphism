@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Neumorphism",
-        "description": "Stellt das Theme „Neumorphism“ bereit und zeigt im Profil unter „Design“ alle Einstellungen: Farben, Hintergrund, Effektstärke, Lichtrichtung, Oberfläche, Rundung, Schrift und mehr. Danach im Profil das Theme „Neumorphism“ wählen."
+        "description": "Stellt das Theme „Neumorphism“ bereit und zeigt im Profil unter „Design“ alle Einstellungen: Vorlagen, Farben, Hintergrund, Effektstärke, Licht, Oberfläche, Rundung, Schrift und mehr. Danach im Profil das Theme „Neumorphism“ wählen."
       }
     },
     "abort": {
@@ -25,9 +25,16 @@
           "contrast": "Kontrast",
           "roundness": "Rundung",
           "font": "Schrift",
+          "font_size": "Schriftgröße",
+          "density": "Abstände",
           "sections": "Sektionen",
+          "pressed": "Zustand als Tiefe",
+          "emboss": "Prägung",
+          "grain": "Körnung",
+          "charts": "Diagramme",
           "animations": "Animationen",
           "glow": "Leuchten aktiver Geräte",
+          "evening": "Abendmodus",
           "custom_cards": "Eigene Karten",
           "addons": "Add-ons und Integrationen"
         },
@@ -36,14 +43,21 @@
           "accent_color": "Schalter und Hervorhebungen. Als #rrggbb.",
           "background": "Farbton der Flächen.",
           "strength": "-100 bis 100. Positiv erhaben, 0 flach, negativ umgekehrt.",
-          "light_direction": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite.",
+          "light_direction": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite. „Nach der Sonne“ folgt dem Sonnenstand.",
           "surface": "Erhabene Flächen eben, gewölbt oder gemuldet.",
           "contrast": "Hoch: kräftigere Schrift, Linien und Schatten und eine feine Kante um jede Fläche.",
           "roundness": "0 bis 200 Prozent der üblichen Rundung; 0 ist eckig.",
-          "font": "Rund: Nunito, wird mit der Integration geliefert.",
+          "font": "Rund (Nunito), Modern (Inter) oder Gut lesbar (Atkinson Hyperlegible), liegen der Integration bei.",
+          "font_size": "85 bis 130 Prozent.",
+          "density": "Kompakt, normal oder luftig.",
           "sections": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde oder auf einer herausgehobenen Platte.",
+          "pressed": "Eingeschaltete Geräte erscheinen gedrückt (eingelassen), ausgeschaltete erhaben.",
+          "emboss": "Überschriften und große Symbole wirken ins Material geprägt.",
+          "grain": "Feine Struktur auf allen Flächen.",
+          "charts": "In Themenfarben mit eingelassener Fläche oder wie in Home Assistant.",
           "animations": "Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten.",
           "glow": "Eingeschaltete Geräte leuchten sanft in ihrer Zustandsfarbe.",
+          "evening": "Was sich zwischen Sonnenuntergang und Sonnenaufgang ändert; leer: nichts.",
           "custom_cards": "Karten aus HACS oder selbst geschrieben.",
           "addons": "Oberflächen von Add-ons und Seiten von Integrationen im selben Design."
         }
@@ -70,7 +84,8 @@
       "options": {
         "top_left": "Oben links",
         "top": "Oben",
-        "top_right": "Oben rechts"
+        "top_right": "Oben rechts",
+        "sun": "Nach der Sonne"
       }
     },
     "surface": {
@@ -89,7 +104,16 @@
     "font": {
       "options": {
         "standard": "Standard",
-        "round": "Rund"
+        "round": "Rund",
+        "modern": "Modern",
+        "legible": "Gut lesbar"
+      }
+    },
+    "density": {
+      "options": {
+        "compact": "Kompakt",
+        "normal": "Normal",
+        "airy": "Luftig"
       }
     },
     "sections": {
@@ -97,6 +121,18 @@
         "open": "Frei",
         "well": "Eingelassen",
         "raised": "Herausgehoben"
+      }
+    },
+    "pressed": {
+      "options": {
+        "on": "An",
+        "off": "Aus"
+      }
+    },
+    "emboss": {
+      "options": {
+        "on": "An",
+        "off": "Aus"
       }
     },
     "animations": {
@@ -109,6 +145,26 @@
       "options": {
         "on": "An",
         "off": "Aus"
+      }
+    },
+    "grain": {
+      "options": {
+        "off": "Aus",
+        "fine": "Fein",
+        "strong": "Kräftig"
+      }
+    },
+    "charts": {
+      "options": {
+        "theme": "Themenfarben",
+        "standard": "Wie Home Assistant"
+      }
+    },
+    "evening": {
+      "options": {
+        "warm": "Wärmer",
+        "flat": "Flacher",
+        "dark": "Dunkel"
       }
     },
     "custom_cards": {
@@ -135,9 +191,16 @@
         "contrast": "Kontrast",
         "roundness": "Rundung",
         "font": "Schrift",
+        "font_size": "Schriftgröße",
+        "density": "Abstände",
         "sections": "Sektionen",
+        "pressed": "Zustand als Tiefe",
+        "emboss": "Prägung",
+        "grain": "Körnung",
+        "charts": "Diagramme",
         "animations": "Animationen",
         "glow": "Leuchten aktiver Geräte",
+        "evening": "Abendmodus",
         "custom_cards": "Eigene Karten",
         "addons": "Add-ons und Integrationen"
       }
@@ -166,7 +229,7 @@
         },
         "light_direction": {
           "name": "Lichtrichtung",
-          "description": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite."
+          "description": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite. „Nach der Sonne“ folgt dem Sonnenstand."
         },
         "surface": {
           "name": "Oberfläche",
@@ -182,11 +245,35 @@
         },
         "font": {
           "name": "Schrift",
-          "description": "Rund: Nunito, wird mit der Integration geliefert."
+          "description": "Rund (Nunito), Modern (Inter) oder Gut lesbar (Atkinson Hyperlegible), liegen der Integration bei."
+        },
+        "font_size": {
+          "name": "Schriftgröße",
+          "description": "85 bis 130 Prozent."
+        },
+        "density": {
+          "name": "Abstände",
+          "description": "Kompakt, normal oder luftig."
         },
         "sections": {
           "name": "Sektionen",
           "description": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde oder auf einer herausgehobenen Platte."
+        },
+        "pressed": {
+          "name": "Zustand als Tiefe",
+          "description": "Eingeschaltete Geräte erscheinen gedrückt (eingelassen), ausgeschaltete erhaben."
+        },
+        "emboss": {
+          "name": "Prägung",
+          "description": "Überschriften und große Symbole wirken ins Material geprägt."
+        },
+        "grain": {
+          "name": "Körnung",
+          "description": "Feine Struktur auf allen Flächen."
+        },
+        "charts": {
+          "name": "Diagramme",
+          "description": "In Themenfarben mit eingelassener Fläche oder wie in Home Assistant."
         },
         "animations": {
           "name": "Animationen",
@@ -195,6 +282,10 @@
         "glow": {
           "name": "Leuchten aktiver Geräte",
           "description": "Eingeschaltete Geräte leuchten sanft in ihrer Zustandsfarbe."
+        },
+        "evening": {
+          "name": "Abendmodus",
+          "description": "Was sich zwischen Sonnenuntergang und Sonnenaufgang ändert; leer: nichts."
         },
         "custom_cards": {
           "name": "Eigene Karten",

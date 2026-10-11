@@ -47,12 +47,17 @@ def _selector(name: str, kind: str, values: Any) -> Any:
         return TextSelector()
     if kind == "scale":
         low, high, _ = values
-        config = NumberSelectorConfig(min=low, max=high, step=5 if name == "strength" else 10, mode=NumberSelectorMode.SLIDER)
-        if name == "roundness":
+        config = NumberSelectorConfig(min=low, max=high, step=10 if name == "roundness" else 5, mode=NumberSelectorMode.SLIDER)
+        if name in ("roundness", "font_size"):
             config["unit_of_measurement"] = "%"
         return NumberSelector(config)
     return SelectSelector(
-        SelectSelectorConfig(options=list(values), translation_key=name, mode=SelectSelectorMode.DROPDOWN)
+        SelectSelectorConfig(
+            options=list(values),
+            translation_key=name,
+            multiple=kind == "list",
+            mode=SelectSelectorMode.LIST if kind == "list" else SelectSelectorMode.DROPDOWN,
+        )
     )
 
 

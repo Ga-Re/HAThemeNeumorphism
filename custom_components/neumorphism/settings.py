@@ -16,20 +16,25 @@ import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
 TINTS = ["standard", "gray", "warm", "sand", "mint", "rose", "blue", "primary"]
-LIGHTS = ["top_left", "top", "top_right"]
+LIGHTS = ["top_left", "top", "top_right", "sun"]
 SURFACES = ["flat", "convex", "concave"]
 CONTRASTS = ["normal", "high"]
-FONTS = ["standard", "round"]
+FONTS = ["standard", "round", "modern", "legible"]
 SECTIONS = ["open", "well", "raised"]
 SWITCHES = ["on", "off"]
 CARDS = ["full", "frame", "off"]
 ADDONS = ["full", "off"]
+GRAINS = ["off", "fine", "strong"]
+DENSITIES = ["compact", "normal", "airy"]
+CHARTS = ["theme", "standard"]
+EVENING = ["warm", "flat", "dark"]
 
 # Name in Optionen und Aktionen: (Schlüssel im Frontend, Art, Werte)
 #   color:  Farbe als "#rrggbb" (Aktionen auch als [r, g, b])
 #   scale:  Zahl (min, max, Teiler für den Faktor im Frontend)
 #   choice: einer der Werte
 #   switch: "on"/"off" (Aktionen auch true/false)
+#   list:   Teilmenge der Werte (z. B. Abendmodus)
 FIELDS: dict[str, tuple[str, str, Any]] = {
     "primary_color": ("primary", "color", None),
     "accent_color": ("accent", "color", None),
@@ -40,9 +45,16 @@ FIELDS: dict[str, tuple[str, str, Any]] = {
     "contrast": ("contrast", "choice", CONTRASTS),
     "roundness": ("radius", "scale", (0, 200, 100)),
     "font": ("font", "choice", FONTS),
+    "font_size": ("fontScale", "scale", (85, 130, 100)),
+    "density": ("density", "choice", DENSITIES),
     "sections": ("sections", "choice", SECTIONS),
+    "pressed": ("pressed", "switch", SWITCHES),
+    "emboss": ("emboss", "switch", SWITCHES),
+    "grain": ("grain", "choice", GRAINS),
+    "charts": ("charts", "choice", CHARTS),
     "animations": ("motion", "switch", SWITCHES),
     "glow": ("glow", "switch", SWITCHES),
+    "evening": ("evening", "list", EVENING),
     "custom_cards": ("cards", "choice", CARDS),
     "addons": ("apps", "choice", ADDONS),
 }
@@ -68,9 +80,22 @@ def _switch(value: Any) -> str:
     return "on" if cv.boolean(value) else "off"
 
 
+def _subset(values: list[str]) -> Any:
+    def validate(value: Any) -> list[str]:
+        items = cv.ensure_list(value)
+        for item in items:
+            if item not in values:
+                raise vol.Invalid(f"unknown value {item}")
+        return [item for item in values if item in items]
+
+    return validate
+
+
 def _field_validator(kind: str, values: Any) -> Any:
     if kind == "color":
         return to_hex
+    if kind == "list":
+        return _subset(values)
     if kind == "scale":
         low, high, _ = values
         return vol.All(vol.Coerce(float), vol.Range(min=low, max=high))
@@ -89,7 +114,7 @@ def clean(values: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, validator in FIELD_VALIDATORS.items():
         value = values.get(name)
-        if value is None or value == "":
+        if value is None or value == "" or (value == [] and FIELDS[name][1] != "list"):
             continue
         try:
             out[name] = validator(value)

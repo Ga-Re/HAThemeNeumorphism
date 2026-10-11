@@ -39,6 +39,7 @@ set_style:
             - top_left
             - top
             - top_right
+            - sun
     surface:
       required: false
       selector:
@@ -73,6 +74,26 @@ set_style:
           options:
             - standard
             - round
+            - modern
+            - legible
+    font_size:
+      required: false
+      selector:
+        number:
+          min: 85
+          max: 130
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider
+    density:
+      required: false
+      selector:
+        select:
+          translation_key: density
+          options:
+            - compact
+            - normal
+            - airy
     sections:
       required: false
       selector:
@@ -82,6 +103,31 @@ set_style:
             - open
             - well
             - raised
+    pressed:
+      required: false
+      selector:
+        boolean:
+    emboss:
+      required: false
+      selector:
+        boolean:
+    grain:
+      required: false
+      selector:
+        select:
+          translation_key: grain
+          options:
+            - off
+            - fine
+            - strong
+    charts:
+      required: false
+      selector:
+        select:
+          translation_key: charts
+          options:
+            - theme
+            - standard
     animations:
       required: false
       selector:
@@ -90,6 +136,16 @@ set_style:
       required: false
       selector:
         boolean:
+    evening:
+      required: false
+      selector:
+        select:
+          multiple: true
+          translation_key: evening
+          options:
+            - warm
+            - flat
+            - dark
     custom_cards:
       required: false
       selector:
@@ -125,8 +181,15 @@ reset_style:
             - contrast
             - roundness
             - font
+            - font_size
+            - density
             - sections
+            - pressed
+            - emboss
+            - grain
+            - charts
             - animations
             - glow
+            - evening
             - custom_cards
             - addons

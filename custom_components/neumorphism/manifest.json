@@ -1,7 +1,7 @@
 {
   "domain": "neumorphism",
   "name": "Neumorphism",
-  "codeowners": [],
+  "codeowners": ["@Ga-Re"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "websocket_api"],
   "documentation": "https://github.com/Ga-Re/HAThemeNeumorphism",
@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/Ga-Re/HAThemeNeumorphism/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "7.1.1"
+  "version": "8.0.0"
 }

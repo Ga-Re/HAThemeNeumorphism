@@ -1,0 +1,86 @@
+# Prüft jede Änderung und jede Woche gegen die neueste Version von Home Assistant.
+# Schlägt eine Prüfung fehl, schickt GitHub eine Benachrichtigung.
+name: Prüfen
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1" # montags: neue Version von Home Assistant?
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    name: Home-Assistant-Prüfung (hassfest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS-Prüfung
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # Symbole liegen im Ordner brand/ der Integration (Home Assistant ab 2026.3);
+          # Beschreibung und Themen stehen in den Einstellungen des Repositorys auf GitHub.
+          ignore: brands description topics
+
+  dateien:
+    name: Dateien
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Skript und Python-Dateien fehlerfrei
+        run: |
+          node --check custom_components/neumorphism/www/neumorphism-colors.js
+          python -m py_compile custom_components/neumorphism/*.py generate.py tests/smoke_test.py
+      - name: Theme-Datei passt zu generate.py
+        run: |
+          python generate.py
+          git diff --exit-code custom_components/neumorphism/theme/
+      - name: Versionsnummern gleich
+        run: |
+          manifest=$(jq -r .version custom_components/neumorphism/manifest.json)
+          const=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' custom_components/neumorphism/const.py)
+          script=$(sed -n 's/^const VERSION = "\(.*\)";/\1/p' custom_components/neumorphism/www/neumorphism-colors.js)
+          changelog=$(sed -n 's/^## \([0-9.]*\).*/\1/p' CHANGELOG.md | head -1)
+          echo "manifest=$manifest const=$const script=$script changelog=$changelog"
+          test "$manifest" = "$const" && test "$manifest" = "$script" && test "$manifest" = "$changelog"
+
+  rauchtest:
+    name: Rauchtest mit neuester Home-Assistant-Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Home Assistant und Browser installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install homeassistant playwright
+          python -m playwright install --with-deps chromium
+          python -c "import importlib.metadata as m; print('Home Assistant', m.version('homeassistant'))"
+      - name: Rauchtest
+        run: python tests/smoke_test.py
+      - name: Bilder und Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rauchtest
+          path: tests/output/
+          if-no-files-found: ignore
