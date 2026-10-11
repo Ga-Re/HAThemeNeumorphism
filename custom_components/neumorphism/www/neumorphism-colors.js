@@ -19,7 +19,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "6.1.1";
+const VERSION = "6.1.2";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -374,6 +374,8 @@ const CONTROL_STYLES = {
   "ha-tab-group": `
     :host { --track-color: transparent !important; --indicator-color: transparent !important; }
     .indicator { display: none !important; }
+    /* Waagrechte Reiterleisten scrollen nur seitlich, nie senkrecht (auch nicht bei Rundungsfehlern) */
+    .tab-group-top .nav, .tab-group-bottom .nav { overflow-y: hidden !important; }
   `,
   // Die Pille liegt in der Reiterfläche, ohne sie zu vergrößern: sonst wird die Reiterleiste
   // höher als die Titelleiste, lässt sich verschieben und schneidet den Schatten ab.
@@ -1981,7 +1983,7 @@ function texts(hass) {
     appsFull: de ? "Angepasst" : "Adapted",
     appsOff: de ? "Aus" : "Off",
     appsExceptions: de ? "Abgewählte behalten ihr eigenes Aussehen." : "Unchecked ones keep their own look.",
-    perUser: de ? "Gilt für deinen Benutzer." : "Applies to your user.",
+    perUser: de ? `Gilt für deinen Benutzer · Version ${VERSION}` : `Applies to your user · version ${VERSION}`,
     inactive: de
       ? "Wähle im Profil das Theme „Neumorphism“, dann wirken diese Einstellungen."
       : "Select the theme “Neumorphism” in your profile to use these settings.",
