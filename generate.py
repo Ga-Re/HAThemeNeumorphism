@@ -34,6 +34,8 @@ MODES = {
         "inset": "#dce1e9",
         "shadow_dark": ("163, 174, 194", 0.65),
         "shadow_light": ("255, 255, 255", 0.95),
+        "sheen": 0.6,
+        "shade": 0.4,
         "text": "#3d4657",
         "text_secondary": "#7a8496",
         "text_disabled": "#a8b0be",
@@ -47,6 +49,8 @@ MODES = {
         "inset": "#25292f",
         "shadow_dark": ("12, 13, 16", 0.75),
         "shadow_light": ("70, 77, 91", 0.65),
+        "sheen": 0.35,
+        "shade": 0.35,
         "text": "#e3e6ec",
         "text_secondary": "#9aa2b1",
         "text_disabled": "#5f6674",
@@ -67,8 +71,19 @@ POSITIVE = f"max(0, {STRENGTH})"
 NEGATIVE = f"max(0, -1 * {STRENGTH})"
 MAGNITUDE = f"max({STRENGTH}, -1 * {STRENGTH})"
 
-CARD_RADIUS = "28px"
-DIALOG_RADIUS = "32px"
+# Weitere Einstellungen aus dem Profil, ebenfalls als Variablen (Standardwerte in Klammern):
+# Lichtrichtung als Versatz der Schatten (oben links: 1, 1), Kontrast (0 normal, 1 hoch:
+# kräftigere Schatten und eine feine Kante), Rundung als Faktor für alle Radien.
+LIGHT_X = "var(--neumorphism-light-x, 1)"
+LIGHT_Y = "var(--neumorphism-light-y, 1)"
+LIGHT_ANGLE = "var(--neumorphism-light-angle, 135deg)"
+CONTRAST = "var(--neumorphism-contrast, 0)"
+RADIUS = "var(--neumorphism-radius, 1)"
+
+CARD_RADIUS = 28
+DIALOG_RADIUS = 32
+# Radien von Home Assistant (--ha-border-radius-...), skaliert mit der Rundung
+HA_RADII = {"sm": 4, "md": 8, "lg": 12, "xl": 16, "2xl": 20, "3xl": 24, "4xl": 28, "5xl": 32, "6xl": 36}
 
 
 # --------------------------------------------------------------------------
@@ -167,35 +182,66 @@ def text_on(value: str) -> str:
 # --------------------------------------------------------------------------
 
 def mode_vars(m: dict) -> list[tuple[str, str]]:
-    rgba = lambda c, k: f"rgba({c[0]}, calc({c[1]} * {k}))"  # noqa: E731
-    px = lambda v, k: f"calc({v}px * {k})"  # noqa: E731
-    dark, light = rgba(m["shadow_dark"], MAGNITUDE), rgba(m["shadow_light"], MAGNITUDE)
+    def color(kind: str, k: str) -> str:
+        """Schattenfarbe; Farbton und Deckkraft sind Variablen (Hintergrund-Farbton, Kontrast)."""
+        return f"rgba(var(--neumorphism-shadow-{kind}-rgb), calc(var(--neumorphism-shadow-{kind}-alpha) * {k} * (1 + 0.5 * {CONTRAST})))"
 
     def layer(d: float, b: float, k: str, inset: bool) -> str:
+        """Schatten zur Lichtrichtung hin und heller Schein auf der Gegenseite."""
         pre = "inset " if inset else ""
+        x = lambda sign: f"calc({sign * d}px * {k} * {LIGHT_X})"  # noqa: E731
+        y = lambda sign: f"calc({sign * d}px * {k} * {LIGHT_Y})"  # noqa: E731
+        blur = f"calc({b}px * {k})"
         return (
-            f"{pre}{px(d, k)} {px(d, k)} {px(b, k)} {rgba(m['shadow_dark'], k)}, "
-            f"{pre}{px(-d, k)} {px(-d, k)} {px(b, k)} {rgba(m['shadow_light'], k)}"
+            f"{pre}{x(1)} {y(1)} {blur} {color('dark', k)}, "
+            f"{pre}{x(-1)} {y(-1)} {blur} {color('light', k)}"
         )
+
+    def edge(inset: bool) -> str:
+        """Feine Kante, nur im Kontrastmodus sichtbar."""
+        pre = "inset " if inset else ""
+        return f"{pre}0 0 0 calc(1px * {CONTRAST}) rgba(var(--rgb-primary-text-color), 0.16)"
 
     def shadow(d: float, b: float, inset: bool = False) -> str:
         """Erhaben (oder eingelassen), bei negativer Effektstärke umgekehrt."""
-        return f"{layer(d, b, POSITIVE, inset)}, {layer(d, b, NEGATIVE, not inset)}"
+        return f"{layer(d, b, POSITIVE, inset)}, {layer(d, b, NEGATIVE, not inset)}, {edge(inset)}"
 
     def floating(d: float, b: float) -> str:
         """Dialoge schweben immer über der Seite."""
-        return layer(d, b, MAGNITUDE, False)
+        return f"{layer(d, b, MAGNITUDE, False)}, {edge(False)}"
+
+    def surface(first: str, second: str) -> str:
+        """Gewölbte oder gemuldete Oberfläche: Verlauf von der Licht- zur Schattenseite.
+        Bei negativer Effektstärke ist der Verlauf umgekehrt."""
+        mix = lambda c, k: f"color-mix(in srgb, {c} calc(100% * min(1, {k})), transparent)"  # noqa: E731
+        return (
+            f"linear-gradient({LIGHT_ANGLE}, {mix(first, POSITIVE)}, {mix(second, POSITIVE)}), "
+            f"linear-gradient({LIGHT_ANGLE}, {mix(second, NEGATIVE)}, {mix(first, NEGATIVE)})"
+        )
+
+    dark, light = color("dark", MAGNITUDE), color("light", MAGNITUDE)
+    radius = lambda px: f"calc({px}px * {RADIUS})"  # noqa: E731
+    sheen, shade = "var(--neumorphism-sheen)", "var(--neumorphism-shade)"
 
     return [
+        ("# Grundwerte (der Hintergrund-Farbton im Profil ersetzt sie)", None),
+        ("neumorphism-shadow-dark-rgb", m["shadow_dark"][0]),
+        ("neumorphism-shadow-dark-alpha", str(m["shadow_dark"][1])),
+        ("neumorphism-shadow-light-rgb", m["shadow_light"][0]),
+        ("neumorphism-shadow-light-alpha", str(m["shadow_light"][1])),
+        ("neumorphism-track", m["track"]),
+        ("neumorphism-thumb", m["thumb"]),
+        ("neumorphism-sheen", f"rgba(var(--neumorphism-shadow-light-rgb), {m['sheen']})"),
+        ("neumorphism-shade", f"rgba(var(--neumorphism-shadow-dark-rgb), {m['shade']})"),
         ("# Flächen", None),
         ("primary-background-color", m["background"]),
         ("secondary-background-color", m["inset"]),
-        ("clear-background-color", m["background"]),
+        ("clear-background-color", "var(--primary-background-color)"),
         ("card-background-color", m["background"]),
         ("ha-card-background", "var(--card-background-color)"),
-        ("ha-color-surface-default", m["background"]),
-        ("ha-color-surface-low", m["background"]),
-        ("ha-color-surface-lower", m["inset"]),
+        ("ha-color-surface-default", "var(--card-background-color)"),
+        ("ha-color-surface-low", "var(--card-background-color)"),
+        ("ha-color-surface-lower", "var(--secondary-background-color)"),
         ("# Schrift", None),
         ("primary-text-color", m["text"]),
         ("secondary-text-color", m["text_secondary"]),
@@ -207,7 +253,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("neumorphism-card-shadow", shadow(9, 22)),
         ("ha-card-border-width", "0px"),
         ("ha-card-border-color", "transparent"),
-        ("ha-card-border-radius", CARD_RADIUS),
+        ("ha-card-border-radius", radius(CARD_RADIUS)),
         ("ha-box-shadow-s", shadow(4, 10)),
         ("ha-box-shadow-m", shadow(8, 20)),
         ("ha-box-shadow-l", shadow(14, 36)),
@@ -221,6 +267,10 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("neumorphism-raised-shadow-s", shadow(3, 6)),
         ("neumorphism-inset-shadow", shadow(4, 9, inset=True)),
         ("neumorphism-inset-shadow-s", shadow(2, 5, inset=True)),
+        ("neumorphism-inset-shadow-l", shadow(7, 16, inset=True)),
+        ("# Oberfläche gewölbt oder gemuldet (das Profil wählt eine davon für --neumorphism-surface-image)", None),
+        ("neumorphism-convex", surface(sheen, shade)),
+        ("neumorphism-concave", surface(shade, sheen)),
         ("ha-button-box-shadow", shadow(3, 7)),
         ("divider-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-color", f"rgba({m['rgb_ink']}, 0.08)"),
@@ -229,7 +279,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("app-header-background-color", "var(--primary-background-color)"),
         ("app-header-text-color", "var(--primary-text-color)"),
         ("app-header-border-bottom", "none"),
-        ("app-header-edit-background-color", m["inset"]),
+        ("app-header-edit-background-color", "var(--secondary-background-color)"),
         ("app-header-edit-text-color", "var(--primary-text-color)"),
         ("sidebar-background-color", "var(--primary-background-color)"),
         ("sidebar-text-color", "var(--primary-text-color)"),
@@ -238,19 +288,19 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("sidebar-selected-icon-color", "var(--primary-color)"),
         ("# Dialoge", None),
         ("ha-dialog-surface-background", "var(--card-background-color)"),
-        ("ha-dialog-border-radius", DIALOG_RADIUS),
+        ("ha-dialog-border-radius", radius(DIALOG_RADIUS)),
         ("dialog-box-shadow", floating(18, 48)),
         ("mdc-dialog-scrim-color", m["scrim"]),
         ("ha-dialog-scrim-backdrop-filter", "blur(6px)"),
         ("# Eingabefelder wirken eingelassen", None),
-        ("ha-color-form-background", m["background"]),
-        ("ha-color-form-background-hover", m["background"]),
-        ("ha-color-form-background-disabled", m["background"]),
+        ("ha-color-form-background", "var(--card-background-color)"),
+        ("ha-color-form-background-hover", "var(--card-background-color)"),
+        ("ha-color-form-background-disabled", "var(--card-background-color)"),
         ("ha-color-border-neutral-loud", f"rgba({m['rgb_ink']}, 0.18)"),
         ("ha-color-border-neutral-normal", f"rgba({m['rgb_ink']}, 0.14)"),
         ("ha-color-border-neutral-quiet", f"rgba({m['rgb_ink']}, 0.08)"),
-        ("input-fill-color", m["background"]),
-        ("input-disabled-fill-color", m["background"]),
+        ("input-fill-color", "var(--card-background-color)"),
+        ("input-disabled-fill-color", "var(--card-background-color)"),
         ("input-ink-color", "var(--primary-text-color)"),
         ("input-label-ink-color", "var(--secondary-text-color)"),
         ("input-idle-line-color", "transparent"),
@@ -259,15 +309,15 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("input-outlined-hover-border-color", f"rgba({m['rgb_ink']}, 0.3)"),
         ("input-dropdown-icon-color", "var(--secondary-text-color)"),
         ("# Schalter und Regler", None),
-        ("ha-switch-background-color", m["track"]),
-        ("ha-switch-thumb-background-color", m["thumb"]),
+        ("ha-switch-background-color", "var(--neumorphism-track)"),
+        ("ha-switch-thumb-background-color", "var(--neumorphism-thumb)"),
         ("ha-switch-checked-background-color", "var(--accent-color)"),
-        ("ha-switch-checked-thumb-background-color", m["thumb"]),
+        ("ha-switch-checked-thumb-background-color", "var(--neumorphism-thumb)"),
         ("ha-switch-thumb-box-shadow", shadow(2, 5)),
-        ("switch-unchecked-track-color", m["track"]),
-        ("switch-unchecked-button-color", m["thumb"]),
-        ("slider-track-color", m["track"]),
-        ("scrollbar-thumb-color", m["track"]),
+        ("switch-unchecked-track-color", "var(--neumorphism-track)"),
+        ("switch-unchecked-button-color", "var(--neumorphism-thumb)"),
+        ("slider-track-color", "var(--neumorphism-track)"),
+        ("scrollbar-thumb-color", "var(--neumorphism-track)"),
         ("# Tabellen, Code, Badges", None),
         ("table-header-background-color", "var(--card-background-color)"),
         ("table-row-background-color", "var(--card-background-color)"),
@@ -276,8 +326,11 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("markdown-code-background-color", "var(--secondary-background-color)"),
         ("code-editor-background-color", "var(--secondary-background-color)"),
         ("label-badge-background-color", "var(--card-background-color)"),
-        ("ha-assist-chip-filled-container-color", m["inset"]),
-        ("chip-background-color", m["inset"]),
+        ("ha-assist-chip-filled-container-color", "var(--secondary-background-color)"),
+        ("chip-background-color", "var(--secondary-background-color)"),
+        ("# Rundung", None),
+        *[(f"ha-border-radius-{name}", radius(px)) for name, px in HA_RADII.items()],
+        ("ha-border-radius-pill", f"calc(9999px * min(1, {RADIUS} * 1000))"),
     ]
 
 

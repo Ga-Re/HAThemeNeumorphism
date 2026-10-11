@@ -3,12 +3,12 @@
   "name": "Neumorphism",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": ["frontend", "http"],
+  "dependencies": ["frontend", "http", "websocket_api"],
   "documentation": "https://github.com/Ga-Re/HAThemeNeumorphism",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/Ga-Re/HAThemeNeumorphism/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "6.2.2"
+  "version": "7.0.0"
 }

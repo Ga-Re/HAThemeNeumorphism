@@ -1,0 +1,32 @@
+# Legt für jede neue Version (manifest.json) ein GitHub-Release an. HACS zeigt damit die
+# Versionsnummer und die Änderungen aus CHANGELOG.md an.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [custom_components/neumorphism/manifest.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release anlegen, falls es die Version noch nicht gibt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r .version custom_components/neumorphism/manifest.json)
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "v$version gibt es schon"
+            exit 0
+          fi
+          # Abschnitt "## <Version>" aus CHANGELOG.md als Beschreibung
+          awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Version $version" > notes.md
+          gh release create "v$version" --title "$version" --notes-file notes.md --target "$GITHUB_SHA"

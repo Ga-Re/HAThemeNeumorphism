@@ -4,7 +4,10 @@ Die Integration
 - registriert das Theme aus theme/neumorphism.yaml direkt im Frontend
   (kein Eintrag `frontend: themes:` in der configuration.yaml nötig),
 - liefert www/neumorphism-colors.js aus und lädt es auf jeder Seite
-  (kein `extra_module_url` nötig).
+  (kein `extra_module_url` nötig),
+- hält den Standard für alle Benutzer (Optionen der Integration) und Vorgaben aus
+  Automationen (Aktionen neumorphism.set_style und neumorphism.reset_style) bereit;
+  das Frontend erhält beides über die WebSocket-Schnittstelle neumorphism/subscribe.
 """
 
 from __future__ import annotations
@@ -13,16 +16,33 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import voluptuous as vol
+
+from homeassistant.components import websocket_api
 from homeassistant.components.frontend import add_extra_js_url, remove_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_THEMES_UPDATED
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.yaml import load_yaml_dict
 
 from .const import DOMAIN, JS_FILE, STATIC_URL, THEMES_DIR, THEMES_FILE, VERSION
+from .settings import FIELDS, STYLE_SCHEMA, clean, from_frontend, to_frontend
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# Einstellungen geändert (Standard für alle oder Vorgabe einer Automation)
+SIGNAL_SETTINGS = f"{DOMAIN}_settings_updated"
+STORAGE_VERSION = 1
+SERVICE_SET_STYLE = "set_style"
+SERVICE_RESET_STYLE = "reset_style"
+RESET_SCHEMA = vol.Schema({vol.Optional("settings"): vol.All(cv.ensure_list, [vol.In(list(FIELDS))])})
 
 # Schlüssel, unter denen das Frontend Themes und Standard-Themes ablegt.
 DATA_THEMES = "frontend_themes"
@@ -32,6 +52,72 @@ DATA_DEFAULT_DARK_THEME = "frontend_default_dark_theme"
 
 BASE_DIR = Path(__file__).parent
 JS_URL = f"{STATIC_URL}/{JS_FILE}?v={VERSION}"
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Schnittstelle zum Frontend und Aktionen, unabhängig vom Eintrag."""
+    data = hass.data.setdefault(DOMAIN, {})
+    store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.style")
+    stored = await store.async_load() or {}
+    data.update(store=store, style=clean(stored.get("style") or {}), defaults={})
+
+    websocket_api.async_register_command(hass, ws_subscribe)
+    websocket_api.async_register_command(hass, ws_set_defaults)
+
+    async def set_style(call: ServiceCall) -> None:
+        """Vorgaben für alle Benutzer und Geräte, bis sie aufgehoben werden."""
+        data["style"] = clean({**data["style"], **call.data})
+        await _async_style_changed(hass)
+
+    async def reset_style(call: ServiceCall) -> None:
+        """Vorgaben ganz oder für einzelne Einstellungen aufheben."""
+        names = call.data.get("settings")
+        data["style"] = {key: value for key, value in data["style"].items() if names and key not in names}
+        await _async_style_changed(hass)
+
+    hass.services.async_register(DOMAIN, SERVICE_SET_STYLE, set_style, schema=STYLE_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_RESET_STYLE, reset_style, schema=RESET_SCHEMA)
+    return True
+
+
+async def _async_style_changed(hass: HomeAssistant) -> None:
+    data = hass.data[DOMAIN]
+    await data["store"].async_save({"style": data["style"]})
+    async_dispatcher_send(hass, SIGNAL_SETTINGS)
+
+
+def _frontend_settings(hass: HomeAssistant) -> dict[str, Any]:
+    data = hass.data.get(DOMAIN, {})
+    return {"defaults": to_frontend(data.get("defaults", {})), "style": to_frontend(data.get("style", {}))}
+
+
+@websocket_api.websocket_command({vol.Required("type"): "neumorphism/subscribe"})
+@callback
+def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Standard für alle Benutzer und Vorgaben aus Automationen, bei jeder Änderung erneut."""
+
+    @callback
+    def send() -> None:
+        connection.send_message(websocket_api.event_message(msg["id"], _frontend_settings(hass)))
+
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, SIGNAL_SETTINGS, send)
+    connection.send_result(msg["id"])
+    send()
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): "neumorphism/set_defaults", vol.Required("defaults"): dict}
+)
+@callback
+def ws_set_defaults(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Einstellungen aus dem Profil als Standard für alle Benutzer übernehmen."""
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)), None)
+    if entry is None:
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Neumorphism is not set up")
+        return
+    hass.config_entries.async_update_entry(entry, options=from_frontend(msg["defaults"]))
+    connection.send_result(msg["id"])
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -63,7 +149,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_restore_default_themes(hass, themes)
     data["themes"] = themes
     data["unsub"] = hass.bus.async_listen(EVENT_THEMES_UPDATED, _inject_themes)
+
+    # Standard für alle Benutzer aus den Optionen; Änderungen gelten sofort, ohne Neuladen
+    data["defaults"] = clean(dict(entry.options))
+    async_dispatcher_send(hass, SIGNAL_SETTINGS)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    hass.data[DOMAIN]["defaults"] = clean(dict(entry.options))
+    async_dispatcher_send(hass, SIGNAL_SETTINGS)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -72,6 +168,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unsub := data.pop("unsub", None):
         unsub()
     remove_extra_js_url(hass, JS_URL)
+    data["defaults"] = {}
 
     themes = data.pop("themes", {})
     hass.data[DATA_THEMES] = {

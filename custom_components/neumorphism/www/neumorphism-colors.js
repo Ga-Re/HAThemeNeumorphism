@@ -1,8 +1,8 @@
 /*
- * Neumorphism für Home Assistant: Farbwähler, Effektstärke und Formung
+ * Neumorphism für Home Assistant: Einstellungen, Formung und Anpassung von allem
  *
- * - Zeigt im Profil unter "Design" Farbwähler für Primär- und Akzentfarbe, einen
- *   Regler für die Effektstärke und die Schalter für eigene Karten und Add-ons,
+ * - Zeigt im Profil unter "Design" alle Einstellungen (Farben, Hintergrund, Effektstärke,
+ *   Licht, Oberfläche, Kontrast, Rundung, Schrift, Sektionen, Bewegung, Bereiche, Gerät),
  *   sobald das Theme "Neumorphism" gewählt ist.
  * - Stellt die Karte "custom:neumorphism-color-card" bereit (gleiche Einstellungen).
  * - Wendet die Einstellungen auf das aktive Theme an.
@@ -12,14 +12,15 @@
  *   Integrationen, HACS, Oberflächen von Add-ons), wird automatisch erkannt und nach Farbe
  *   und Form eingeordnet, ohne Regeln für einzelne Integrationen oder Add-ons.
  *
- * Gespeichert wird in den Theme-Einstellungen des Benutzers (primaryColor,
- * accentColor, neumorphismStrength, neumorphismCards, neumorphismApps,
- * neumorphismAppsOff), dort wo Home Assistant auch die Farben des Standard-Themes ablegt.
+ * Gespeichert wird beim Benutzer in den Theme-Einstellungen (primaryColor, accentColor und
+ * neumorphism..., siehe USER_KEYS), dort wo Home Assistant auch die Farben des Standard-Themes
+ * ablegt, oder nur für dieses Gerät im Browser (DEVICE_KEY). Standard für alle Benutzer und
+ * Vorgaben aus Automationen kommen von der Integration (neumorphism/subscribe).
  *
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "6.2.2";
+const VERSION = "7.0.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -43,6 +44,8 @@ const HEX_RE = /^#[0-9a-f]{6}$/i;
 // (erhaben wird eingelassen und umgekehrt). Der Regler zeigt -100 bis +100, also Faktor * 50.
 const STRENGTH_MAX = 2;
 const STRENGTH_SCALE = 50;
+// Rundung als Faktor für alle Radien: 1 ist der Standard, 0 eckig. Der Regler zeigt Prozent.
+const RADIUS_MAX = 2;
 
 // ---------------------------------------------------------------------------
 // Farbrechnung (sRGB <-> OKLCH), wie im Home-Assistant-Frontend
@@ -158,8 +161,15 @@ function colorVars(primary, accent) {
 }
 
 // ---------------------------------------------------------------------------
-// Farben lesen, speichern, anwenden
+// Einstellungen: Ebenen, Speichern, Anwenden
 // ---------------------------------------------------------------------------
+//
+// Jede Einstellung kommt aus der obersten Ebene, die sie festlegt:
+//   Automation (Aktion neumorphism.set_style, gilt für alle)
+//   > dieses Gerät (wenn eigene Einstellungen eingeschaltet sind, im Browser gespeichert)
+//   > Benutzer (Theme-Einstellungen im Profil, auf allen Geräten des Benutzers gleich)
+//   > Standard für alle Benutzer (Integration, vom Administrator festgelegt)
+//   > eingebaute Standardwerte
 
 // Jeder Schritt für sich: Ein Fehler in einem Teil soll die anderen nicht aufhalten.
 function safely(fn) {
@@ -174,48 +184,306 @@ function safely(fn) {
 const normalize = (value) => (typeof value === "string" && HEX_RE.test(value.trim()) ? value.trim().toLowerCase() : "");
 const getRoot = () => document.querySelector("home-assistant");
 const getHass = () => getRoot()?.hass;
+const haDark = () => !!getHass()?.themes?.darkMode;
 
 const clampStrength = (value) => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(STRENGTH_MAX, Math.max(-STRENGTH_MAX, number)) : null;
 };
+const clampRadius = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(RADIUS_MAX, Math.max(0, number)) : null;
+};
 
-function storedSettings(hass = getHass()) {
-  const theme = hass?.selectedTheme || {};
+// Auswahlwerte, gleiche Namen wie in der Integration (Standard für alle, Aktionen)
+const CHOICES = {
+  light: ["top_left", "top", "top_right"],
+  surface: ["flat", "convex", "concave"],
+  tint: ["standard", "gray", "warm", "sand", "mint", "rose", "blue", "primary"],
+  font: ["standard", "round"],
+  contrast: ["normal", "high"],
+  glow: ["on", "off"],
+  motion: ["on", "off"],
+  sections: ["open", "well"],
+  cards: ["full", "frame", "off"],
+  apps: ["full", "off"],
+};
+// Name in den Theme-Einstellungen des Benutzers (wie primaryColor von Home Assistant)
+const USER_KEYS = {
+  primary: "primaryColor",
+  accent: "accentColor",
+  strength: "neumorphismStrength",
+  light: "neumorphismLight",
+  surface: "neumorphismSurface",
+  tint: "neumorphismTint",
+  radius: "neumorphismRadius",
+  font: "neumorphismFont",
+  contrast: "neumorphismContrast",
+  glow: "neumorphismGlow",
+  motion: "neumorphismMotion",
+  sections: "neumorphismSections",
+  cards: "neumorphismCards",
+  apps: "neumorphismApps",
+  appsOff: "neumorphismAppsOff",
+};
+const SETTING_KEYS = Object.keys(USER_KEYS);
+const BUILTIN = {
+  primary: "",
+  accent: "",
+  strength: 1,
+  light: "top_left",
+  surface: "flat",
+  tint: "standard",
+  radius: 1,
+  font: "standard",
+  contrast: "normal",
+  glow: "on",
+  motion: "on",
+  sections: "open",
+  cards: "full",
+  apps: "full",
+  appsOff: [],
+};
+
+function parseSetting(key, value) {
+  if (value === undefined || value === null) return null;
+  if (key === "primary" || key === "accent") return normalize(value) || null;
+  if (key === "strength") return clampStrength(value);
+  if (key === "radius") return clampRadius(value);
+  if (key === "appsOff") return Array.isArray(value) ? value.filter((v) => typeof v === "string") : null;
+  return CHOICES[key]?.includes(value) ? value : null;
+}
+
+/** Gültige Werte einer Ebene; names übersetzt die Schlüssel (Theme-Einstellungen des Benutzers). */
+function readLayer(source, names = null) {
+  const out = {};
+  if (!source || typeof source !== "object") return out;
+  for (const key of SETTING_KEYS) {
+    const value = parseSetting(key, source[names ? names[key] : key]);
+    if (value !== null) out[key] = value;
+  }
+  return out;
+}
+
+// Dieses Gerät: { own: eigene Einstellungen?, settings, mode: "light" | "dark", saver: Sparmodus }
+const DEVICE_KEY = "neumorphism-device";
+let deviceCache = null;
+
+function device() {
+  if (!deviceCache) {
+    try {
+      const data = JSON.parse(localStorage.getItem(DEVICE_KEY) || "{}");
+      deviceCache = data && typeof data === "object" ? data : {};
+    } catch {
+      deviceCache = {}; // privates Fenster oder gesperrter Speicher
+    }
+  }
+  return deviceCache;
+}
+
+function saveDevice(patch) {
+  const next = { ...device(), ...patch };
+  for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key];
+  deviceCache = next;
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(next));
+  } catch {
+    // nur für diese Sitzung
+  }
+}
+
+const saver = () => device().saver === true;
+
+// Von der Integration: Standard für alle Benutzer und Vorgaben aus Automationen
+const backend = { defaults: {}, style: {}, connection: null, available: false };
+
+function subscribeBackend() {
+  const connection = getHass()?.connection;
+  if (!connection || backend.connection === connection) return;
+  backend.connection = connection;
+  connection
+    .subscribeMessage(
+      (message) => {
+        backend.defaults = readLayer(message.defaults);
+        backend.style = readLayer(message.style);
+        backend.available = true;
+        tick();
+      },
+      { type: "neumorphism/subscribe" }
+    )
+    .catch((err) => {
+      // Integration noch nicht bereit: beim nächsten Takt erneut (ohne die Schnittstelle: nie)
+      if (err?.code !== "unknown_command") backend.connection = null;
+    });
+}
+
+const userLayer = (hass = getHass()) => readLayer(hass?.selectedTheme, USER_KEYS);
+const deviceLayer = () => (device().own ? readLayer(device().settings) : {});
+
+// Vorschau beim Ziehen, bevor der Wert gespeichert ist.
+const preview = {};
+
+/** Was im Profil bearbeitet wird: alle Ebenen ohne Automation. */
+function baseSettings(hass = getHass()) {
+  return { ...BUILTIN, ...backend.defaults, ...userLayer(hass), ...deviceLayer() };
+}
+
+/** Was gerade gilt. */
+function settings(hass = getHass()) {
+  return { ...baseSettings(hass), ...backend.style, ...preview };
+}
+
+/**
+ * Speichert beim Benutzer (wie das Profil von Home Assistant) oder, mit eigenen Einstellungen,
+ * nur auf diesem Gerät. undefined entfernt einen Wert.
+ */
+function saveSettings(patch) {
+  if (device().own) {
+    const next = { ...device().settings };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete next[key];
+      else next[key] = value;
+    }
+    saveDevice({ settings: next });
+    return;
+  }
+  const detail = {};
+  for (const [key, value] of Object.entries(patch)) detail[USER_KEYS[key]] = value;
+  getRoot()?.dispatchEvent(new CustomEvent("settheme", { detail, bubbles: true, composed: true }));
+}
+
+// Lichtrichtung: Versatz der Schatten (der Schatten fällt vom Licht weg) und Winkel der Wölbung
+const LIGHTS = {
+  top_left: {},
+  top: { "neumorphism-light-x": "0", "neumorphism-light-y": "1.3", "neumorphism-light-angle": "180deg" },
+  top_right: { "neumorphism-light-x": "-1", "neumorphism-light-y": "1", "neumorphism-light-angle": "225deg" },
+};
+
+// Hintergrund-Farbton: Farbton (Grad, null = Primärfarbe) und Buntheit im Hell- und Dunkelmodus.
+// Helligkeiten bleiben wie im Theme, nur Farbton und Buntheit ändern sich.
+const TINTS = {
+  gray: [0, 0, 0],
+  warm: [75, 0.012, 0.01],
+  sand: [85, 0.024, 0.016],
+  mint: [170, 0.025, 0.018],
+  rose: [15, 0.022, 0.016],
+  blue: [255, 0.025, 0.035],
+  primary: [null, 0.025, 0.022],
+};
+const BASE_PALETTE = {
+  light: { bg: "#e4e8ef", inset: "#dce1e9", track: "#d5dbe4", thumb: "#f2f4f8", shadowDark: "#a3aec2", shadowLight: "#ffffff" },
+  dark: { bg: "#292d35", inset: "#25292f", track: "#22252b", thumb: "#343943", shadowDark: "#0c0d10", shadowLight: "#464d5b" },
+};
+const rgbTriplet = (hex) => hexToRgb(hex).map((c) => Math.round(c * 255)).join(", ");
+
+function tintPalette(tint, dark, primary) {
+  const base = BASE_PALETTE[dark ? "dark" : "light"];
+  const spec = TINTS[tint];
+  if (!spec) return base;
+  const bgChroma = hexToOklch(base.bg)[1];
+  const hue = spec[0] === null ? hexToOklch(primary || "#3d7bfd")[2] : (spec[0] * Math.PI) / 180;
+  const chroma = spec[dark ? 2 : 1];
+  const out = {};
+  for (const [name, hex] of Object.entries(base)) {
+    const [L, C] = hexToOklch(hex);
+    out[name] = oklchToHex(L, bgChroma ? chroma * (C / bgChroma) : chroma, hue);
+  }
+  return out;
+}
+
+function tintVars(tint, dark, primary) {
+  if (!TINTS[tint]) return {};
+  const p = tintPalette(tint, dark, primary);
   return {
-    primary: normalize(theme.primaryColor),
-    accent: normalize(theme.accentColor),
-    strength: theme.neumorphismStrength == null ? null : clampStrength(theme.neumorphismStrength),
-    cards: ["full", "frame", "off"].includes(theme.neumorphismCards) ? theme.neumorphismCards : "full",
-    cardsStored: theme.neumorphismCards != null,
-    apps: theme.neumorphismApps === "off" ? "off" : "full",
-    appsOff: Array.isArray(theme.neumorphismAppsOff) ? theme.neumorphismAppsOff.filter((v) => typeof v === "string") : [],
-    appsStored: theme.neumorphismApps != null || theme.neumorphismAppsOff != null,
+    "primary-background-color": p.bg,
+    "card-background-color": p.bg,
+    "secondary-background-color": p.inset,
+    "rgb-primary-background-color": rgbTriplet(p.bg),
+    "rgb-card-background-color": rgbTriplet(p.bg),
+    "rgb-secondary-background-color": rgbTriplet(p.inset),
+    "neumorphism-track": p.track,
+    "neumorphism-thumb": p.thumb,
+    "neumorphism-shadow-dark-rgb": rgbTriplet(p.shadowDark),
+    "neumorphism-shadow-light-rgb": rgbTriplet(p.shadowLight),
+    "mdc-dialog-scrim-color": `rgba(${rgbTriplet(dark ? p.shadowDark : p.bg)}, 0.55)`,
   };
 }
 
-/** Speichert wie das Profil von Home Assistant: pro Benutzer in den Theme-Einstellungen. */
-function saveSettings(patch) {
-  getRoot()?.dispatchEvent(new CustomEvent("settheme", { detail: patch, bubbles: true, composed: true }));
+// Kontrastmodus: kräftigere Schrift und Linien (Schatten und Kanten regelt das Theme)
+const CONTRAST_TEXT = {
+  light: ["#1d2330", "#4a5365", "#7f8798"],
+  dark: ["#f6f7f9", "#c8cdd6", "#8c93a1"],
+};
+
+function contrastVars(dark) {
+  const [text, text2, disabled] = CONTRAST_TEXT[dark ? "dark" : "light"];
+  const ink = rgbTriplet(text);
+  return {
+    "neumorphism-contrast": "1",
+    "primary-text-color": text,
+    "secondary-text-color": text2,
+    "disabled-text-color": disabled,
+    "rgb-primary-text-color": ink,
+    "rgb-secondary-text-color": rgbTriplet(text2),
+    "divider-color": `rgba(${ink}, 0.16)`,
+    "outline-color": `rgba(${ink}, 0.16)`,
+    "ha-color-border-neutral-quiet": `rgba(${ink}, 0.16)`,
+  };
 }
 
-// Vorschau beim Ziehen, bevor der Wert gespeichert ist.
-const preview = { primary: "", accent: "", strength: null };
+// Runde Schrift (Nunito, SIL Open Font License), liegt der Integration bei
+const FONT_FAMILY = '"Nunito Neumorphism"';
+const FONT_FACES = [
+  ["latin-ext", "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF"],
+  ["latin", "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"],
+]
+  .map(
+    ([subset, range]) =>
+      `@font-face { font-family: ${FONT_FAMILY}; font-style: normal; font-display: swap; font-weight: 200 1000;
+  src: url(/neumorphism_static/fonts/nunito-${subset}-wght-normal.woff2) format("woff2"); unicode-range: ${range}; }`
+  )
+  .join("\n");
+const FONT_STACK = `${FONT_FAMILY}, Roboto, Noto, sans-serif`;
+const FONT_VARS = {
+  "ha-font-family-body": FONT_STACK,
+  "ha-font-family-heading": FONT_STACK,
+  "mdc-typography-font-family": FONT_STACK,
+  "paper-font-common-base_-_font-family": FONT_STACK,
+};
+
+/** Alle eigenen Variablen für die aktuellen Einstellungen. */
+function settingsVars(s, dark) {
+  const primary = s.primary || normalize(getComputedStyle(document.documentElement).getPropertyValue("--primary-color"));
+  const vars = colorVars(s.primary, s.accent);
+  // Alle Schatten des Themes sind mit dieser Variable multipliziert.
+  if (s.strength !== 1) vars["neumorphism-strength"] = String(s.strength);
+  Object.assign(vars, LIGHTS[s.light] || {});
+  if (s.radius !== 1) vars["neumorphism-radius"] = String(s.radius);
+  if (s.surface !== "flat") vars["neumorphism-surface-image"] = `var(--neumorphism-${s.surface})`;
+  Object.assign(vars, tintVars(s.tint, dark, primary));
+  if (s.contrast === "high") Object.assign(vars, contrastVars(dark));
+  if (s.font === "round") Object.assign(vars, FONT_VARS);
+  // Weichgezeichneter Hintergrund hinter Dialogen kostet auf schwachen Geräten viel
+  if (saver()) vars["ha-dialog-scrim-backdrop-filter"] = "none";
+  return vars;
+}
+
 let applied = null;
-let colorCss = ""; // eigene Farben und Effektstärke, auch für eingebettete Seiten
+let appliedVars = {}; // eigene Variablen, auch für eingebettete Seiten
+let fontCss = "";
 
 function neumorphismActive() {
   return getComputedStyle(document.documentElement).getPropertyValue(MARKER_VAR).trim() !== "";
 }
 
-function applyColors() {
+function applySettings() {
+  safely(subscribeBackend);
+  safely(applyDeviceMode);
   const active = neumorphismActive();
-  setControlsActive(active);
-  const stored = storedSettings();
-  const primary = preview.primary || stored.primary;
-  const accent = preview.accent || stored.accent;
-  const strength = preview.strength ?? stored.strength;
-  const key = active ? `${primary}|${accent}|${strength}` : "";
+  const s = settings();
+  const dark = haDark();
+  setControlsActive(active, s);
+  const key = active ? JSON.stringify([s, dark, saver()]) : "";
   if (key === applied) return;
   applied = key;
 
@@ -225,15 +493,49 @@ function applyColors() {
     style.id = STYLE_ID;
     document.head.appendChild(style);
   }
+  appliedVars = active ? settingsVars(s, dark) : {};
+  fontCss = active && s.font === "round" ? FONT_FACES : "";
   // !important schlägt die Inline-Variablen, die Home Assistant für das Theme auf <html> setzt.
-  const vars = active ? colorVars(primary, accent) : {};
-  // Alle Schatten des Themes sind mit dieser Variable multipliziert.
-  if (active && strength !== null) vars["neumorphism-strength"] = String(strength);
-  const body = Object.entries(vars)
+  const body = Object.entries(appliedVars)
     .map(([name, value]) => `--${name}: ${value} !important;`)
     .join(" ");
-  colorCss = body;
-  style.textContent = body ? `html { ${body} }` : "";
+  style.textContent = `${fontCss}\n${body ? `html { ${body} }` : ""}`;
+  // Home Assistant färbt <html> beim Theme-Wechsel mit dem Hintergrund (sichtbar beim Überscrollen)
+  if (active) {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--primary-background-color").trim();
+    if (bg && document.documentElement.style.backgroundColor !== bg) document.documentElement.style.backgroundColor = bg;
+  }
+}
+
+/**
+ * Fester Hell- oder Dunkelmodus nur für dieses Gerät: Home Assistant wählt den Modus beim
+ * Anwenden des Themes aus den Einstellungen des Benutzers. Für dieses Gerät wird dort nur
+ * der Modus ersetzt, gespeichert wird nichts.
+ */
+let modeApplied = ""; // "" = wie im Profil
+function applyDeviceMode() {
+  const root = getRoot();
+  if (!root || typeof root._applyTheme !== "function") return;
+  if (!root.__neumorphismMode) {
+    const original = root._applyTheme;
+    root._applyTheme = function (...args) {
+      const mode = device().mode;
+      const selected = this.hass?.selectedTheme;
+      if ((mode !== "light" && mode !== "dark") || !this.hass) return original.apply(this, args);
+      this.hass.selectedTheme = { ...selected, dark: mode === "dark" };
+      try {
+        return original.apply(this, args);
+      } finally {
+        if (this.hass) this.hass.selectedTheme = selected;
+      }
+    };
+    root.__neumorphismMode = true;
+  }
+  // Auch beim Start: Home Assistant hat das Theme womöglich schon vor diesem Skript angewendet
+  const mode = device().mode || "";
+  if (mode === modeApplied) return;
+  modeApplied = mode;
+  root._applyTheme(matchMedia("(prefers-color-scheme: dark)").matches);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +549,10 @@ const RAISED_L = "var(--neumorphism-raised-shadow-l)";
 const RAISED_S = "var(--neumorphism-raised-shadow-s, var(--neumorphism-raised-shadow))";
 const INSET = "var(--neumorphism-inset-shadow)";
 const INSET_S = "var(--neumorphism-inset-shadow-s)";
+const INSET_L = "var(--neumorphism-inset-shadow-l, var(--neumorphism-inset-shadow))";
 const SURFACE = "var(--card-background-color)";
+// Gewölbte oder gemuldete Oberfläche erhabener Flächen (Verlauf über der Flächenfarbe), sonst none
+const SHEEN = "var(--neumorphism-surface-image, none)";
 const PILL = "var(--ha-border-radius-pill, 999px)";
 const STRENGTH = "var(--neumorphism-strength, 1)";
 // Knopfgruppen liegen über ihrer Tropfenform (siehe updateDroplets).
@@ -262,7 +567,7 @@ const HEADER_FADE = `content: ""; position: absolute; left: 0; right: 0; top: 10
 const CONTROL_STYLES = {
   // Knöpfe in Kacheln und Detailansichten (z. B. +/–, Modus, Szenen)
   "ha-control-button": `
-    .button { background: ${SURFACE}; box-shadow: ${RAISED}; }
+    .button { background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED}; }
     .button::before { opacity: max(0, calc((var(--control-button-background-opacity) - 0.2) * 1.25)) !important; }
     .button:not(:disabled):active { box-shadow: ${INSET_S}; }
   `,
@@ -271,14 +576,14 @@ const CONTROL_STYLES = {
     .switch { box-shadow: ${INSET}; }
     .switch .background { opacity: 0 !important; }
     .switch[checked] .background { opacity: 0.12 !important; }
-    .switch .button { background-color: ${SURFACE} !important; color: var(--secondary-text-color); box-shadow: ${RAISED}; }
+    .switch .button { background-color: ${SURFACE} !important; background-image: ${SHEEN}; color: var(--secondary-text-color); box-shadow: ${RAISED}; }
     .switch[checked] .button { background-color: var(--control-switch-on-color) !important; color: white; }
   `,
   // Auswahlknöpfe (Modus, Stufen): eingelassene Leiste, gewählte Option erhaben
   "ha-control-select": `
     .container { box-shadow: ${INSET}; border-radius: var(--control-select-border-radius); }
     .container::before { opacity: 0 !important; }
-    .option.selected { box-shadow: ${RAISED}; }
+    .option.selected { box-shadow: ${RAISED}; background-image: ${SHEEN}; }
   `,
   // Schieber (Helligkeit, Position ...): eingelassene Spur
   "ha-control-slider": `
@@ -295,12 +600,16 @@ const CONTROL_STYLES = {
   // Runde Knöpfe mit Rahmen (z. B. +/– am Thermostat)
   "ha-outlined-icon-button": `
     :host { --md-outlined-icon-button-outline-width: 0px; --md-outlined-icon-button-outline-color: transparent; }
-    .icon-button { background: ${SURFACE}; box-shadow: ${RAISED_L}; }
+    .icon-button { background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED_L}; }
     .icon-button:active { box-shadow: ${INSET_S}; }
   `,
   // Symbol links in Kacheln
   "ha-tile-icon": `
     .container { box-shadow: ${RAISED}; }
+  `,
+  // Karten: Wölbung (die Fläche selbst kommt aus dem Theme)
+  "ha-card": `
+    :host { background-image: ${SHEEN}; }
   `,
   // Umschalter in Listen und Einstellungen
   "ha-switch": `
@@ -324,7 +633,7 @@ const CONTROL_STYLES = {
   // Symbol-Knöpfe sind flach, erhaben werden sie erst als Gruppe in der Titelleiste
   // Buttons, die mit Nachbarn eine gemeinsame Form haben (siehe updateButtonGroups)
   "ha-button": `
-    :host([appearance="outlined"]) .button { border-color: transparent !important; background-color: ${SURFACE}; }
+    :host([appearance="outlined"]) .button { border-color: transparent !important; background-color: ${SURFACE}; background-image: ${SHEEN}; }
     :host([slot="fab"]) .button { box-shadow: ${RAISED_L} !important; }
     :host([neumorphism-merged]) { position: relative; z-index: 1; }
     :host([neumorphism-merged]) .button { box-shadow: none !important; }
@@ -368,7 +677,7 @@ const CONTROL_STYLES = {
     div { isolation: isolate; }
     :host(:not([narrow])[active]) div { border-bottom: none !important; }
     :host([active]) div::after { content: ""; position: absolute; inset: 9px 8px; z-index: -1;
-      border-radius: ${PILL}; background: ${SURFACE}; box-shadow: ${RAISED_S}; }
+      border-radius: ${PILL}; background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED_S}; }
     :host([narrow][active]) div::after { inset: 7px 4px; border-radius: 18px; }
   `,
   "ha-tab-group": `
@@ -389,20 +698,20 @@ const CONTROL_STYLES = {
   "ha-tab-group-tab": `
     .tab { position: relative; isolation: isolate; }
     :host([active]) .tab::before { content: ""; position: absolute; inset: 9px 2px; z-index: -1;
-      border-radius: ${PILL}; background: ${SURFACE}; box-shadow: ${RAISED_S}; }
+      border-radius: ${PILL}; background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED_S}; }
     /* In der Titelleiste gehört die Pille zur Tropfenform der Knöpfe (siehe headerTabsGroup) */
     :host([neumorphism-header][active]) .tab::before { display: none; }
   `,
   // Filter- und Auswahl-Chips: erhaben statt umrandet
   "ha-assist-chip": `
-    :host([appearance="outlined"]) .button { border-color: transparent !important; background-color: ${SURFACE}; box-shadow: ${RAISED}; }
+    :host([appearance="outlined"]) .button { border-color: transparent !important; background-color: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED}; }
     /* ältere Fassung (z. B. in HACS) */
     .container:has(> .outline) { background: ${SURFACE}; box-shadow: ${RAISED}; }
     .outline { border-color: transparent !important; }
   `,
   // Aufklappbare Abschnitte mit Rahmen: erhaben statt umrandet
   "ha-expansion-panel": `
-    :host([outlined]) { border-color: transparent !important; background: ${SURFACE}; box-shadow: ${RAISED}; }
+    :host([outlined]) { border-color: transparent !important; background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED}; }
     .top.focused { background: transparent; }
   `,
   // Ältere umrandete Eingabefelder (z. B. die Suche in HACS): eingelassen
@@ -435,6 +744,56 @@ const CONTROL_STYLES = {
   `,
 };
 
+// Zuschaltbare Teile (Einstellungen im Profil), pro Element wie CONTROL_STYLES.
+const GLOW_ICON = "drop-shadow(0 0 5px color-mix(in srgb, currentColor 70%, transparent))";
+const NOT_UNKNOWN = ':not([data-state="unavailable"]):not([data-state="unknown"])';
+const motion = (css) => `@media (prefers-reduced-motion: no-preference) { ${css} }`;
+const FEATURE_STYLES = {
+  // Aktive Geräte leuchten sanft in ihrer Zustandsfarbe
+  glow: {
+    "hui-tile-card": `ha-card.active { --nm-glow-color: var(--tile-color); }`,
+    "ha-tile-icon": `.container { box-shadow: ${RAISED},
+      0 0 18px 2px color-mix(in srgb, var(--nm-glow-color, transparent) 50%, transparent); }`,
+    "hui-entity-badge": `ha-badge.active { --nm-icon-glow: ${GLOW_ICON}; }`,
+    // Schaltfläche und Zeilen: die Zustandsfarbe aktiver Geräte verweist nicht auf "inactive"
+    "hui-button-card": `ha-card[style*="--state-color"]:not([style*="inactive"]) ha-state-icon${NOT_UNKNOWN} { --nm-icon-glow: ${GLOW_ICON}; }`,
+    "state-badge": `ha-state-icon[style*="color"]:not([style*="inactive"])${NOT_UNKNOWN} { --nm-icon-glow: ${GLOW_ICON}; }`,
+    "ha-state-icon": `ha-icon, ha-svg-icon { filter: var(--nm-icon-glow, none); }`,
+    "ha-control-switch": `.switch[checked] .button { box-shadow: ${RAISED},
+      0 0 14px 1px color-mix(in srgb, var(--control-switch-on-color) 55%, transparent); }`,
+  },
+  // Drücken sinkt ein, Wechsel gleiten statt zu springen
+  motion: {
+    "ha-control-button": motion(`.button { transition: box-shadow 180ms ease, transform 140ms ease; }
+      .button:not(:disabled):active { transform: scale(0.96); }`),
+    "ha-control-switch": motion(`.switch .button { transition: transform 180ms ease-in-out, box-shadow 240ms ease, background-color 240ms ease !important; }`),
+    "ha-control-select": motion(`.option { transition: box-shadow 240ms ease, background-color 240ms ease, color 240ms ease; }`),
+    "ha-outlined-icon-button": motion(`.icon-button { transition: box-shadow 160ms ease, transform 120ms ease; }
+      .icon-button:active { transform: scale(0.95); }`),
+    "ha-button": motion(`.button { transition: box-shadow 160ms ease, transform 120ms ease, background-color 160ms ease; }
+      :host(:not([disabled])) .button:active { transform: scale(0.97); box-shadow: ${INSET_S} !important; }`),
+    "hui-tile-card": motion(`ha-card { transition: box-shadow 220ms ease, transform 160ms ease; }
+      ha-card:has(> .background:active) { transform: scale(0.985); box-shadow: ${RAISED_S}; }`),
+    "hui-button-card": motion(`ha-card { transition: box-shadow 220ms ease, transform 160ms ease; }
+      ha-card:active { transform: scale(0.97); box-shadow: ${INSET}; }`),
+    "ha-tile-icon": motion(`.container { transition: box-shadow 300ms ease; }`),
+    "ha-switch": motion(`.switch { transition: box-shadow 200ms ease; }`),
+    "ha-tab-group-tab": motion(`:host([active]) .tab::before { animation: nm-pill 260ms ease-out; }
+      @keyframes nm-pill { from { opacity: 0; transform: scale(0.85); } }`),
+    "ha-tab": motion(`:host([active]) div::after { animation: nm-pill 260ms ease-out; }
+      @keyframes nm-pill { from { opacity: 0; transform: scale(0.85); } }`),
+    "ha-sidebar": motion(`ha-list-item-button { transition: box-shadow 200ms ease; }`),
+    "ha-list-item": motion(`:host { transition: box-shadow 200ms ease; }`),
+    "ha-dropdown-item": motion(`:host { transition: box-shadow 200ms ease; }`),
+  },
+  // Sektionen eines Dashboards als Mulden, die Karten liegen erhaben darin
+  wells: {
+    "hui-sections-view": `
+      .section > .section-container { padding: var(--ha-space-3, 12px); box-shadow: ${INSET_L};
+        border-radius: calc(var(--ha-card-border-radius, 28px) + var(--ha-space-3, 12px)); }`,
+  },
+};
+
 const supportsSheets =
   typeof CSSStyleSheet !== "undefined" &&
   "replaceSync" in CSSStyleSheet.prototype &&
@@ -453,7 +812,7 @@ function controlSheet(tag, doc = document) {
   let sheet = sheets.get(tag);
   if (!sheet) {
     sheet = new doc.defaultView.CSSStyleSheet();
-    sheet.replaceSync(controlsActive ? CONTROL_STYLES[tag] : "");
+    sheet.replaceSync(controlCss(tag));
     sheets.set(tag, sheet);
   }
   return sheet;
@@ -467,16 +826,34 @@ function adoptControlStyle(root, tag) {
   }
 }
 
-/** Ein gemeinsames Stylesheet pro Element: leeren genügt, um alles abzuschalten. */
-function setControlsActive(active) {
-  if (active === controlsActive) return;
+let activeFeatures = [];
+let controlsKey = "";
+
+function controlCss(tag) {
+  if (!controlsActive) return "";
+  return [CONTROL_STYLES[tag] || "", ...activeFeatures.map((name) => FEATURE_STYLES[name][tag] || "")].join("\n");
+}
+
+const FEATURE_ON = {
+  glow: (s) => s.glow === "on",
+  motion: (s) => s.motion === "on" && !saver(),
+  wells: (s) => s.sections === "well",
+};
+
+/** Ein gemeinsames Stylesheet pro Element: neu füllen genügt, um alles umzuschalten. */
+function setControlsActive(active, s) {
+  const features = active ? Object.keys(FEATURE_STYLES).filter((name) => FEATURE_ON[name](s)) : [];
+  const key = `${active}|${features.join(",")}`;
+  if (key === controlsKey) return;
+  controlsKey = key;
   controlsActive = active;
+  activeFeatures = features;
   for (const [doc, sheets] of sheetSets) {
     if (doc !== document && !doc.defaultView) {
       sheetSets.delete(doc); // Fenster geschlossen
       continue;
     }
-    for (const [tag, sheet] of sheets) sheet.replaceSync(active ? CONTROL_STYLES[tag] : "");
+    for (const [tag, sheet] of sheets) sheet.replaceSync(controlCss(tag));
   }
 }
 
@@ -510,7 +887,8 @@ function trackHost(el, tag) {
 function patchControls(win = window) {
   if (!supportsSheets || win.__neumorphismPatched) return;
   win.__neumorphismPatched = true;
-  for (const tag of Object.keys(CONTROL_STYLES)) {
+  const tags = new Set([...Object.keys(CONTROL_STYLES), ...Object.values(FEATURE_STYLES).flatMap(Object.keys)]);
+  for (const tag of tags) {
     if (tag.startsWith("__")) continue;
     win.customElements.whenDefined(tag).then(() => {
       const proto = win.customElements.get(tag).prototype;
@@ -657,12 +1035,27 @@ function dropletPaint() {
     dropletProbe.style.cssText =
       "position:absolute;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;" +
       "color:var(--neumorphism-shadow-dark);background-color:var(--neumorphism-shadow-light);" +
-      "border:0 solid var(--card-background-color);";
+      "border:0 solid var(--card-background-color);outline:0 solid var(--neumorphism-sheen);" +
+      "text-decoration-color:var(--neumorphism-shade);caret-color:rgba(var(--rgb-primary-text-color),0.16);";
     document.body.appendChild(dropletProbe);
   }
   const css = getComputedStyle(dropletProbe);
-  const strength = clampStrength(getComputedStyle(document.documentElement).getPropertyValue("--neumorphism-strength").trim() || 1) ?? 1;
-  return { dark: css.color, light: css.backgroundColor, fill: css.borderTopColor, strength };
+  const root = getComputedStyle(document.documentElement);
+  const number = (name, fallback) => {
+    const value = parseFloat(root.getPropertyValue(name));
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const s = settings();
+  return {
+    dark: css.color,
+    light: css.backgroundColor,
+    fill: css.borderTopColor,
+    strength: clampStrength(number("--neumorphism-strength", 1)) ?? 1,
+    lx: number("--neumorphism-light-x", 1),
+    ly: number("--neumorphism-light-y", 1),
+    edge: number("--neumorphism-contrast", 0) > 0 ? css.caretColor : "",
+    surface: s.surface === "flat" ? null : { light: s.light, convex: s.surface === "convex", sheen: css.outlineColor, shade: css.textDecorationColor },
+  };
 }
 
 const fmt = (n) => (Math.round(n * 100) / 100).toString();
@@ -730,20 +1123,36 @@ const rgbaParts = (color) => {
   return [`rgb(${r},${g},${b})`, Number(a)];
 };
 
-/** Form mit Schatten: erhaben, bei negativer Effektstärke eingelassen (Schatten innen). */
-function dropletSvg(width, height, d, paint, id) {
+// Richtung des Verlaufs bei gewölbter Oberfläche (vom Licht zum Schatten)
+const GRADIENT_ENDS = { top_left: [0, 0, 1, 1], top: [0, 0, 0, 1], top_right: [1, 0, 0, 1] };
+
+/**
+ * Form mit Schatten: erhaben, bei negativer Effektstärke eingelassen (Schatten innen).
+ * caps: die einzelnen Pillen, für die Wölbung je mit eigenem Verlauf.
+ */
+function dropletSvg(width, height, d, paint, id, caps = []) {
   const s = Math.abs(paint.strength);
   const [dark, darkA] = rgbaParts(paint.dark);
   const [light, lightA] = rgbaParts(paint.light);
-  const shade = (source, dx, color, alpha, result) =>
-    `<feOffset in="${source}" dx="${fmt(dx * s)}" dy="${fmt(dx * s)}" result="${result}o"/>` +
+  // Schatten fällt vom Licht weg (Lichtrichtung aus dem Theme)
+  const shade = (source, k, color, alpha, result) =>
+    `<feOffset in="${source}" dx="${fmt(k * s * paint.lx)}" dy="${fmt(k * s * paint.ly)}" result="${result}o"/>` +
     `<feFlood flood-color="${color}" flood-opacity="${alpha}"/><feComposite in2="${result}o" operator="in" result="${result}"/>`;
+  // Kontrastmodus: feine Kante rund um die ganze Form
+  const [edgeColor, edgeA] = paint.edge ? rgbaParts(paint.edge) : [];
+  const edge = paint.edge
+    ? `<feMorphology in="SourceAlpha" operator="dilate" radius="1" result="e0"/>` +
+      `<feComposite in="e0" in2="SourceAlpha" operator="out" result="e1"/>` +
+      `<feFlood flood-color="${edgeColor}" flood-opacity="${edgeA}"/><feComposite in2="e1" operator="in" result="e"/>`
+    : "";
+  const edgeNode = paint.edge ? `<feMergeNode in="e"/>` : "";
   const filter =
     paint.strength >= 0
       ? `<feGaussianBlur in="SourceAlpha" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
         shade("b", 4, dark, darkA, "d") +
         shade("b", -4, light, lightA, "l") +
-        `<feMerge><feMergeNode in="d"/><feMergeNode in="l"/><feMergeNode in="SourceGraphic"/></feMerge>`
+        edge +
+        `<feMerge><feMergeNode in="d"/><feMergeNode in="l"/><feMergeNode in="SourceGraphic"/>${edgeNode}</feMerge>`
       : // Innenschatten: Umgebung der Form weichzeichnen, versetzen und auf die Form beschneiden
         `<feComponentTransfer in="SourceAlpha" result="inv"><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>` +
         `<feGaussianBlur in="inv" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
@@ -751,11 +1160,26 @@ function dropletSvg(width, height, d, paint, id) {
         `<feComposite in="d0" in2="SourceAlpha" operator="in" result="d"/>` +
         shade("b", -4, light, lightA, "l0") +
         `<feComposite in="l0" in2="SourceAlpha" operator="in" result="l"/>` +
-        `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="d"/><feMergeNode in="l"/></feMerge>`;
+        edge +
+        `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="d"/><feMergeNode in="l"/>${edgeNode}</feMerge>`;
+  // Wölbung: jede Pille mit eigenem Verlauf über der Fläche, bei negativer Stärke umgekehrt
+  let sheen = "";
+  if (paint.surface && caps.length) {
+    const [x1, y1, x2, y2] = GRADIENT_ENDS[paint.surface.light] || GRADIENT_ENDS.top_left;
+    const forward = paint.surface.convex === paint.strength >= 0;
+    const [from, to] = forward ? [paint.surface.sheen, paint.surface.shade] : [paint.surface.shade, paint.surface.sheen];
+    const k = Math.min(1, s);
+    const stop = (offset, color) => {
+      const [c, a] = rgbaParts(color);
+      return `<stop offset="${offset}" stop-color="${c}" stop-opacity="${fmt(a * k)}"/>`;
+    };
+    sheen = `<linearGradient id="${id}-g" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stop(0, from)}${stop(1, to)}</linearGradient>`;
+  }
+  const capPaths = sheen ? caps.map((cap) => `<path class="cap" fill="url(#${id}-g)" d="${cap}"/>`).join("") : "";
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-    `<defs><filter id="${id}" x="-50%" y="-50%" width="200%" height="200%">${filter}</filter></defs>` +
-    `<path filter="url(#${id})" fill="${paint.fill}" d="${d}"/></svg>`
+    `<defs><filter id="${id}" x="-50%" y="-50%" width="200%" height="200%">${filter}</filter>${sheen}</defs>` +
+    `<path class="shape" filter="url(#${id})" fill="${paint.fill}" d="${d}"/>${capPaths}</svg>`
   );
 }
 
@@ -763,12 +1187,17 @@ function dropletSvg(width, height, d, paint, id) {
 function updateDroplets() {
   // Home Assistant hängt Seiten beim Zurückkehren wieder ein, deshalb nicht verworfen.
   if (dropletHosts.size > 50) for (const host of dropletHosts.keys()) if (!host.isConnected) dropletHosts.delete(host);
+  // Sparmodus: keine Tropfenformen, die Ansicht in der Titelleiste bekommt wieder ihre eigene Pille
+  const enabled = controlsActive && !saver();
   for (const [host, tag] of dropletHosts) {
     const root = host.shadowRoot;
     if (!host.isConnected || !root) continue;
+    if (!enabled) {
+      for (const tab of root.querySelectorAll("ha-tab-group-tab[neumorphism-header]")) tab.removeAttribute("neumorphism-header");
+    }
     DROPLET_GROUPS[tag].forEach((find, index) => {
       const existing = root.querySelector(`.neumorphism-droplet[data-group="${index}"]`);
-      const group = (controlsActive && find(root)) || null;
+      const group = (enabled && find(root)) || null;
       const items = group ? group.rects || groupItems(group) : [];
       const parent = group?.anchor.parentElement;
       if (!items.length || !parent) {
@@ -838,8 +1267,10 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
   // Am rechten Bildschirmrand enden: Was darüber hinausragt, macht die Leiste seitlich verschiebbar
   const viewRight = parent.ownerDocument.documentElement.clientWidth - offsetX;
   const shown = Math.max(0, Math.min(width, viewRight - left));
-  const frame = `${fmt(left)}|${fmt(top)}|${fmt(shown)}|${fmt(width)}|${fmt(height)}|${paint.dark}|${paint.light}|${paint.fill}|${paint.strength}`;
+  const frame = [fmt(left), fmt(top), fmt(shown), fmt(width), fmt(height), JSON.stringify(paint), local.length].join("|");
   const d = shapes.join("");
+  // Pillen einzeln (ohne Hälse) für die Wölbung
+  const caps = shapes.slice(0, local.length);
 
   let droplet = existing;
   if (!droplet) {
@@ -855,11 +1286,14 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
     // Größe, Farben oder Stärke geändert: neu aufbauen
     droplet.dataset.frame = frame;
     Object.assign(droplet.style, { left: `${left}px`, top: `${top}px`, width: `${shown}px`, height: `${height}px` });
-    droplet.innerHTML = dropletSvg(width, height, d, paint, droplet.dataset.id);
+    droplet.innerHTML = dropletSvg(width, height, d, paint, droplet.dataset.id, caps);
   } else {
-    // Nur die Form bewegt sich (z. B. beim Wischen der Reiterleiste): nur den Umriss tauschen
-    const path = droplet.querySelector("path");
+    // Nur die Form bewegt sich (z. B. beim Wischen der Reiterleiste): nur die Umrisse tauschen
+    const path = droplet.querySelector("path.shape");
     if (path && path.getAttribute("d") !== d) path.setAttribute("d", d);
+    droplet.querySelectorAll("path.cap").forEach((cap, i) => {
+      if (caps[i] && cap.getAttribute("d") !== caps[i]) cap.setAttribute("d", caps[i]);
+    });
   }
   return droplet;
 }
@@ -873,7 +1307,7 @@ const buttonDroplets = new Map(); // Elternelement -> gezeichnete Formen
 function updateButtonGroups() {
   if (buttonHosts.size > 2000) for (const btn of buttonHosts) if (!btn.isConnected) buttonHosts.delete(btn);
   const byParent = new Map();
-  if (controlsActive) {
+  if (controlsActive && !saver()) {
     for (const btn of buttonHosts) {
       if (!btn.isConnected || !btn.parentElement) continue;
       // Symbol-Knöpfe sind flach; ihre Gruppen in der Titelleiste zeichnet updateDroplets
@@ -960,7 +1394,7 @@ const CARD_STYLE = `
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  [nm-raised] { background: var(--card-background-color) !important; box-shadow: ${RAISED} !important; }
+  [nm-raised] { background: var(--card-background-color) ${SHEEN} !important; box-shadow: ${RAISED} !important; }
   [nm-accent] { box-shadow: ${RAISED} !important; }
   [nm-inset] { background: var(--card-background-color) !important; box-shadow: ${INSET_S} !important; }
 `;
@@ -1069,7 +1503,8 @@ function insideFramedCard(card) {
 }
 
 function cardsMode() {
-  return storedSettings().cards;
+  const mode = settings().cards;
+  return saver() && mode === "full" ? "frame" : mode; // Sparmodus: nur Rahmen, kein Durchsuchen der Flächen
 }
 
 function scanCard(card) {
@@ -1281,15 +1716,17 @@ const LAYOUT_VAR = /^--(wa-|md-|mdc-(?!theme)|safe-|ha-font|ha-space|ha-border-r
 
 function haFrameCss(colorsOnly = false) {
   if (!controlsActive) return "";
+  const keep = (name) => !colorsOnly || (COLOR_VAR.test(name) && !LAYOUT_VAR.test(name));
   const style = document.documentElement.style;
   const vars = [];
   for (let i = 0; i < style.length; i++) {
     const name = style[i];
-    if (!name.startsWith("--")) continue;
-    if (colorsOnly && (!COLOR_VAR.test(name) || LAYOUT_VAR.test(name))) continue;
-    vars.push(`${name}: ${style.getPropertyValue(name)};`);
+    if (name.startsWith("--") && keep(name)) vars.push(`${name}: ${style.getPropertyValue(name)};`);
   }
-  return `:root { ${vars.join(" ")} }\n:root, body { ${colorCss} }`;
+  const own = Object.entries(appliedVars)
+    .filter(([name]) => keep(`--${name}`))
+    .map(([name, value]) => `--${name}: ${value} !important;`);
+  return `${colorsOnly ? "" : fontCss}\n:root { ${vars.join(" ")} }\n:root, body { ${own.join(" ")} }`;
 }
 
 /** Schlüssel für Ausnahmen in den Einstellungen: Add-on oder Seite einer Integration. */
@@ -1301,9 +1738,12 @@ function hostKey(host) {
 
 /** Ist die Formung fremder Oberflächen für diese Stelle eingeschaltet? */
 function foreignEnabled(key) {
-  const settings = storedSettings();
-  return controlsActive && settings.apps === "full" && !(key && settings.appsOff.includes(key));
+  const s = settings();
+  return foreignOn(s) && !(key && s.appsOff.includes(key));
 }
+
+// Sparmodus: fremde Oberflächen nicht einordnen (das kostet bei großen Seiten am meisten)
+const foreignOn = (s = settings()) => controlsActive && s.apps === "full" && !saver();
 
 function updateFrames() {
   if (frameHosts.size > 50) for (const host of frameHosts) if (!host.isConnected) frameHosts.delete(host);
@@ -1334,7 +1774,7 @@ function updateFrame(iframe, host, haCss) {
     if (!haPage && doc.readyState !== "complete") return; // Bausteine werden noch geladen
     if (haPage) {
       if (scopes.has(doc)) resetScope(scopes.get(doc));
-      const css = controlsActive && !storedSettings().appsOff.includes(key) ? haCss : "";
+      const css = controlsActive && !settings().appsOff.includes(key) ? haCss : "";
       setFrameStyle(doc, css + (css ? HA_FRAME_EXTRA : ""));
       if (css) patchControls(doc.defaultView);
       return;
@@ -1388,6 +1828,7 @@ const FOREIGN_VARS = {
   card: "neumorphism-card-shadow",
   inset: "neumorphism-inset-shadow",
   "inset-s": "neumorphism-inset-shadow-s",
+  sheen: "neumorphism-surface-image",
 };
 
 /** Theme-Werte unter eigenem Namen, damit sie sich nicht mit Variablen der Seite mischen. */
@@ -1404,7 +1845,7 @@ const FOREIGN_MARK_STYLE = `
   [nm-x="flat"] { background-color: var(--nm-bg) !important; box-shadow: none !important; }
   [nm-x="plain"] { background-color: var(--nm-surface) !important; box-shadow: none !important; }
   [nm-x="raised"], [nm-x="raised-l"] { background-color: var(--nm-surface) !important;
-    border-color: transparent !important; box-shadow: var(--nm-raised) !important; }
+    background-image: var(--nm-sheen) !important; border-color: transparent !important; box-shadow: var(--nm-raised) !important; }
   [nm-x="raised-l"] { box-shadow: var(--nm-card) !important; }
   [nm-x="accent"] { border-color: transparent !important; box-shadow: var(--nm-raised) !important; }
   [nm-x="sunken"], [nm-x="field"] { background-color: var(--nm-bg) !important;
@@ -1414,7 +1855,7 @@ const FOREIGN_MARK_STYLE = `
   [nm-x="field"]::placeholder { color: var(--nm-text2) !important; opacity: 0.8 !important; }
   [nm-x="code"] { border-color: transparent !important; box-shadow: var(--nm-inset) !important; }
   [nm-x="tab"] { border-color: transparent !important; box-shadow: none !important; }
-  [nm-x="tab-on"] { background-color: var(--nm-surface) !important; border-color: transparent !important;
+  [nm-x="tab-on"] { background-color: var(--nm-surface) !important; background-image: var(--nm-sheen) !important; border-color: transparent !important;
     box-shadow: var(--nm-raised) !important; border-radius: 999px !important; }
   [nm-x="tablist"] { border-color: transparent !important; box-shadow: none !important; }
   [nm-x-invert] { filter: invert(1) hue-rotate(180deg) !important; }
@@ -1471,11 +1912,10 @@ const lum = ({ r, g, b }) => 0.2126 * toLinear(r / 255) + 0.7152 * toLinear(g / 
 const contrast = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
 const sameColor = (a, b) => a && b && Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) < 3;
 const parentOf = (el) => el.parentElement || el.getRootNode().host || null;
-const haDark = () => !!getHass()?.themes?.darkMode;
 
 /** Fremde Bausteine im Hauptfenster: Seiten, Dialoge und alles außerhalb von Dashboard-Karten. */
 function updateForeignElements() {
-  const enabled = controlsActive && storedSettings().apps === "full";
+  const enabled = foreignOn();
   let style = document.getElementById(MAIN_FOREIGN_STYLE_ID);
   if (!style && enabled) {
     style = document.createElement("style");
@@ -2082,45 +2522,162 @@ function writeForeign(el, result) {
 function texts(hass) {
   const de = (hass?.language || navigator.language || "").toLowerCase().startsWith("de");
   const loc = (key, fallback) => hass?.localize?.(key) || fallback;
+  const t = (deText, enText) => (de ? deText : enText);
   return {
-    colors: de ? "Farben" : "Colors",
-    primary: loc("ui.panel.profile.themes.primary_color", de ? "Primärfarbe" : "Primary color"),
-    accent: loc("ui.panel.profile.themes.accent_color", de ? "Akzentfarbe" : "Accent color"),
-    reset: de ? "Zurücksetzen" : "Reset",
-    primaryHint: de ? "Buttons, Symbole, Auswahl" : "Buttons, icons, selection",
-    accentHint: de ? "Schalter, Hervorhebungen" : "Switches, highlights",
-    fromTheme: de ? "aus dem Theme" : "from theme",
-    strength: de ? "Effektstärke" : "Effect strength",
-    strengthHint: de
-      ? "Positiv: erhaben wie gewohnt. 0: flach. Negativ: umgekehrt, Erhabenes wird eingelassen und Eingelassenes erhaben."
-      : "Positive: raised as usual. 0: flat. Negative: inverted, raised becomes inset and inset becomes raised.",
-    inverted: de ? "umgekehrt" : "inverted",
-    flat: de ? "flach" : "flat",
-    cards: de ? "Eigene Karten" : "Custom cards",
-    cardsHint: de
-      ? "Karten aus HACS oder selbst geschrieben. „Nur Rahmen“ oder „Aus“, falls eine Karte nicht richtig aussieht."
-      : "Cards from HACS or self-written. Use “Frame only” or “Off” if a card does not look right.",
-    cardsFull: de ? "Vollständig" : "Full",
-    cardsFrame: de ? "Nur Rahmen" : "Frame only",
-    cardsOff: de ? "Aus" : "Off",
-    apps: de ? "Add-ons und Integrationen" : "Add-ons and integrations",
-    appsHint: de
-      ? "Oberflächen von Add-ons und Seiten von Integrationen im selben Design, automatisch für alle, auch künftige."
-      : "Add-on interfaces and integration pages in the same design, automatically for all, including future ones.",
-    appsFull: de ? "Angepasst" : "Adapted",
-    appsOff: de ? "Aus" : "Off",
-    appsExceptions: de ? "Abgewählte behalten ihr eigenes Aussehen." : "Unchecked ones keep their own look.",
-    perUser: de ? `Gilt für deinen Benutzer · Version ${VERSION}` : `Applies to your user · version ${VERSION}`,
-    inactive: de
-      ? "Wähle im Profil das Theme „Neumorphism“, dann wirken diese Einstellungen."
-      : "Select the theme “Neumorphism” in your profile to use these settings.",
+    title: "Neumorphism",
+    primary: loc("ui.panel.profile.themes.primary_color", t("Primärfarbe", "Primary color")),
+    accent: loc("ui.panel.profile.themes.accent_color", t("Akzentfarbe", "Accent color")),
+    reset: t("Zurücksetzen", "Reset"),
+    primaryHint: t("Buttons, Symbole, Auswahl", "Buttons, icons, selection"),
+    accentHint: t("Schalter, Hervorhebungen", "Switches, highlights"),
+    fromTheme: t("aus dem Theme", "from theme"),
+    // Gruppen
+    groupColors: t("Farben", "Colors"),
+    groupDepth: t("Licht und Tiefe", "Light and depth"),
+    groupShape: t("Form und Schrift", "Shape and font"),
+    groupMotion: t("Bewegung", "Motion"),
+    groupAreas: t("Bereiche", "Areas"),
+    groupDevice: t("Dieses Gerät", "This device"),
+    // Speichern für
+    scope: t("Einstellungen speichern für", "Save settings for"),
+    scope_user: t("Meinen Benutzer", "My user"),
+    scope_device: t("Nur dieses Gerät", "This device only"),
+    scopeHint_user: t("Gilt auf allen Geräten, auf denen du angemeldet bist.", "Applies on all devices you are logged in on."),
+    scopeHint_device: t(
+      "Gilt nur in diesem Browser oder dieser App, zum Beispiel für ein Wandtablet.",
+      "Applies only in this browser or app, for example on a wall tablet."
+    ),
+    tint: t("Hintergrund", "Background"),
+    tint_standard: "Standard",
+    tint_gray: t("Grau", "Gray"),
+    tint_warm: t("Warm", "Warm"),
+    tint_sand: "Sand",
+    tint_mint: "Mint",
+    tint_rose: t("Rosé", "Rose"),
+    tint_blue: t("Blau", "Blue"),
+    tint_primary: t("Primärfarbe", "Primary"),
+    strength: t("Effektstärke", "Effect strength"),
+    strengthHint: t(
+      "Positiv: erhaben wie gewohnt. 0: flach. Negativ: umgekehrt, Erhabenes wird eingelassen und Eingelassenes erhaben.",
+      "Positive: raised as usual. 0: flat. Negative: inverted, raised becomes inset and inset becomes raised."
+    ),
+    inverted: t("umgekehrt", "inverted"),
+    flat: t("flach", "flat"),
+    light: t("Lichtrichtung", "Light direction"),
+    light_top_left: t("↖ Oben links", "↖ Top left"),
+    light_top: t("↑ Oben", "↑ Top"),
+    light_top_right: t("↗ Oben rechts", "↗ Top right"),
+    lightHint: t("Woher das Licht fällt; die Schatten liegen auf der Gegenseite.", "Where the light comes from; shadows fall on the opposite side."),
+    surface: t("Oberfläche", "Surface"),
+    surface_flat: t("Flach", "Flat"),
+    surface_convex: t("Gewölbt", "Convex"),
+    surface_concave: t("Gemuldet", "Concave"),
+    surfaceHint: t(
+      "Erhabene Flächen eben, gewölbt wie ein Kissen oder gemuldet wie eine Schale.",
+      "Raised surfaces even, curved outward like a pillow or inward like a bowl."
+    ),
+    contrast: t("Kontrast", "Contrast"),
+    contrast_normal: "Normal",
+    contrast_high: t("Hoch", "High"),
+    contrastHint: t(
+      "Hoch: kräftigere Schrift, Linien und Schatten und eine feine Kante um jede Fläche.",
+      "High: stronger text, lines and shadows and a fine edge around every surface."
+    ),
+    radius: t("Rundung", "Roundness"),
+    square: t("eckig", "square"),
+    font: t("Schrift", "Font"),
+    font_standard: "Standard",
+    font_round: t("Rund", "Rounded"),
+    fontHint: t("Rund: Nunito, wird mit der Integration geliefert.", "Rounded: Nunito, shipped with the integration."),
+    sections: t("Sektionen", "Sections"),
+    sections_open: t("Frei", "Open"),
+    sections_well: t("Als Mulden", "As wells"),
+    sectionsHint: t(
+      "In Dashboards mit Sektionen liegen die Karten jeder Sektion in einer eingelassenen Mulde.",
+      "In section dashboards, the cards of each section sit in an inset well."
+    ),
+    motion: t("Animationen", "Animations"),
+    motion_on: t("An", "On"),
+    motion_off: t("Aus", "Off"),
+    motionHint: t(
+      "Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten. Folgt der Systemeinstellung „Bewegung reduzieren“.",
+      "Buttons sink in when pressed, switches and selections glide. Follows the system setting “reduce motion”."
+    ),
+    glow: t("Leuchten aktiver Geräte", "Glow of active devices"),
+    glow_on: t("An", "On"),
+    glow_off: t("Aus", "Off"),
+    glowHint: t("Eingeschaltete Geräte leuchten sanft in ihrer Zustandsfarbe.", "Devices that are on glow softly in their state color."),
+    cards: t("Eigene Karten", "Custom cards"),
+    cardsHint: t(
+      "Karten aus HACS oder selbst geschrieben. „Nur Rahmen“ oder „Aus“, falls eine Karte nicht richtig aussieht.",
+      "Cards from HACS or self-written. Use “Frame only” or “Off” if a card does not look right."
+    ),
+    cards_full: t("Vollständig", "Full"),
+    cards_frame: t("Nur Rahmen", "Frame only"),
+    cards_off: t("Aus", "Off"),
+    apps: t("Add-ons und Integrationen", "Add-ons and integrations"),
+    appsHint: t(
+      "Oberflächen von Add-ons und Seiten von Integrationen im selben Design, automatisch für alle, auch künftige.",
+      "Add-on interfaces and integration pages in the same design, automatically for all, including future ones."
+    ),
+    apps_full: t("Angepasst", "Adapted"),
+    apps_off: t("Aus", "Off"),
+    appsExceptions: t("Abgewählte behalten ihr eigenes Aussehen.", "Unchecked ones keep their own look."),
+    mode: t("Hell oder dunkel", "Light or dark"),
+    mode_user: t("Wie im Profil", "As in profile"),
+    mode_light: t("Hell", "Light"),
+    mode_dark: t("Dunkel", "Dark"),
+    modeHint: t("Nur für dieses Gerät, unabhängig von der Einstellung „Modus“ oben.", "Only for this device, regardless of the “Mode” setting above."),
+    saver: t("Sparmodus", "Saver mode"),
+    saver_off: t("Aus", "Off"),
+    saver_on: t("An", "On"),
+    saverHint: t(
+      "Für schwache Geräte: ohne Tropfenformen, Animationen und Weichzeichner; Add-ons bleiben unverändert, eigene Karten bekommen nur den Rahmen.",
+      "For weak devices: no droplet shapes, animations or blur; add-ons stay unchanged, custom cards only get their frame."
+    ),
+    defaults: t("Als Standard für alle", "Use as default for everyone"),
+    defaultsSaved: t("Als Standard für alle Benutzer gespeichert", "Saved as default for all users"),
+    defaultsFailed: t("Standard konnte nicht gespeichert werden", "Could not save default"),
+    automation: t("Von einer Automation festgelegt:", "Set by an automation:"),
+    automationReset: t("Aufheben", "Clear"),
+    perUser: t(`Gilt für deinen Benutzer · Version ${VERSION}`, `Applies to your user · version ${VERSION}`),
+    perDevice: t(`Gilt nur für dieses Gerät · Version ${VERSION}`, `Applies to this device only · version ${VERSION}`),
+    inactive: t(
+      "Wähle im Profil das Theme „Neumorphism“, dann wirken diese Einstellungen.",
+      "Select the theme “Neumorphism” in your profile to use these settings."
+    ),
   };
 }
 
 const ROWS = [
-  { key: "primary", setting: "primaryColor", cssVar: "--primary-color" },
-  { key: "accent", setting: "accentColor", cssVar: "--accent-color" },
+  { key: "primary", cssVar: "--primary-color" },
+  { key: "accent", cssVar: "--accent-color" },
 ];
+
+// Auswahlfelder: Einstellung, Werte, Gruppe. Gespeichert wird wie die übrigen Einstellungen.
+const SEGMENTS = {
+  depth: ["light", "surface", "contrast"],
+  shape: ["font", "sections"],
+  motion: ["motion", "glow"],
+};
+// Nur für dieses Gerät (nicht beim Benutzer gespeichert)
+const DEVICE_SEGMENTS = {
+  mode: ["user", "light", "dark"],
+  saver: ["off", "on"],
+};
+// Bezeichnungen für den Hinweis auf Werte aus Automationen
+const SETTING_LABELS = {
+  primary: "primary", accent: "accent", strength: "strength", light: "light", surface: "surface", tint: "tint",
+  radius: "radius", font: "font", contrast: "contrast", glow: "glow", motion: "motion", sections: "sections",
+  cards: "cards", apps: "apps", appsOff: "apps",
+};
+
+const segmentHtml = (name, values, attr = "data-value") => `
+  <div class="setting" data-setting="${name}">
+    <div class="label"></div>
+    <div class="segmented">${values.map((value) => `<button ${attr}="${value}"></button>`).join("")}</div>
+    <div class="hint"></div>
+  </div>`;
 
 class NeumorphismColorPicker extends HTMLElement {
   set hass(hass) {
@@ -2152,17 +2709,24 @@ class NeumorphismColorPicker extends HTMLElement {
         .headline { color: var(--primary-text-color); font-size: var(--ha-font-size-m, 14px);
           font-weight: var(--ha-font-weight-medium, 500); padding: 8px 0 4px; }
         :host(:not([in-profile])) .headline { display: none; }
+        h3 { margin: 22px 0 2px; color: var(--secondary-text-color); font-size: 0.78rem; font-weight: var(--ha-font-weight-medium, 500);
+          letter-spacing: 0.06em; text-transform: uppercase; }
         .info { color: var(--secondary-text-color); font-size: 0.85rem; line-height: 1.4; }
         .info.warning { color: var(--warning-color); padding-bottom: 8px; }
-        .rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 32px; }
+        .notice { display: flex; align-items: center; gap: 12px; margin: 8px 0; padding: 10px 14px; border-radius: 16px;
+          color: var(--primary-text-color); font-size: 0.85rem; box-shadow: var(--neumorphism-inset-shadow-s, none); }
+        .notice span { flex: 1; }
+        .notice[hidden], [hidden] { display: none !important; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 32px; }
         .row { display: flex; align-items: center; gap: 16px; padding: 12px 0 10px; }
         .text { flex: 1; min-width: 0; }
         .label { color: var(--primary-text-color); font-size: 1rem; }
-        .hint { color: var(--secondary-text-color); font-size: 0.85rem; margin-top: 2px; }
+        .hint { color: var(--secondary-text-color); font-size: 0.85rem; margin-top: 2px; line-height: 1.35; }
+        .hint:empty { display: none; }
         .value { color: var(--secondary-text-color); font-family: var(--ha-font-family-code, monospace);
           font-size: 0.8rem; margin-top: 4px; }
         .picker { width: 56px; height: 56px; flex: none; border-radius: 50%; padding: 7px; box-sizing: border-box;
-          background: var(--card-background-color); box-shadow: var(--ha-box-shadow-m); }
+          background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none); box-shadow: var(--ha-box-shadow-m); }
         input[type="color"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 100%;
           border: none; padding: 0; border-radius: 50%; background: none; cursor: pointer; }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
@@ -2172,11 +2736,19 @@ class NeumorphismColorPicker extends HTMLElement {
         .dot { width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; cursor: pointer;
           box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
         .dot.selected { outline: 2px solid var(--primary-text-color); }
-        .strength { padding: 16px 0 2px; }
-        .strength-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+        .setting { padding: 14px 0 2px; }
+        .setting[data-setting="light"] { grid-column: 1 / -1; }
+        .segmented button { white-space: nowrap; }
+        .setting-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+        .tints { display: flex; flex-wrap: wrap; gap: 14px 10px; padding: 10px 2px 4px; }
+        .tint { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 58px; padding: 0; border: none;
+          background: none; cursor: pointer; color: var(--secondary-text-color); font: inherit; font-size: 0.75rem; }
+        .tint .swatch { width: 34px; height: 34px; border-radius: 50%; box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
+        .tint.selected { color: var(--primary-text-color); }
+        .tint.selected .swatch { outline: 2px solid var(--primary-color); }
         input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; margin: 6px 0 0;
-          background: transparent; cursor: pointer; --from: 50%; --to: 50%;
-          --track: linear-gradient(to right, transparent calc(50% - 1px), var(--divider-color) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+          background: transparent; cursor: pointer; --from: 50%; --to: 50%; --mark: 50%;
+          --track: linear-gradient(to right, transparent calc(var(--mark) - 1px), var(--divider-color) calc(var(--mark) - 1px) calc(var(--mark) + 1px), transparent calc(var(--mark) + 1px)),
             linear-gradient(to right, var(--secondary-background-color) var(--from), var(--primary-color) var(--from) var(--to),
               var(--secondary-background-color) var(--to)); }
         input[type="range"]::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: var(--track);
@@ -2189,16 +2761,14 @@ class NeumorphismColorPicker extends HTMLElement {
         input[type="range"]::-moz-range-thumb { width: 28px; height: 28px; border: none; border-radius: 50%;
           box-shadow: var(--ha-box-shadow-s);
           background: radial-gradient(circle, var(--primary-color) 0 5px, var(--card-background-color) 6px); }
-        .cards-mode { padding: 16px 0 2px; }
-        .segmented { display: flex; gap: 6px; padding: 5px; margin: 8px 0 6px; border-radius: 999px;
+        .segmented { display: flex; gap: 6px; padding: 5px; margin: 8px 0 6px; border-radius: var(--ha-border-radius-pill, 999px);
           box-shadow: var(--neumorphism-inset-shadow-s, none); }
-        .segmented button { flex: 1; border: none; border-radius: 999px; padding: 8px 6px; cursor: pointer;
-          background: transparent; color: var(--secondary-text-color); font: inherit; font-size: 0.85rem; }
-        .segmented button[hidden] { display: none; }
-        .segmented button.selected { background: var(--card-background-color); color: var(--primary-color);
-          font-weight: var(--ha-font-weight-medium, 500); box-shadow: var(--neumorphism-raised-shadow, none); }
+        .segmented button { flex: 1; border: none; border-radius: var(--ha-border-radius-pill, 999px); padding: 8px 6px; cursor: pointer;
+          background: transparent; color: var(--secondary-text-color); font: inherit; font-size: 0.85rem;
+          transition: box-shadow 200ms ease, color 200ms ease; }
+        .segmented button.selected { background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none);
+          color: var(--primary-color); font-weight: var(--ha-font-weight-medium, 500); box-shadow: var(--neumorphism-raised-shadow, none); }
         .apps-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 16px; margin: 8px 0 2px; }
-        .apps-list[hidden] { display: none; }
         .apps-list label { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer;
           color: var(--primary-text-color); font-size: 0.9rem; }
         .apps-list input { -webkit-appearance: none; appearance: none; flex: none; width: 20px; height: 20px; margin: 0;
@@ -2207,16 +2777,20 @@ class NeumorphismColorPicker extends HTMLElement {
         .apps-list input:checked { background-color: var(--primary-color);
           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E");
           box-shadow: var(--neumorphism-raised-shadow, none); }
-        .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; }
-        button.reset { border: none; background: var(--card-background-color); color: var(--primary-color);
-          border-radius: 999px; padding: 9px 18px; font: inherit; font-size: 0.9rem; cursor: pointer;
-          box-shadow: var(--ha-box-shadow-s); }
-        button.reset:active, .dot:active { box-shadow: var(--neumorphism-inset-shadow, none); }
-        button.reset[hidden] { display: none; }
+        .footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 20px; }
+        .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+        button.action { border: none; background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none);
+          color: var(--primary-color); border-radius: var(--ha-border-radius-pill, 999px); padding: 9px 18px; font: inherit;
+          font-size: 0.9rem; cursor: pointer; box-shadow: var(--ha-box-shadow-s); }
+        button.action:active, .dot:active, .tint:active .swatch { box-shadow: var(--neumorphism-inset-shadow, none); }
       </style>
       <div class="headline"></div>
       <div class="info warning" hidden></div>
-      <div class="rows">
+      <div class="notice automation" hidden><span></span><button class="action automation-reset" hidden></button></div>
+      ${segmentHtml("scope", ["user", "device"], "data-scope")}
+
+      <h3 data-text="groupColors"></h3>
+      <div class="grid">
         ${ROWS.map(
           (row) => `
           <div class="block" data-key="${row.key}">
@@ -2234,30 +2808,44 @@ class NeumorphismColorPicker extends HTMLElement {
           </div>`
         ).join("")}
       </div>
-      <div class="strength">
-        <div class="strength-head"><span class="label s-label"></span><span class="value s-value"></span></div>
+      <div class="setting" data-setting="tint">
+        <div class="label"></div>
+        <div class="tints">${CHOICES.tint.map((tint) => `<button class="tint" data-value="${tint}"><span class="swatch"></span><span class="name"></span></button>`).join("")}</div>
+      </div>
+
+      <h3 data-text="groupDepth"></h3>
+      <div class="setting" data-setting="strength">
+        <div class="setting-head"><span class="label"></span><span class="value"></span></div>
         <input type="range" min="${-STRENGTH_MAX * STRENGTH_SCALE}" max="${STRENGTH_MAX * STRENGTH_SCALE}" step="5">
-        <div class="hint s-hint"></div>
+        <div class="hint"></div>
       </div>
-      <div class="cards-mode">
-        <div class="label c-label"></div>
-        <div class="segmented cards">
-          <button data-mode="full"></button><button data-mode="frame"></button><button data-mode="off"></button>
-        </div>
-        <div class="hint c-hint"></div>
+      <div class="grid">${SEGMENTS.depth.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
+
+      <h3 data-text="groupShape"></h3>
+      <div class="setting" data-setting="radius">
+        <div class="setting-head"><span class="label"></span><span class="value"></span></div>
+        <input type="range" min="0" max="${RADIUS_MAX * 100}" step="10">
       </div>
-      <div class="cards-mode apps-mode">
-        <div class="label a-label"></div>
-        <div class="segmented apps">
-          <button data-apps="full"></button><button data-apps="off"></button>
-        </div>
-        <div class="hint a-hint"></div>
-        <div class="apps-list" hidden></div>
-        <div class="hint a-exceptions" hidden></div>
-      </div>
+      <div class="grid">${SEGMENTS.shape.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
+
+      <h3 data-text="groupMotion"></h3>
+      <div class="grid">${SEGMENTS.motion.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
+
+      <h3 data-text="groupAreas"></h3>
+      ${segmentHtml("cards", CHOICES.cards)}
+      ${segmentHtml("apps", CHOICES.apps)}
+      <div class="apps-list" hidden></div>
+      <div class="hint apps-exceptions" hidden></div>
+
+      <h3 data-text="groupDevice"></h3>
+      <div class="grid">${Object.entries(DEVICE_SEGMENTS).map(([name, values]) => segmentHtml(name, values, "data-device")).join("")}</div>
+
       <div class="footer">
         <span class="info per-user"></span>
-        <button class="reset"></button>
+        <div class="actions">
+          <button class="action defaults" hidden></button>
+          <button class="action reset"></button>
+        </div>
       </div>`;
 
     for (const row of ROWS) {
@@ -2266,53 +2854,83 @@ class NeumorphismColorPicker extends HTMLElement {
       // Während des Ziehens nur anzeigen, gespeichert wird beim Loslassen.
       input.addEventListener("input", () => {
         preview[row.key] = input.value;
-        applyColors();
+        applySettings();
       });
-      input.addEventListener("change", () => this._save({ [row.setting]: input.value }));
+      input.addEventListener("change", () => this._save({ [row.key]: input.value }));
       for (const dot of block.querySelectorAll(".dot")) {
-        dot.addEventListener("click", () => this._save({ [row.setting]: dot.dataset.color }));
+        dot.addEventListener("click", () => this._save({ [row.key]: dot.dataset.color }));
       }
     }
-    const range = root.querySelector('input[type="range"]');
-    range.addEventListener("input", () => {
-      preview.strength = Number(range.value) / STRENGTH_SCALE;
-      applyColors();
+    const strength = root.querySelector('[data-setting="strength"] input');
+    strength.addEventListener("input", () => {
+      preview.strength = Number(strength.value) / STRENGTH_SCALE;
+      applySettings();
       this._update();
     });
-    range.addEventListener("change", () => this._save({ neumorphismStrength: Number(range.value) / STRENGTH_SCALE }));
-    for (const button of root.querySelectorAll(".segmented.cards button")) {
-      button.addEventListener("click", () => this._save({ neumorphismCards: button.dataset.mode }));
+    strength.addEventListener("change", () => this._save({ strength: Number(strength.value) / STRENGTH_SCALE }));
+    const radius = root.querySelector('[data-setting="radius"] input');
+    radius.addEventListener("input", () => {
+      preview.radius = Number(radius.value) / 100;
+      applySettings();
+      this._update();
+    });
+    radius.addEventListener("change", () => this._save({ radius: Number(radius.value) / 100 }));
+    for (const button of root.querySelectorAll("button[data-value]")) {
+      const name = button.closest("[data-setting]").dataset.setting;
+      button.addEventListener("click", () => this._save({ [name]: button.dataset.value }));
     }
-    for (const button of root.querySelectorAll(".segmented.apps button")) {
-      button.addEventListener("click", () => this._save({ neumorphismApps: button.dataset.apps }));
+    for (const button of root.querySelectorAll("button[data-device]")) {
+      const name = button.closest("[data-setting]").dataset.setting;
+      button.addEventListener("click", () => {
+        const value = button.dataset.device;
+        if (name === "mode") saveDevice({ mode: value === "user" ? undefined : value });
+        else saveDevice({ saver: value === "on" ? true : undefined });
+        tick();
+        this._render();
+      });
+    }
+    for (const button of root.querySelectorAll("button[data-scope]")) {
+      button.addEventListener("click", () => {
+        const own = button.dataset.scope === "device";
+        if (own === !!device().own) return;
+        // Eigene Einstellungen beginnen mit denen des Benutzers
+        saveDevice(own ? { own: true, settings: userLayer(this._hass) } : { own: undefined, settings: undefined });
+        tick();
+        this._render();
+      });
     }
     root.querySelector(".apps-list").addEventListener("change", (ev) => {
-      const off = new Set(storedSettings(this._hass).appsOff);
+      const off = new Set(settings(this._hass).appsOff);
       if (ev.target.checked) off.delete(ev.target.value);
       else off.add(ev.target.value);
-      this._save({ neumorphismAppsOff: [...off] });
+      this._save({ appsOff: [...off] });
     });
     root.querySelector(".reset").addEventListener("click", () =>
-      this._save({
-        primaryColor: undefined,
-        accentColor: undefined,
-        neumorphismStrength: undefined,
-        neumorphismCards: undefined,
-        neumorphismApps: undefined,
-        neumorphismAppsOff: undefined,
-      })
+      this._save(Object.fromEntries(SETTING_KEYS.map((key) => [key, undefined])))
+    );
+    root.querySelector(".defaults").addEventListener("click", () => this._saveDefaults());
+    root.querySelector(".automation-reset").addEventListener("click", () =>
+      this._hass.callService("neumorphism", "reset_style", {}).catch((err) => console.warn("Neumorphism:", err))
     );
   }
 
-  /** Add-ons: an/aus und Ausnahmen (Liste nur für Administratoren, aus dem Supervisor). */
-  _updateApps(t, stored) {
-    const root = this.shadowRoot;
-    root.querySelector(".a-label").textContent = t.apps;
-    root.querySelector(".a-hint").textContent = t.appsHint;
-    for (const button of root.querySelectorAll(".segmented.apps button")) {
-      button.textContent = t[button.dataset.apps === "full" ? "appsFull" : "appsOff"];
-      button.classList.toggle("selected", stored.apps === button.dataset.apps);
+  /** Administratoren: aktuelle Einstellungen als Standard für alle Benutzer (Integration). */
+  async _saveDefaults() {
+    const t = texts(this._hass);
+    const { appsOff, ...rest } = baseSettings(this._hass);
+    let message = t.defaultsSaved;
+    try {
+      await this._hass.callWS({ type: "neumorphism/set_defaults", defaults: { ...rest, appsOff } });
+    } catch (err) {
+      console.warn("Neumorphism:", err);
+      message = t.defaultsFailed;
     }
+    this.dispatchEvent(new CustomEvent("hass-notification", { detail: { message }, bubbles: true, composed: true }));
+  }
+
+  /** Add-ons: an/aus und Ausnahmen (Liste nur für Administratoren, aus dem Supervisor). */
+  _updateApps(t, current) {
+    const root = this.shadowRoot;
     if (this._apps === undefined) {
       this._apps = null;
       this._loadApps().then((apps) => {
@@ -2322,12 +2940,13 @@ class NeumorphismColorPicker extends HTMLElement {
     }
     // Auch Ausnahmen für Add-ons zeigen, die gerade nicht in der Liste stehen (z. B. gestoppt)
     const apps = [...(this._apps || [])];
-    for (const slug of stored.appsOff) if (!apps.some((app) => app.slug === slug)) apps.push({ slug, name: slug });
+    for (const slug of current.appsOff) if (!apps.some((app) => app.slug === slug)) apps.push({ slug, name: slug });
     const list = root.querySelector(".apps-list");
-    const visible = stored.apps === "full" && apps.length > 0;
+    const visible = current.apps === "full" && apps.length > 0;
     list.hidden = !visible;
-    root.querySelector(".a-exceptions").hidden = !visible;
-    root.querySelector(".a-exceptions").textContent = t.appsExceptions;
+    const exceptions = root.querySelector(".apps-exceptions");
+    exceptions.hidden = !visible;
+    exceptions.textContent = t.appsExceptions;
     const key = apps.map((app) => `${app.slug}:${app.name}`).join("|");
     if (list.dataset.key !== key) {
       list.dataset.key = key;
@@ -2342,7 +2961,7 @@ class NeumorphismColorPicker extends HTMLElement {
         })
       );
     }
-    for (const input of list.querySelectorAll("input")) input.checked = !stored.appsOff.includes(input.value);
+    for (const input of list.querySelectorAll("input")) input.checked = !current.appsOff.includes(input.value);
   }
 
   /**
@@ -2375,66 +2994,113 @@ class NeumorphismColorPicker extends HTMLElement {
 
   _save(patch) {
     saveSettings(patch);
-    preview.primary = "";
-    preview.accent = "";
-    preview.strength = null;
-    applyColors();
+    for (const key of Object.keys(preview)) delete preview[key];
+    applySettings();
     this._render();
+  }
+
+  /** Regler mit Füllung von mark bis zum Wert (Effektstärke von der Mitte, Rundung vom Anfang). */
+  _range(input, value, mark) {
+    const root = this.shadowRoot;
+    if (root.activeElement !== input) input.value = String(value);
+    const min = Number(input.min);
+    const position = ((Number(input.value) - min) / (Number(input.max) - min)) * 100;
+    input.style.setProperty("--mark", `${mark}%`);
+    input.style.setProperty("--from", `${Math.min(mark, position).toFixed(1)}%`);
+    input.style.setProperty("--to", `${Math.max(mark, position).toFixed(1)}%`);
   }
 
   _update() {
     const root = this.shadowRoot;
-    const t = texts(this._hass);
+    const hass = this._hass;
+    const t = texts(hass);
     const active = neumorphismActive();
-    const stored = storedSettings(this._hass);
+    const own = !!device().own;
+    const current = settings(hass);
+    const dark = haDark();
     this.toggleAttribute("inactive", !active);
 
-    root.querySelector(".headline").textContent = t.colors;
+    root.querySelector(".headline").textContent = t.title;
     const warning = root.querySelector(".warning");
     warning.hidden = active;
     warning.textContent = t.inactive;
-    root.querySelector(".per-user").textContent = t.perUser;
-    const reset = root.querySelector(".reset");
-    reset.textContent = t.reset;
-    reset.hidden = !stored.primary && !stored.accent && stored.strength === null && !stored.cardsStored && !stored.appsStored;
-    root.querySelector(".c-label").textContent = t.cards;
-    root.querySelector(".c-hint").textContent = t.cardsHint;
-    for (const button of root.querySelectorAll(".segmented.cards button")) {
-      const mode = button.dataset.mode;
-      button.textContent = t[`cards${mode[0].toUpperCase()}${mode.slice(1)}`];
-      button.classList.toggle("selected", stored.cards === mode);
+    for (const el of root.querySelectorAll("[data-text]")) el.textContent = t[el.dataset.text];
+    root.querySelector(".per-user").textContent = own ? t.perDevice : t.perUser;
+
+    // Beschriftungen und gewählte Werte aller Auswahlfelder
+    for (const setting of root.querySelectorAll(".setting[data-setting]")) {
+      const name = setting.dataset.setting;
+      setting.querySelector(".label").textContent = t[name] || "";
+      const hint = setting.querySelector(".hint");
+      if (hint) hint.textContent = name === "scope" ? t[`scopeHint_${own ? "device" : "user"}`] : t[`${name}Hint`] || "";
     }
-    this._updateApps(t, stored);
+    for (const button of root.querySelectorAll("button[data-value]")) {
+      const name = button.closest("[data-setting]").dataset.setting;
+      const label = t[`${name}_${button.dataset.value}`];
+      if (button.classList.contains("tint")) button.querySelector(".name").textContent = label;
+      else button.textContent = label;
+      button.classList.toggle("selected", current[name] === button.dataset.value);
+    }
+    for (const button of root.querySelectorAll("button[data-scope]")) {
+      button.textContent = t[`scope_${button.dataset.scope}`];
+      button.classList.toggle("selected", (button.dataset.scope === "device") === own);
+    }
+    const deviceValues = { mode: device().mode || "user", saver: saver() ? "on" : "off" };
+    for (const button of root.querySelectorAll("button[data-device]")) {
+      const name = button.closest("[data-setting]").dataset.setting;
+      button.textContent = t[`${name}_${button.dataset.device}`];
+      button.classList.toggle("selected", deviceValues[name] === button.dataset.device);
+    }
 
-    const strength = preview.strength ?? stored.strength ?? 1;
-    const range = root.querySelector('input[type="range"]');
-    if (root.activeElement !== range) range.value = String(Math.round(strength * STRENGTH_SCALE));
-    // Füllung von der Mitte (0, flach) bis zum Wert, nach links für umgekehrt
-    const position = ((Number(range.value) / (STRENGTH_MAX * STRENGTH_SCALE)) * 50 + 50).toFixed(1);
-    range.style.setProperty("--from", `${Math.min(50, position)}%`);
-    range.style.setProperty("--to", `${Math.max(50, position)}%`);
-    range.setAttribute("aria-label", t.strength);
-    root.querySelector(".s-label").textContent = t.strength;
-    root.querySelector(".s-hint").textContent = t.strengthHint;
-    const shown = Math.round(strength * STRENGTH_SCALE);
-    root.querySelector(".s-value").textContent =
-      shown === 0 ? `0 (${t.flat})` : shown > 0 ? `+${shown}` : `−${-shown} (${t.inverted})`;
+    // Hintergrund: Farbmuster im aktuellen Modus
+    const primary = current.primary || normalize(getComputedStyle(document.documentElement).getPropertyValue("--primary-color"));
+    for (const button of root.querySelectorAll(".tint")) {
+      button.querySelector(".swatch").style.background = tintPalette(button.dataset.value, dark, primary).bg;
+    }
 
+    // Effektstärke und Rundung
+    const strength = Math.round(current.strength * STRENGTH_SCALE);
+    this._range(root.querySelector('[data-setting="strength"] input'), strength, 50);
+    root.querySelector('[data-setting="strength"] .value').textContent =
+      strength === 0 ? `0 (${t.flat})` : strength > 0 ? `+${strength}` : `−${-strength} (${t.inverted})`;
+    const radius = Math.round(current.radius * 100);
+    this._range(root.querySelector('[data-setting="radius"] input'), radius, 0);
+    root.querySelector('[data-setting="radius"] .value').textContent = radius === 0 ? `0 % (${t.square})` : `${radius} %`;
+    for (const input of root.querySelectorAll('input[type="range"]')) input.setAttribute("aria-label", t[input.closest("[data-setting]").dataset.setting]);
+
+    this._updateApps(t, current);
+
+    // Farben
     const css = getComputedStyle(document.documentElement);
     for (const row of ROWS) {
       const block = root.querySelector(`.block[data-key="${row.key}"]`);
       const input = block.querySelector("input");
-      const value = stored[row.key];
+      const value = current[row.key];
       const shown = preview[row.key] || value || normalize(css.getPropertyValue(row.cssVar)) || "#3d7bfd";
       if (root.activeElement !== input) input.value = shown;
       input.setAttribute("aria-label", t[row.key]);
       block.querySelector(".label").textContent = t[row.key];
       block.querySelector(".hint").textContent = t[`${row.key}Hint`];
       block.querySelector(".value").textContent = value || t.fromTheme;
-      for (const dot of block.querySelectorAll(".dot")) {
-        dot.classList.toggle("selected", dot.dataset.color === value);
-      }
+      for (const dot of block.querySelectorAll(".dot")) dot.classList.toggle("selected", dot.dataset.color === value);
     }
+
+    // Von einer Automation festgelegt
+    const fixed = [...new Set(Object.keys(backend.style).map((key) => t[SETTING_LABELS[key]]))];
+    const notice = root.querySelector(".automation");
+    notice.hidden = !fixed.length;
+    notice.querySelector("span").textContent = `${t.automation} ${fixed.join(", ")}`;
+    const clear = root.querySelector(".automation-reset");
+    clear.hidden = !hass.user?.is_admin;
+    clear.textContent = t.automationReset;
+
+    // Zurücksetzen der Ebene, in die gerade gespeichert wird; Standard für alle nur für Administratoren
+    const reset = root.querySelector(".reset");
+    reset.textContent = t.reset;
+    reset.hidden = !Object.keys(own ? readLayer(device().settings) : userLayer(hass)).length;
+    const defaults = root.querySelector(".defaults");
+    defaults.textContent = t.defaults;
+    defaults.hidden = !(hass.user?.is_admin && backend.available);
   }
 }
 
@@ -2477,7 +3143,7 @@ class NeumorphismColorCard extends HTMLElement {
 
   _update() {
     const h2 = this.shadowRoot.querySelector("h2");
-    const title = this._config?.title || texts(this._hass).colors;
+    const title = this._config?.title || texts(this._hass).title;
     h2.textContent = title;
   }
 }
@@ -2523,6 +3189,16 @@ function injectIntoProfile() {
 // Start
 // ---------------------------------------------------------------------------
 
+function tick() {
+  safely(applySettings);
+  safely(injectIntoProfile);
+  safely(updateDroplets);
+  safely(updateButtonGroups);
+  safely(updateCards);
+  safely(updateFrames);
+  safely(updateForeignElements);
+}
+
 if (!customElements.get(PICKER_TAG)) {
   customElements.define(PICKER_TAG, NeumorphismColorPicker);
   customElements.define("neumorphism-color-card", NeumorphismColorCard);
@@ -2530,21 +3206,12 @@ if (!customElements.get(PICKER_TAG)) {
   window.customCards.push({
     type: "neumorphism-color-card",
     name: "Neumorphism Farben",
-    description: "Primär- und Akzentfarbe und Effektstärke des Neumorphism-Themes einstellen.",
+    description: "Alle Einstellungen des Neumorphism-Themes: Farben, Hintergrund, Effektstärke, Licht, Form und mehr.",
     preview: true,
   });
 
   hookDefine();
   patchControls();
-  const tick = () => {
-    safely(applyColors);
-    safely(injectIntoProfile);
-    safely(updateDroplets);
-    safely(updateButtonGroups);
-    safely(updateCards);
-    safely(updateFrames);
-    safely(updateForeignElements);
-  };
   window.addEventListener("resize", () =>
     requestAnimationFrame(() => {
       safely(updateDroplets);
@@ -2554,8 +3221,20 @@ if (!customElements.get(PICKER_TAG)) {
   // Theme- oder Moduswechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.
   new MutationObserver(tick).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
   window.addEventListener("location-changed", () => setTimeout(tick, 100));
-  // Fängt Änderungen von anderen Geräten und späte Seitenaufbauten ab. Kostet praktisch nichts.
-  setInterval(tick, 1000);
+  // Einstellungen dieses Geräts in einem anderen Fenster geändert
+  window.addEventListener("storage", (ev) => {
+    if (ev.key !== DEVICE_KEY) return;
+    deviceCache = null;
+    tick();
+  });
+  // Fängt Änderungen von anderen Geräten und späte Seitenaufbauten ab. Kostet praktisch nichts,
+  // im Sparmodus seltener.
+  let last = 0;
+  setInterval(() => {
+    if (saver() && Date.now() - last < 2900) return;
+    last = Date.now();
+    tick();
+  }, 1000);
   tick();
 
   console.info(`%c NEUMORPHISM-COLORS %c ${VERSION} `, "background:#3d7bfd;color:#fff", "");

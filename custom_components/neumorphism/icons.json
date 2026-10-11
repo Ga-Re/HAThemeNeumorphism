@@ -1,0 +1,10 @@
+{
+  "services": {
+    "set_style": {
+      "service": "mdi:palette"
+    },
+    "reset_style": {
+      "service": "mdi:palette-outline"
+    }
+  }
+}

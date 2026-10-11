@@ -3,11 +3,217 @@
     "step": {
       "user": {
         "title": "Neumorphism",
-        "description": "Provides the theme “Neumorphism” and adds primary and accent color pickers and an effect strength slider to the Theme section of your profile. Afterwards select the theme “Neumorphism” in your profile."
+        "description": "Provides the theme “Neumorphism” and adds all settings to the Theme section of your profile: colors, background, effect strength, light direction, surface, roundness, font and more. Afterwards select the theme “Neumorphism” in your profile."
       }
     },
     "abort": {
       "single_instance_allowed": "Neumorphism is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Default for all users",
+        "description": "Applies to all users who do not change the setting in their profile. Empty fields: theme default. Easier: “Use as default for everyone” in your profile.",
+        "data": {
+          "primary_color": "Primary color",
+          "accent_color": "Accent color",
+          "background": "Background",
+          "strength": "Effect strength",
+          "light_direction": "Light direction",
+          "surface": "Surface",
+          "contrast": "Contrast",
+          "roundness": "Roundness",
+          "font": "Font",
+          "sections": "Sections",
+          "animations": "Animations",
+          "glow": "Glow of active devices",
+          "custom_cards": "Custom cards",
+          "addons": "Add-ons and integrations"
+        },
+        "data_description": {
+          "primary_color": "Buttons, icons, selection. As #rrggbb, e.g. #3d7bfd.",
+          "accent_color": "Switches and highlights. As #rrggbb.",
+          "background": "Tint of the surfaces.",
+          "strength": "-100 to 100. Positive raised, 0 flat, negative inverted.",
+          "light_direction": "Where the light comes from; shadows fall on the opposite side.",
+          "surface": "Raised surfaces even, convex or concave.",
+          "contrast": "High: stronger text, lines and shadows and a fine edge around every surface.",
+          "roundness": "0 to 200 percent of the usual roundness; 0 is square.",
+          "font": "Rounded: Nunito, shipped with the integration.",
+          "sections": "In section dashboards, the cards of each section in an inset well.",
+          "animations": "Buttons sink in when pressed, switches and selections glide.",
+          "glow": "Devices that are on glow softly in their state color.",
+          "custom_cards": "Cards from HACS or self-written.",
+          "addons": "Add-on interfaces and integration pages in the same design."
+        }
+      }
+    },
+    "error": {
+      "invalid_color": "Enter the color as #rrggbb, e.g. #3d7bfd."
+    }
+  },
+  "selector": {
+    "background": {
+      "options": {
+        "standard": "Standard",
+        "gray": "Gray",
+        "warm": "Warm",
+        "sand": "Sand",
+        "mint": "Mint",
+        "rose": "Rose",
+        "blue": "Blue",
+        "primary": "Primary color"
+      }
+    },
+    "light_direction": {
+      "options": {
+        "top_left": "Top left",
+        "top": "Top",
+        "top_right": "Top right"
+      }
+    },
+    "surface": {
+      "options": {
+        "flat": "Flat",
+        "convex": "Convex",
+        "concave": "Concave"
+      }
+    },
+    "contrast": {
+      "options": {
+        "normal": "Normal",
+        "high": "High"
+      }
+    },
+    "font": {
+      "options": {
+        "standard": "Standard",
+        "round": "Rounded"
+      }
+    },
+    "sections": {
+      "options": {
+        "open": "Open",
+        "well": "As wells"
+      }
+    },
+    "animations": {
+      "options": {
+        "on": "On",
+        "off": "Off"
+      }
+    },
+    "glow": {
+      "options": {
+        "on": "On",
+        "off": "Off"
+      }
+    },
+    "custom_cards": {
+      "options": {
+        "full": "Full",
+        "frame": "Frame only",
+        "off": "Off"
+      }
+    },
+    "addons": {
+      "options": {
+        "full": "Adapted",
+        "off": "Off"
+      }
+    },
+    "settings": {
+      "options": {
+        "primary_color": "Primary color",
+        "accent_color": "Accent color",
+        "background": "Background",
+        "strength": "Effect strength",
+        "light_direction": "Light direction",
+        "surface": "Surface",
+        "contrast": "Contrast",
+        "roundness": "Roundness",
+        "font": "Font",
+        "sections": "Sections",
+        "animations": "Animations",
+        "glow": "Glow of active devices",
+        "custom_cards": "Custom cards",
+        "addons": "Add-ons and integrations"
+      }
+    }
+  },
+  "services": {
+    "set_style": {
+      "name": "Set style",
+      "description": "Sets settings of the Neumorphism theme for all users and devices until they are cleared with “Clear style”. Settings that are not given stay as they are.",
+      "fields": {
+        "primary_color": {
+          "name": "Primary color",
+          "description": "Buttons, icons, selection."
+        },
+        "accent_color": {
+          "name": "Accent color",
+          "description": "Switches and highlights."
+        },
+        "background": {
+          "name": "Background",
+          "description": "Tint of the surfaces."
+        },
+        "strength": {
+          "name": "Effect strength",
+          "description": "-100 to 100. Positive raised, 0 flat, negative inverted."
+        },
+        "light_direction": {
+          "name": "Light direction",
+          "description": "Where the light comes from; shadows fall on the opposite side."
+        },
+        "surface": {
+          "name": "Surface",
+          "description": "Raised surfaces even, convex or concave."
+        },
+        "contrast": {
+          "name": "Contrast",
+          "description": "High: stronger text, lines and shadows and a fine edge around every surface."
+        },
+        "roundness": {
+          "name": "Roundness",
+          "description": "0 to 200 percent of the usual roundness; 0 is square."
+        },
+        "font": {
+          "name": "Font",
+          "description": "Rounded: Nunito, shipped with the integration."
+        },
+        "sections": {
+          "name": "Sections",
+          "description": "In section dashboards, the cards of each section in an inset well."
+        },
+        "animations": {
+          "name": "Animations",
+          "description": "Buttons sink in when pressed, switches and selections glide."
+        },
+        "glow": {
+          "name": "Glow of active devices",
+          "description": "Devices that are on glow softly in their state color."
+        },
+        "custom_cards": {
+          "name": "Custom cards",
+          "description": "Cards from HACS or self-written."
+        },
+        "addons": {
+          "name": "Add-ons and integrations",
+          "description": "Add-on interfaces and integration pages in the same design."
+        }
+      }
+    },
+    "reset_style": {
+      "name": "Clear style",
+      "description": "Clears the settings made with “Set style”; afterwards every user's profile settings apply again.",
+      "fields": {
+        "settings": {
+          "name": "Settings",
+          "description": "Clear only these; empty: all."
+        }
+      }
     }
   }
 }

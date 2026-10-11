@@ -1,0 +1,131 @@
+set_style:
+  fields:
+    primary_color:
+      required: false
+      selector:
+        color_rgb:
+    accent_color:
+      required: false
+      selector:
+        color_rgb:
+    background:
+      required: false
+      selector:
+        select:
+          translation_key: background
+          options:
+            - standard
+            - gray
+            - warm
+            - sand
+            - mint
+            - rose
+            - blue
+            - primary
+    strength:
+      required: false
+      selector:
+        number:
+          min: -100
+          max: 100
+          step: 5
+          mode: slider
+    light_direction:
+      required: false
+      selector:
+        select:
+          translation_key: light_direction
+          options:
+            - top_left
+            - top
+            - top_right
+    surface:
+      required: false
+      selector:
+        select:
+          translation_key: surface
+          options:
+            - flat
+            - convex
+            - concave
+    contrast:
+      required: false
+      selector:
+        select:
+          translation_key: contrast
+          options:
+            - normal
+            - high
+    roundness:
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 200
+          step: 10
+          unit_of_measurement: "%"
+          mode: slider
+    font:
+      required: false
+      selector:
+        select:
+          translation_key: font
+          options:
+            - standard
+            - round
+    sections:
+      required: false
+      selector:
+        select:
+          translation_key: sections
+          options:
+            - open
+            - well
+    animations:
+      required: false
+      selector:
+        boolean:
+    glow:
+      required: false
+      selector:
+        boolean:
+    custom_cards:
+      required: false
+      selector:
+        select:
+          translation_key: custom_cards
+          options:
+            - full
+            - frame
+            - off
+    addons:
+      required: false
+      selector:
+        select:
+          translation_key: addons
+          options:
+            - full
+            - off
+reset_style:
+  fields:
+    settings:
+      required: false
+      selector:
+        select:
+          multiple: true
+          translation_key: settings
+          options:
+            - primary_color
+            - accent_color
+            - background
+            - strength
+            - light_direction
+            - surface
+            - contrast
+            - roundness
+            - font
+            - sections
+            - animations
+            - glow
+            - custom_cards
+            - addons

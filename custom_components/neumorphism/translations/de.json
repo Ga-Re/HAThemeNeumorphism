@@ -3,11 +3,217 @@
     "step": {
       "user": {
         "title": "Neumorphism",
-        "description": "Stellt das Theme „Neumorphism“ bereit und zeigt im Profil unter „Design“ Farbwähler für Primär- und Akzentfarbe sowie einen Regler für die Effektstärke. Danach im Profil das Theme „Neumorphism“ wählen."
+        "description": "Stellt das Theme „Neumorphism“ bereit und zeigt im Profil unter „Design“ alle Einstellungen: Farben, Hintergrund, Effektstärke, Lichtrichtung, Oberfläche, Rundung, Schrift und mehr. Danach im Profil das Theme „Neumorphism“ wählen."
       }
     },
     "abort": {
       "single_instance_allowed": "Neumorphism ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Standard für alle Benutzer",
+        "description": "Gilt für alle Benutzer, die die Einstellung im Profil nicht selbst ändern. Leere Felder: Standard des Themes. Bequemer geht es im Profil mit „Als Standard für alle“.",
+        "data": {
+          "primary_color": "Primärfarbe",
+          "accent_color": "Akzentfarbe",
+          "background": "Hintergrund",
+          "strength": "Effektstärke",
+          "light_direction": "Lichtrichtung",
+          "surface": "Oberfläche",
+          "contrast": "Kontrast",
+          "roundness": "Rundung",
+          "font": "Schrift",
+          "sections": "Sektionen",
+          "animations": "Animationen",
+          "glow": "Leuchten aktiver Geräte",
+          "custom_cards": "Eigene Karten",
+          "addons": "Add-ons und Integrationen"
+        },
+        "data_description": {
+          "primary_color": "Buttons, Symbole, Auswahl. Als #rrggbb, z. B. #3d7bfd.",
+          "accent_color": "Schalter und Hervorhebungen. Als #rrggbb.",
+          "background": "Farbton der Flächen.",
+          "strength": "-100 bis 100. Positiv erhaben, 0 flach, negativ umgekehrt.",
+          "light_direction": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite.",
+          "surface": "Erhabene Flächen eben, gewölbt oder gemuldet.",
+          "contrast": "Hoch: kräftigere Schrift, Linien und Schatten und eine feine Kante um jede Fläche.",
+          "roundness": "0 bis 200 Prozent der üblichen Rundung; 0 ist eckig.",
+          "font": "Rund: Nunito, wird mit der Integration geliefert.",
+          "sections": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde.",
+          "animations": "Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten.",
+          "glow": "Eingeschaltete Geräte leuchten sanft in ihrer Zustandsfarbe.",
+          "custom_cards": "Karten aus HACS oder selbst geschrieben.",
+          "addons": "Oberflächen von Add-ons und Seiten von Integrationen im selben Design."
+        }
+      }
+    },
+    "error": {
+      "invalid_color": "Farbe als #rrggbb angeben, z. B. #3d7bfd."
+    }
+  },
+  "selector": {
+    "background": {
+      "options": {
+        "standard": "Standard",
+        "gray": "Grau",
+        "warm": "Warm",
+        "sand": "Sand",
+        "mint": "Mint",
+        "rose": "Rosé",
+        "blue": "Blau",
+        "primary": "Primärfarbe"
+      }
+    },
+    "light_direction": {
+      "options": {
+        "top_left": "Oben links",
+        "top": "Oben",
+        "top_right": "Oben rechts"
+      }
+    },
+    "surface": {
+      "options": {
+        "flat": "Flach",
+        "convex": "Gewölbt",
+        "concave": "Gemuldet"
+      }
+    },
+    "contrast": {
+      "options": {
+        "normal": "Normal",
+        "high": "Hoch"
+      }
+    },
+    "font": {
+      "options": {
+        "standard": "Standard",
+        "round": "Rund"
+      }
+    },
+    "sections": {
+      "options": {
+        "open": "Frei",
+        "well": "Als Mulden"
+      }
+    },
+    "animations": {
+      "options": {
+        "on": "An",
+        "off": "Aus"
+      }
+    },
+    "glow": {
+      "options": {
+        "on": "An",
+        "off": "Aus"
+      }
+    },
+    "custom_cards": {
+      "options": {
+        "full": "Vollständig",
+        "frame": "Nur Rahmen",
+        "off": "Aus"
+      }
+    },
+    "addons": {
+      "options": {
+        "full": "Angepasst",
+        "off": "Aus"
+      }
+    },
+    "settings": {
+      "options": {
+        "primary_color": "Primärfarbe",
+        "accent_color": "Akzentfarbe",
+        "background": "Hintergrund",
+        "strength": "Effektstärke",
+        "light_direction": "Lichtrichtung",
+        "surface": "Oberfläche",
+        "contrast": "Kontrast",
+        "roundness": "Rundung",
+        "font": "Schrift",
+        "sections": "Sektionen",
+        "animations": "Animationen",
+        "glow": "Leuchten aktiver Geräte",
+        "custom_cards": "Eigene Karten",
+        "addons": "Add-ons und Integrationen"
+      }
+    }
+  },
+  "services": {
+    "set_style": {
+      "name": "Stil festlegen",
+      "description": "Legt Einstellungen des Neumorphism-Themes für alle Benutzer und Geräte fest, bis sie mit „Stil aufheben“ aufgehoben werden. Nicht angegebene Einstellungen bleiben, wie sie sind.",
+      "fields": {
+        "primary_color": {
+          "name": "Primärfarbe",
+          "description": "Buttons, Symbole, Auswahl."
+        },
+        "accent_color": {
+          "name": "Akzentfarbe",
+          "description": "Schalter und Hervorhebungen."
+        },
+        "background": {
+          "name": "Hintergrund",
+          "description": "Farbton der Flächen."
+        },
+        "strength": {
+          "name": "Effektstärke",
+          "description": "-100 bis 100. Positiv erhaben, 0 flach, negativ umgekehrt."
+        },
+        "light_direction": {
+          "name": "Lichtrichtung",
+          "description": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite."
+        },
+        "surface": {
+          "name": "Oberfläche",
+          "description": "Erhabene Flächen eben, gewölbt oder gemuldet."
+        },
+        "contrast": {
+          "name": "Kontrast",
+          "description": "Hoch: kräftigere Schrift, Linien und Schatten und eine feine Kante um jede Fläche."
+        },
+        "roundness": {
+          "name": "Rundung",
+          "description": "0 bis 200 Prozent der üblichen Rundung; 0 ist eckig."
+        },
+        "font": {
+          "name": "Schrift",
+          "description": "Rund: Nunito, wird mit der Integration geliefert."
+        },
+        "sections": {
+          "name": "Sektionen",
+          "description": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde."
+        },
+        "animations": {
+          "name": "Animationen",
+          "description": "Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten."
+        },
+        "glow": {
+          "name": "Leuchten aktiver Geräte",
+          "description": "Eingeschaltete Geräte leuchten sanft in ihrer Zustandsfarbe."
+        },
+        "custom_cards": {
+          "name": "Eigene Karten",
+          "description": "Karten aus HACS oder selbst geschrieben."
+        },
+        "addons": {
+          "name": "Add-ons und Integrationen",
+          "description": "Oberflächen von Add-ons und Seiten von Integrationen im selben Design."
+        }
+      }
+    },
+    "reset_style": {
+      "name": "Stil aufheben",
+      "description": "Hebt die mit „Stil festlegen“ gesetzten Einstellungen auf; danach gilt wieder, was jeder Benutzer im Profil eingestellt hat.",
+      "fields": {
+        "settings": {
+          "name": "Einstellungen",
+          "description": "Nur diese aufheben; leer: alle."
+        }
+      }
     }
   }
 }
