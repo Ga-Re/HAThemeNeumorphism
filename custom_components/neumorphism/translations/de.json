@@ -41,7 +41,7 @@
           "contrast": "Hoch: kräftigere Schrift, Linien und Schatten und eine feine Kante um jede Fläche.",
           "roundness": "0 bis 200 Prozent der üblichen Rundung; 0 ist eckig.",
           "font": "Rund: Nunito, wird mit der Integration geliefert.",
-          "sections": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde.",
+          "sections": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde oder auf einer herausgehobenen Platte.",
           "animations": "Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten.",
           "glow": "Eingeschaltete Geräte leuchten sanft in ihrer Zustandsfarbe.",
           "custom_cards": "Karten aus HACS oder selbst geschrieben.",
@@ -95,7 +95,8 @@
     "sections": {
       "options": {
         "open": "Frei",
-        "well": "Als Mulden"
+        "well": "Eingelassen",
+        "raised": "Herausgehoben"
       }
     },
     "animations": {
@@ -185,7 +186,7 @@
         },
         "sections": {
           "name": "Sektionen",
-          "description": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde."
+          "description": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde oder auf einer herausgehobenen Platte."
         },
         "animations": {
           "name": "Animationen",

@@ -12,7 +12,7 @@ Das Design gilt überall: auf den Dashboards, in allen Seiten von Home Assistant
 - **Auch eigene Karten** aus HACS oder selbst geschrieben, etwa [M3 Cards](https://github.com/j0sp0r/m3-cards), Mushroom, Button Card oder Bubble Card: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen
 - **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen. Die gewählte Ansicht in der Titelleiste läuft beim Wischen wie ein Tropfen in die Knöpfe hinein, die übrigen Ansichten blenden an den Rändern weich aus
 - **Aktive Geräte leuchten** sanft in ihrer Zustandsfarbe, **Knöpfe sinken beim Drücken ein**, Schalter und Auswahl gleiten
-- **Alles einstellbar im Profil**: Primär- und Akzentfarbe, Farbton des Hintergrunds, Effektstärke von −100 bis +100 (im negativen Bereich umgekehrt), Lichtrichtung, gewölbte oder gemuldete Oberfläche, Kontrast, Rundung, runde Schrift, Sektionen als Mulden
+- **Alles einstellbar im Profil**: Primär- und Akzentfarbe, Farbton des Hintergrunds, Effektstärke von −100 bis +100 (im negativen Bereich umgekehrt), Lichtrichtung, gewölbte oder gemuldete Oberfläche, Kontrast, Rundung, runde Schrift, Sektionen eingelassen oder herausgehoben
 - Einstellungen gelten **pro Benutzer** auf allen Geräten oder **nur für ein Gerät**, etwa ein Wandtablet, auch mit festem Hell- oder Dunkelmodus
 - **Standard für alle Benutzer** legt der Administrator fest, **Automationen** können den Stil ändern (z. B. abends wärmer und flacher)
 - **Sparmodus** für schwache Geräte
@@ -54,7 +54,7 @@ Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
 **Form und Schrift**
 - **Rundung**: 0 % (eckig) bis 200 % der üblichen Rundung von Karten, Dialogen, Knöpfen und Feldern
 - **Schrift**: *Standard* oder *Rund* (Nunito, liegt der Integration bei, nichts wird aus dem Internet geladen)
-- **Sektionen**: *Als Mulden* legt in Dashboards mit Sektionen die Karten jeder Sektion in eine eingelassene Mulde
+- **Sektionen**: in Dashboards mit Sektionen *Frei* wie gewohnt, *Eingelassen* (die Karten jeder Sektion liegen in einer Mulde) oder *Herausgehoben* (die Karten liegen auf einer erhabenen Platte)
 
 **Bewegung**
 - **Animationen**: Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten, die gewählte Ansicht erscheint weich. Ist im System „Bewegung reduzieren“ eingeschaltet, bleibt alles still
@@ -66,7 +66,7 @@ Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
 
 **Zurücksetzen** stellt alle Einstellungen auf den Standard zurück.
 
-![Oben links: gewölbt mit Licht von oben. Oben rechts: Sand, dunkel, hoher Kontrast. Unten links: Mint mit runder Schrift und wenig Rundung. Unten rechts: Sektionen als Mulden, Hintergrund passend zur Primärfarbe, dunkel](styles.png)
+![Oben links: gewölbt mit Licht von oben. Oben rechts: Sand, dunkel, hoher Kontrast. Unten links: Mint mit runder Schrift und wenig Rundung. Unten rechts: Sektionen eingelassen, Hintergrund passend zur Primärfarbe, dunkel](styles.png)
 
 ### Für meinen Benutzer oder nur für dieses Gerät
 
@@ -99,7 +99,7 @@ actions:
       glow: true
 ```
 
-Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`), `sections` (`open`, `well`), `animations` und `glow` (`true`/`false`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
+Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`), `sections` (`open`, `well`, `raised`), `animations` und `glow` (`true`/`false`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
 
 Die Vorgaben gelten, auch über einen Neustart hinweg, bis **`neumorphism.reset_style`** sie aufhebt, ganz oder nur einzelne:
 

@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "7.0.0";
+const VERSION = "7.1.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -204,7 +204,7 @@ const CHOICES = {
   contrast: ["normal", "high"],
   glow: ["on", "off"],
   motion: ["on", "off"],
-  sections: ["open", "well"],
+  sections: ["open", "well", "raised"],
   cards: ["full", "frame", "off"],
   apps: ["full", "off"],
 };
@@ -792,6 +792,13 @@ const FEATURE_STYLES = {
       .section > .section-container { padding: var(--ha-space-3, 12px); box-shadow: ${INSET_L};
         border-radius: calc(var(--ha-card-border-radius, 28px) + var(--ha-space-3, 12px)); }`,
   },
+  // Sektionen als herausgehobene Platten, die Karten liegen erhaben darauf
+  plates: {
+    "hui-sections-view": `
+      .section > .section-container { padding: var(--ha-space-3, 12px);
+        background-color: ${SURFACE}; background-image: ${SHEEN}; box-shadow: var(--neumorphism-card-shadow);
+        border-radius: calc(var(--ha-card-border-radius, 28px) + var(--ha-space-3, 12px)); }`,
+  },
 };
 
 const supportsSheets =
@@ -838,6 +845,7 @@ const FEATURE_ON = {
   glow: (s) => s.glow === "on",
   motion: (s) => s.motion === "on" && !saver(),
   wells: (s) => s.sections === "well",
+  plates: (s) => s.sections === "raised",
 };
 
 /** Ein gemeinsames Stylesheet pro Element: neu füllen genügt, um alles umzuschalten. */
@@ -2591,10 +2599,11 @@ function texts(hass) {
     fontHint: t("Rund: Nunito, wird mit der Integration geliefert.", "Rounded: Nunito, shipped with the integration."),
     sections: t("Sektionen", "Sections"),
     sections_open: t("Frei", "Open"),
-    sections_well: t("Als Mulden", "As wells"),
+    sections_well: t("Eingelassen", "Inset"),
+    sections_raised: t("Herausgehoben", "Raised"),
     sectionsHint: t(
-      "In Dashboards mit Sektionen liegen die Karten jeder Sektion in einer eingelassenen Mulde.",
-      "In section dashboards, the cards of each section sit in an inset well."
+      "In Dashboards mit Sektionen liegen die Karten jeder Sektion in einer eingelassenen Mulde oder auf einer herausgehobenen Platte.",
+      "In section dashboards, the cards of each section sit in an inset well or on a raised plate."
     ),
     motion: t("Animationen", "Animations"),
     motion_on: t("An", "On"),
@@ -2737,7 +2746,7 @@ class NeumorphismColorPicker extends HTMLElement {
           box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
         .dot.selected { outline: 2px solid var(--primary-text-color); }
         .setting { padding: 14px 0 2px; }
-        .setting[data-setting="light"] { grid-column: 1 / -1; }
+        .setting[data-setting="light"], .setting[data-setting="sections"] { grid-column: 1 / -1; }
         .segmented button { white-space: nowrap; }
         .setting-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
         .tints { display: flex; flex-wrap: wrap; gap: 14px 10px; padding: 10px 2px 4px; }

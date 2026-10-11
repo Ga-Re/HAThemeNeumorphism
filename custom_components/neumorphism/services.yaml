@@ -81,6 +81,7 @@ set_style:
           options:
             - open
             - well
+            - raised
     animations:
       required: false
       selector:

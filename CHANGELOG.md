@@ -1,5 +1,10 @@
 # Änderungen
 
+## 7.1.0
+
+- Sektionen können jetzt auch herausgehoben sein: Die Karten jeder Sektion liegen auf einer erhabenen Platte (Profil → Sektionen → *Herausgehoben*, in Aktionen `sections: raised`)
+- Bezeichnung „Als Mulden“ heißt jetzt „Eingelassen“
+
 ## 7.0.0
 
 **Neu im Profil**

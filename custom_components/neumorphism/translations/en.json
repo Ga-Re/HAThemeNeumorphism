@@ -41,7 +41,7 @@
           "contrast": "High: stronger text, lines and shadows and a fine edge around every surface.",
           "roundness": "0 to 200 percent of the usual roundness; 0 is square.",
           "font": "Rounded: Nunito, shipped with the integration.",
-          "sections": "In section dashboards, the cards of each section in an inset well.",
+          "sections": "In section dashboards, the cards of each section in an inset well or on a raised plate.",
           "animations": "Buttons sink in when pressed, switches and selections glide.",
           "glow": "Devices that are on glow softly in their state color.",
           "custom_cards": "Cards from HACS or self-written.",
@@ -95,7 +95,8 @@
     "sections": {
       "options": {
         "open": "Open",
-        "well": "As wells"
+        "well": "Inset",
+        "raised": "Raised"
       }
     },
     "animations": {
@@ -185,7 +186,7 @@
         },
         "sections": {
           "name": "Sections",
-          "description": "In section dashboards, the cards of each section in an inset well."
+          "description": "In section dashboards, the cards of each section in an inset well or on a raised plate."
         },
         "animations": {
           "name": "Animations",
