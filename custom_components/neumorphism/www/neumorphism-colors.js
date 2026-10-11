@@ -19,7 +19,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "6.1.2";
+const VERSION = "6.2.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -338,7 +338,7 @@ const CONTROL_STYLES = {
     .header::after { ${HEADER_FADE} }
     .edit-mode .header::after { background: linear-gradient(to bottom, var(--app-header-edit-background-color), transparent); }
     .toolbar { border-bottom: none !important; position: relative; }
-    .action-items, .toolbar > ha-menu-button, .toolbar > ha-icon-button-arrow-prev { ${GROUP} }
+    .action-items, .toolbar > ha-menu-button, .toolbar > ha-icon-button-arrow-prev, .toolbar > ha-tab-group { ${GROUP} }
   `,
   "ha-top-app-bar-fixed": `
     .row, .sub-row { border-bottom: none !important; }
@@ -376,6 +376,13 @@ const CONTROL_STYLES = {
     .indicator { display: none !important; }
     /* Waagrechte Reiterleisten scrollen nur seitlich, nie senkrecht (auch nicht bei Rundungsfehlern) */
     .tab-group-top .nav, .tab-group-bottom .nav { overflow-y: hidden !important; }
+    /* Home Assistant blendet die Enden mit einer Fläche in Hintergrundfarbe aus; die legt sich als
+       Streifen über Schatten und Tropfenform. Stattdessen blenden die Reiter selbst weich aus. */
+    .scroll-button { background: none !important; }
+    /* Reiter laufen an den Enden weich aus statt an einer harten Kante */
+    .tab-group-top .nav, .tab-group-bottom .nav {
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+      mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
   `,
   // Die Pille liegt in der Reiterfläche, ohne sie zu vergrößern: sonst wird die Reiterleiste
   // höher als die Titelleiste, lässt sich verschieben und schneidet den Schatten ab.
@@ -383,6 +390,8 @@ const CONTROL_STYLES = {
     .tab { position: relative; isolation: isolate; }
     :host([active]) .tab::before { content: ""; position: absolute; inset: 9px 2px; z-index: -1;
       border-radius: ${PILL}; background: ${SURFACE}; box-shadow: ${RAISED_S}; }
+    /* In der Titelleiste gehört die Pille zur Tropfenform der Knöpfe (siehe headerTabsGroup) */
+    :host([neumorphism-header][active]) .tab::before { display: none; }
   `,
   // Filter- und Auswahl-Chips: erhaben statt umrandet
   "ha-assist-chip": `
@@ -534,8 +543,13 @@ const singleGroup = (el) => el && { anchor: el, elements: [el] };
 const NAV_BUTTON = ":scope > ha-menu-button, :scope > ha-icon-button-arrow-prev";
 const DROPLET_GROUPS = {
   "hui-root": [
-    (root) => !root.querySelector(".edit-mode") && childGroup(root.querySelector(".toolbar .action-items")),
-    (root) => !root.querySelector(".edit-mode") && singleGroup(root.querySelector(".toolbar")?.querySelector(NAV_BUTTON)),
+    (root) =>
+      !root.querySelector(".edit-mode") &&
+      (headerTabsGroup(root) || childGroup(root.querySelector(".toolbar .action-items"))),
+    (root) =>
+      !root.querySelector(".edit-mode") &&
+      !activeHeaderTab(root) &&
+      singleGroup(root.querySelector(".toolbar")?.querySelector(NAV_BUTTON)),
   ],
   "ha-top-app-bar-fixed": [
     (root) => slotGroup(root.querySelector('#actions slot[name="actionItems"]')),
@@ -577,6 +591,58 @@ function groupItems(group) {
   return group.elements.flatMap(itemRects).sort((a, b) => a.left - b.left);
 }
 
+const activeHeaderTab = (root) => root.querySelector(".toolbar ha-tab-group > ha-tab-group-tab[active]");
+
+/**
+ * Titelleiste mit Ansichten: Menüknopf, gewählte Ansicht und Knöpfe rechts in einer Form.
+ * Die Pille der gewählten Ansicht liegt mit in der Tropfenform; beim Wischen läuft sie wie ein
+ * Tropfen in die Knöpfe hinein (sichtbar nur zwischen deren Mitten).
+ */
+function headerTabsGroup(root) {
+  const active = activeHeaderTab(root);
+  const inner = active?.shadowRoot?.querySelector(".tab");
+  if (!inner) return null;
+  const toolbar = root.querySelector(".toolbar");
+  const tabs = active.parentElement;
+  watchTabScroll(tabs);
+  for (const tab of tabs.children) tab.toggleAttribute?.("neumorphism-header", true);
+  const nav = toolbar.querySelector(NAV_BUTTON);
+  const actions = toolbar.querySelector(".action-items");
+  const navRects = nav ? itemRects(nav) : [];
+  const actionRects = actions ? [...actions.children].flatMap(itemRects).sort((a, b) => a.left - b.left) : [];
+  const t = inner.getBoundingClientRect();
+  if (!t.width) return null;
+  // Gleiche Maße wie die Pille in der Reiterleiste (9px oben/unten, 2px seitlich), plus DROPLET_INSET
+  const pill = {
+    left: t.left + 2 - DROPLET_INSET,
+    right: t.right - 2 + DROPLET_INSET,
+    top: t.top + 9 - DROPLET_INSET,
+    bottom: t.bottom - 9 + DROPLET_INSET,
+    clipLeft: navRects[0] ? navRects[0].left + navRects[0].width / 2 : undefined,
+    clipRight: actionRects[0] ? actionRects[0].left + actionRects[0].width / 2 : undefined,
+  };
+  pill.width = pill.right - pill.left;
+  pill.height = pill.bottom - pill.top;
+  return { anchor: toolbar.firstElementChild, rects: [...navRects, pill, ...actionRects] };
+}
+
+const watchedTabNavs = new WeakSet();
+function watchTabScroll(tabs) {
+  const nav = tabs.shadowRoot?.querySelector(".nav");
+  if (!nav || watchedTabNavs.has(nav)) return;
+  watchedTabNavs.add(nav);
+  nav.addEventListener("scroll", scheduleDroplets, { passive: true });
+}
+
+let dropletFrame = 0;
+function scheduleDroplets() {
+  if (dropletFrame) return;
+  dropletFrame = requestAnimationFrame(() => {
+    dropletFrame = 0;
+    safely(updateDroplets);
+  });
+}
+
 /** Farben und Stärke aus dem Theme, aufgelöst über ein unsichtbares Element. */
 function dropletPaint() {
   if (!dropletProbe) {
@@ -594,14 +660,25 @@ function dropletPaint() {
 
 const fmt = (n) => (Math.round(n * 100) / 100).toString();
 
-/** Kreis oder Pille als Pfad im Uhrzeigersinn (für eine gemeinsame Füllung ohne Nähte). */
-function capsulePath(left, right, cy, r) {
-  const a = left + r;
-  const b = Math.max(a, right - r);
-  return (
-    `M${fmt(a)} ${fmt(cy - r)}H${fmt(b)}A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(b)} ${fmt(cy + r)}` +
-    `H${fmt(a)}A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(a)} ${fmt(cy - r)}Z`
-  );
+/**
+ * Kreis oder Pille (von x0 bis x1) als Pfad im Uhrzeigersinn, nur der Teil zwischen den
+ * senkrechten Linien left und right (für Pillen, die unter einem Knopf verschwinden).
+ */
+function capsulePath(x0, x1, cy, r, left = x0, right = x1) {
+  const c0 = x0 + r;
+  const c1 = Math.max(c0, x1 - r);
+  const h = (x) => (x < c0 ? Math.sqrt(Math.max(0, r * r - (c0 - x) ** 2)) : x > c1 ? Math.sqrt(Math.max(0, r * r - (x - c1) ** 2)) : r);
+  const pt = (x, y) => `${fmt(x)} ${fmt(y)}`;
+  const xs = [left, ...[c0, c1].filter((x) => x > left && x < right), right];
+  const edge = (a, b, sign) => {
+    const mid = (a + b) / 2;
+    return mid < c0 || mid > c1 ? `A${fmt(r)} ${fmt(r)} 0 0 1 ${pt(b, cy + sign * h(b))}` : `L${pt(b, cy + sign * h(b))}`;
+  };
+  let d = `M${pt(left, cy - h(left))}`;
+  for (let i = 1; i < xs.length; i++) d += edge(xs[i - 1], xs[i], -1); // oben nach rechts
+  d += `L${pt(right, cy + h(right))}`;
+  for (let i = xs.length - 1; i > 0; i--) d += edge(xs[i], xs[i - 1], 1); // unten zurück
+  return d + "Z";
 }
 
 /** Eingeschnürte Brücke zwischen zwei Kreisen: Hohlkehlen tangential an beide Kreise. */
@@ -635,11 +712,10 @@ const rgbaParts = (color) => {
 };
 
 /** Form mit Schatten: erhaben, bei negativer Effektstärke eingelassen (Schatten innen). */
-function dropletSvg(width, height, shapes, paint) {
+function dropletSvg(width, height, d, paint, id) {
   const s = Math.abs(paint.strength);
   const [dark, darkA] = rgbaParts(paint.dark);
   const [light, lightA] = rgbaParts(paint.light);
-  const d = shapes.join("");
   const shade = (source, dx, color, alpha, result) =>
     `<feOffset in="${source}" dx="${fmt(dx * s)}" dy="${fmt(dx * s)}" result="${result}o"/>` +
     `<feFlood flood-color="${color}" flood-opacity="${alpha}"/><feComposite in2="${result}o" operator="in" result="${result}"/>`;
@@ -659,8 +735,8 @@ function dropletSvg(width, height, shapes, paint) {
         `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="d"/><feMergeNode in="l"/></feMerge>`;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-    `<defs><filter id="s" x="-50%" y="-50%" width="200%" height="200%">${filter}</filter></defs>` +
-    `<path filter="url(#s)" fill="${paint.fill}" d="${d}"/></svg>`
+    `<defs><filter id="${id}" x="-50%" y="-50%" width="200%" height="200%">${filter}</filter></defs>` +
+    `<path filter="url(#${id})" fill="${paint.fill}" d="${d}"/></svg>`
   );
 }
 
@@ -674,7 +750,7 @@ function updateDroplets() {
     DROPLET_GROUPS[tag].forEach((find, index) => {
       const existing = root.querySelector(`.neumorphism-droplet[data-group="${index}"]`);
       const group = (controlsActive && find(root)) || null;
-      const items = group ? groupItems(group) : [];
+      const items = group ? group.rects || groupItems(group) : [];
       const parent = group?.anchor.parentElement;
       if (!items.length || !parent) {
         existing?.remove();
@@ -690,51 +766,75 @@ function updateDroplets() {
  * Jedes Element wird zu einer Pille (bei quadratischen Knöpfen ein Kreis), benachbarte
  * Pillen werden an ihren zugewandten Enden mit einem Tropfen-Hals verbunden.
  */
+let dropletIds = 0;
+
 function drawDroplet(existing, parent, anchor, items, group, inset) {
   const box = parent.getBoundingClientRect();
   const offsetX = box.left + parent.clientLeft - parent.scrollLeft;
   const offsetY = box.top + parent.clientTop - parent.scrollTop;
-  const pills = items.map((rect) => {
+  const pills = [];
+  for (const rect of items) {
     const r = Math.min(rect.width, rect.height) / 2 - inset;
-    return { left: rect.left + inset - offsetX, right: rect.right - inset - offsetX, cy: rect.top + rect.height / 2 - offsetY, r };
-  });
+    const x0 = rect.left + inset - offsetX;
+    const x1 = rect.right - inset - offsetX;
+    // Teil einer Pille, der zwischen den Knöpfen sichtbar ist (rect.clipLeft/clipRight)
+    const left = rect.clipLeft === undefined ? x0 : Math.max(x0, rect.clipLeft - offsetX);
+    const right = rect.clipRight === undefined ? x1 : Math.min(x1, rect.clipRight - offsetX);
+    if (right - left < 0.5) continue;
+    pills.push({ x0, x1, left, right, cy: rect.top + rect.height / 2 - offsetY, r, flatLeft: left > x0, flatRight: right < x1 });
+  }
+  if (!pills.length) {
+    existing?.remove();
+    return null;
+  }
+  pills.sort((a, b) => a.left - b.left);
   const left = Math.min(...pills.map((p) => p.left)) - DROPLET_MARGIN;
   const top = Math.min(...pills.map((p) => p.cy - p.r)) - DROPLET_MARGIN;
   const width = Math.max(...pills.map((p) => p.right)) + DROPLET_MARGIN - left;
   const height = Math.max(...pills.map((p) => p.cy + p.r)) + DROPLET_MARGIN - top;
-  const local = pills.map((p) => ({ ...p, left: p.left - left, right: p.right - left, cy: p.cy - top }));
-  const shapes = local.map((p) => capsulePath(p.left, p.right, p.cy, p.r));
+  const local = pills.map((p) => ({
+    ...p,
+    x0: p.x0 - left,
+    x1: p.x1 - left,
+    left: p.left - left,
+    right: p.right - left,
+    cy: p.cy - top,
+  }));
+  const shapes = local.map((p) => capsulePath(p.x0, p.x1, p.cy, p.r, p.left, p.right));
   for (let i = 1; i < local.length; i++) {
     const a = local[i - 1];
     const b = local[i];
+    if (a.flatRight || b.flatLeft) continue; // liegt schon unter dem Knopf
     const r = Math.min(a.r, b.r);
-    shapes.push(bridgePath(a.right - a.r, b.left + b.r, (a.cy + b.cy) / 2, r));
+    shapes.push(bridgePath(a.x1 - a.r, b.x0 + b.r, (a.cy + b.cy) / 2, r));
   }
   const paint = dropletPaint();
   // Am rechten Bildschirmrand enden: Was darüber hinausragt, macht die Leiste seitlich verschiebbar
   const viewRight = parent.ownerDocument.documentElement.clientWidth - offsetX;
   const shown = Math.max(0, Math.min(width, viewRight - left));
-  const key = `${fmt(left)}|${fmt(top)}|${fmt(shown)}|${shapes.join("")}|${paint.dark}|${paint.light}|${paint.fill}|${paint.strength}`;
+  const frame = `${fmt(left)}|${fmt(top)}|${fmt(shown)}|${fmt(width)}|${fmt(height)}|${paint.dark}|${paint.light}|${paint.fill}|${paint.strength}`;
+  const d = shapes.join("");
 
   let droplet = existing;
   if (!droplet) {
     droplet = parent.ownerDocument.createElement("div");
     droplet.className = "neumorphism-droplet";
     droplet.dataset.group = String(group);
+    droplet.dataset.id = `neumorphism-droplet-${++dropletIds}`;
     droplet.setAttribute("aria-hidden", "true");
-    droplet.style.cssText = "position:absolute;pointer-events:none;z-index:0;background-repeat:no-repeat;background-position:0 0;";
+    droplet.style.cssText = "position:absolute;pointer-events:none;z-index:0;overflow:hidden;";
   }
   if (droplet.parentElement !== parent || droplet.nextSibling !== anchor) parent.insertBefore(droplet, anchor);
-  if (droplet.dataset.key === key) return droplet;
-  droplet.dataset.key = key;
-  Object.assign(droplet.style, {
-    left: `${left}px`,
-    top: `${top}px`,
-    width: `${shown}px`,
-    height: `${height}px`,
-    backgroundSize: `${width}px ${height}px`,
-    backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(dropletSvg(width, height, shapes, paint))}")`,
-  });
+  if (droplet.dataset.frame !== frame) {
+    // Größe, Farben oder Stärke geändert: neu aufbauen
+    droplet.dataset.frame = frame;
+    Object.assign(droplet.style, { left: `${left}px`, top: `${top}px`, width: `${shown}px`, height: `${height}px` });
+    droplet.innerHTML = dropletSvg(width, height, d, paint, droplet.dataset.id);
+  } else {
+    // Nur die Form bewegt sich (z. B. beim Wischen der Reiterleiste): nur den Umriss tauschen
+    const path = droplet.querySelector("path");
+    if (path && path.getAttribute("d") !== d) path.setAttribute("d", d);
+  }
   return droplet;
 }
 
@@ -787,7 +887,8 @@ function updateButtonGroups() {
         parent.dataset.neumorphismPositioned = "";
       }
       const existing = buttonDroplets.get(parent)?.[index];
-      drawn.push(drawDroplet(existing, parent, run[0].btn, run.map((e) => e.rect), `b${index}`, 0));
+      const droplet = drawDroplet(existing, parent, run[0].btn, run.map((e) => e.rect), `b${index}`, 0);
+      if (droplet) drawn.push(droplet);
       for (const e of run) merged.add(e.btn);
     });
     if (drawn.length) used.set(parent, drawn);
