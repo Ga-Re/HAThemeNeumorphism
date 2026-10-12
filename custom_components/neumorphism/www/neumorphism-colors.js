@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.0.1";
+const VERSION = "8.1.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -371,9 +371,14 @@ function currentDashboard(hass = getHass()) {
 const sunState = (hass = getHass()) => hass?.states?.["sun.sun"];
 const isEvening = (hass = getHass()) => sunState(hass)?.state === "below_horizon";
 
+// Vorschau aus den Einstellungen: Abend jetzt ansehen, Stil eines Dashboards auf dieser Seite zeigen.
+// evening und owner: die Einstellungen, die die Vorschau eingeschaltet haben (nur sie schalten sie aus).
+const previewState = { evening: null, dashboard: "", owner: null };
+const eveningNow = (hass) => !!previewState.evening || isEvening(hass);
+
 /** Abendmodus: wärmer und flacher zwischen Sonnenuntergang und Sonnenaufgang (dunkel: siehe applyDeviceMode). */
 function eveningLayer(s, hass) {
-  if (!s.evening.length || !isEvening(hass)) return {};
+  if (!s.evening.length || !eveningNow(hass)) return {};
   const out = {};
   if (s.evening.includes("warm")) out.tint = "warm";
   if (s.evening.includes("flat")) out.strength = Math.round(s.strength * 50) / 100;
@@ -398,7 +403,7 @@ function baseSettings(hass = getHass(), target = defaultTarget()) {
 }
 
 /** Was gerade gilt (auf dem angegebenen Dashboard, sonst auf der aktuellen Seite). */
-function settings(hass = getHass(), dashboard = currentDashboard(hass)) {
+function settings(hass = getHass(), dashboard = previewState.dashboard || currentDashboard(hass)) {
   const s = { ...BUILTIN, ...backend.defaults, ...userLayer(hass), ...deviceLayer(), ...(backend.dashboards[dashboard] || {}) };
   return { ...s, ...eveningLayer(s, hass), ...backend.style, ...preview };
 }
@@ -718,11 +723,15 @@ function applySettings() {
  */
 let modeApplied = ""; // "" = wie im Profil
 
-/** Fester Modus: dieses Gerät, sonst dunkel im Abendmodus, sonst "" (wie im Profil). */
+/**
+ * Fester Modus: dieses Gerät, sonst dunkel im Abendmodus, sonst "" (wie im Profil).
+ * Nur mit Neumorphism: bei einem anderen Theme gibt es die Einstellung im Profil nicht.
+ */
 function forcedMode() {
+  if (!neumorphismActive()) return "";
   const mode = device().mode;
   if (mode === "light" || mode === "dark") return mode;
-  return settings().evening.includes("dark") && isEvening() && neumorphismActive() ? "dark" : "";
+  return settings().evening.includes("dark") && eveningNow() ? "dark" : "";
 }
 function applyDeviceMode() {
   const root = getRoot();
@@ -1150,8 +1159,29 @@ function findAllDeep(selector, doc = document) {
   return found;
 }
 
+/**
+ * Home Assistant hängt Seiten und Ansichten beim Zurückkehren wieder ein, ohne sie neu zu bauen.
+ * Damit sich solche Elemente dann wieder melden, bekommen sie einen Lit-Controller; so können
+ * abgehängte Elemente sofort vergessen werden (kein Speicher für längst geschlossene Seiten).
+ */
+function watchReconnect(el, tag) {
+  if (el.__neumorphismReconnect || typeof el.addController !== "function") return;
+  el.__neumorphismReconnect = true;
+  el.addController({ hostConnected: () => trackHost(el, tag) });
+}
+
+/** Abgehängte Elemente vergessen; ohne Controller (siehe oben) erst ab limit Einträgen. */
+function forgetDetached(collection, limit, onForget) {
+  for (const el of collection.keys()) {
+    if (el.isConnected || (!el.__neumorphismReconnect && collection.size <= limit)) continue;
+    collection.delete(el);
+    onForget?.(el);
+  }
+}
+
 /** Merkt sich Elemente, die später noch bearbeitet werden (Tropfen, Karten, eingebettete Seiten). */
 function trackHost(el, tag) {
+  watchReconnect(el, tag);
   if (DROPLET_GROUPS[tag]) {
     dropletHosts.set(el, tag);
     layoutObserver?.observe(el); // Titelleiste breiter oder schmaler (z. B. Seitenleiste): neu zeichnen
@@ -1175,6 +1205,16 @@ function patchControls(win = window) {
   if (!supportsSheets || win.__neumorphismPatched) return;
   win.__neumorphismPatched = true;
   const tags = new Set([...Object.keys(CONTROL_STYLES), ...Object.values(FEATURE_STYLES).flatMap(Object.keys)]);
+  // Schon vorhandene Exemplare: alle gerade registrierten Bausteine in einem Durchgang durch die Seite
+  const found = new Set();
+  const collect = () => {
+    const batch = [...found];
+    found.clear();
+    for (const el of findAllDeep(batch.join(","), win.document)) {
+      adoptControlStyle(el.shadowRoot, el.localName);
+      trackHost(el, el.localName);
+    }
+  };
   for (const tag of tags) {
     if (tag.startsWith("__")) continue;
     win.customElements.whenDefined(tag).then(() => {
@@ -1189,10 +1229,8 @@ function patchControls(win = window) {
         };
         proto.__neumorphismPatched = true;
       }
-      for (const el of findAllDeep(tag, win.document)) {
-        adoptControlStyle(el.shadowRoot, tag);
-        trackHost(el, tag);
-      }
+      if (!found.size) queueMicrotask(() => safely(collect));
+      found.add(tag);
     });
   }
 }
@@ -1317,8 +1355,18 @@ function scheduleDroplets() {
   });
 }
 
-/** Farben und Stärke aus dem Theme, aufgelöst über ein unsichtbares Element. */
+// Farben und Werte der Schatten: neu gelesen nur nach Änderung der Einstellungen oder des Themes
+let themeGeneration = 0; // zählt Änderungen der Theme-Variablen auf <html>
+let paintCache = null;
+
 function dropletPaint() {
+  const key = `${applied}|${themeGeneration}`;
+  if (paintCache?.key !== key) paintCache = { key, value: readPaint() };
+  return paintCache.value;
+}
+
+/** Farben und Stärke aus dem Theme, aufgelöst über ein unsichtbares Element. */
+function readPaint() {
   if (!dropletProbe) {
     dropletProbe = document.createElement("div");
     dropletProbe.style.cssText =
@@ -1481,14 +1529,7 @@ function dropletSvg(width, height, d, paint, id, caps = []) {
 
 /** Zeichnet hinter jeder Knopfgruppe eine Form: Kreise, verbunden wie zwei Tropfen. */
 function updateDroplets() {
-  // Home Assistant hängt Seiten beim Zurückkehren wieder ein, deshalb nicht verworfen.
-  if (dropletHosts.size > 50) {
-    for (const host of dropletHosts.keys()) {
-      if (host.isConnected) continue;
-      dropletHosts.delete(host);
-      layoutObserver?.unobserve(host);
-    }
-  }
+  forgetDetached(dropletHosts, 50, (host) => layoutObserver?.unobserve(host));
   // Sparmodus: keine Tropfenformen, die Ansicht in der Titelleiste bekommt wieder ihre eigene Pille
   const enabled = controlsActive && !saver();
   for (const [host, tag] of dropletHosts) {
@@ -1607,11 +1648,13 @@ function drawDroplet(existing, parent, anchor, items, group, inset) {
 const buttonDroplets = new Map(); // Elternelement -> gezeichnete Formen
 
 function updateButtonGroups() {
-  if (buttonHosts.size > 2000) for (const btn of buttonHosts) if (!btn.isConnected) buttonHosts.delete(btn);
+  forgetDetached(buttonHosts, 500);
   const byParent = new Map();
   if (controlsActive && !saver()) {
     for (const btn of buttonHosts) {
       if (!btn.isConnected || !btn.parentElement) continue;
+      // In Slots eines Bausteins (z. B. Fußzeile von Dialogen) wäre die Form unsichtbar: Knöpfe einzeln lassen
+      if (btn.parentElement.shadowRoot) continue;
       // Symbol-Knöpfe sind flach; ihre Gruppen in der Titelleiste zeichnet updateDroplets
       if (btn.getRootNode().host?.localName === "ha-icon-button") continue;
       const list = byParent.get(btn.parentElement) || [];
@@ -1705,11 +1748,11 @@ const CARD_STYLE = `
 `;
 const CARD_MARKS = ["nm-card-shadow", "nm-frame-inner", "nm-raised", "nm-accent", "nm-inset"];
 const ACCENT_DISTANCE = 90; // Abstand zur Kartenfarbe, ab dem eine Fläche als farbig gilt
-const knownCards = new Set();
+const cardTags = new Set(); // Namen der gefundenen eigenen Karten (für die Diagnose)
 const framedCards = new WeakSet();
 const cardPending = new Set();
 const observedRoots = new WeakSet();
-let cardsKey = "";
+let cardsKey = ""; // Stand der Einstellungen; jede Karte merkt sich, für welchen Stand sie eingeordnet ist
 
 const isCardElement = (el) =>
   el.localName !== "hui-card" && el.localName.endsWith("-card") && typeof el.setConfig === "function";
@@ -1749,22 +1792,56 @@ function parseColor(value) {
 const bgAlpha = (css) => parseColor(css.backgroundColor)?.a ?? 0;
 
 function registerCard(card) {
-  if (knownCards.has(card) || card.localName.startsWith("hui-")) return;
-  knownCards.add(card);
-  scheduleCard(card);
+  // Karten von Home Assistant haben eigene Regeln, die eigene Karte formt sich selbst
+  if (card.localName.startsWith("hui-") || card.localName.startsWith("neumorphism-")) return;
+  cardTags.add(card.localName);
+  if (card.__neumorphismCards !== cardsKey) scheduleCard(card);
 }
+
+// Karten, die sich ständig ändern (z. B. animierte Inline-Styles), höchstens viermal pro Sekunde
+const CARD_SCAN_GAP = 250;
 
 function scheduleCard(card) {
   if (cardPending.has(card)) return;
   cardPending.add(card);
-  requestAnimationFrame(() => {
-    cardPending.delete(card);
-    try {
-      if (card.isConnected) scanCard(card);
-    } catch (err) {
-      console.warn("Neumorphism:", err);
-    }
-  });
+  const run = () =>
+    requestAnimationFrame(() => {
+      cardPending.delete(card);
+      try {
+        if (card.isConnected) scanCard(card);
+      } catch (err) {
+        console.warn("Neumorphism:", err);
+      }
+    });
+  const wait = (card.__neumorphismScanAt || 0) + CARD_SCAN_GAP - Date.now();
+  if (wait > 0) setTimeout(run, wait);
+  else run();
+}
+
+// Karten ohne Fläche (versteckt, eingeklappt, in Pop-ups): einordnen, sobald sie sichtbar werden
+const cardsWaiting = new Map(); // Element ohne Fläche -> Karte
+const cardSizeWatch =
+  typeof ResizeObserver === "function"
+    ? new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const size = entry.borderBoxSize?.[0];
+          if (!(size ? size.inlineSize && size.blockSize : entry.contentRect.width && entry.contentRect.height)) continue;
+          const card = cardsWaiting.get(entry.target);
+          cardsWaiting.delete(entry.target);
+          cardSizeWatch.unobserve(entry.target);
+          if (card?.isConnected) scheduleCard(card);
+        }
+      })
+    : null;
+
+function waitForSize(el, card) {
+  if (!cardSizeWatch) {
+    card.__neumorphismCards = undefined; // ohne ResizeObserver: beim nächsten Takt erneut
+    return;
+  }
+  if (cardsWaiting.has(el)) return;
+  cardsWaiting.set(el, card);
+  cardSizeWatch.observe(el);
 }
 
 function observeRoot(root, card) {
@@ -1815,6 +1892,8 @@ function cardsMode() {
 function scanCard(card) {
   const root = card.shadowRoot;
   if (!root) return;
+  card.__neumorphismCards = cardsKey;
+  card.__neumorphismScanAt = Date.now();
   const elements = [];
   collectCard(root, card, elements);
   for (const el of elements) for (const attr of CARD_MARKS) if (el.hasAttribute(attr)) el.removeAttribute(attr);
@@ -1825,7 +1904,10 @@ function scanCard(card) {
   // Rahmen: die oberste ha-card oder ein innerer Rahmen, der die Karte ausfüllt
   const haCard = elements.find((el) => el.localName === "ha-card");
   const box = (haCard || card).getBoundingClientRect();
-  if (!box.width || !box.height) return;
+  if (!box.width || !box.height) {
+    waitForSize(haCard || card, card);
+    return;
+  }
   let frame = null;
   let inner = null;
   if (haCard) {
@@ -1844,7 +1926,9 @@ function scanCard(card) {
   }
   if (frame && !insideFramedCard(card)) {
     frame.setAttribute("nm-card-shadow", "");
-    frame.style.setProperty("--nm-frame-radius", getComputedStyle(inner || frame).borderTopLeftRadius);
+    // Nur bei Änderung schreiben: das style-Attribut löst sonst gleich den nächsten Durchgang aus
+    const radius = getComputedStyle(inner || frame).borderTopLeftRadius;
+    if (frame.style.getPropertyValue("--nm-frame-radius") !== radius) frame.style.setProperty("--nm-frame-radius", radius);
     framedCards.add(card);
   }
   if (inner) inner.setAttribute("nm-frame-inner", "");
@@ -1892,20 +1976,28 @@ function scanCard(card) {
   for (const mark of marks) mark.el.setAttribute(`nm-${mark.kind}`, "");
 }
 
-/** Neue Karten aufnehmen; nach Theme-, Modus- oder Einstellungswechsel alle neu einordnen. */
+/**
+ * Neue Karten aufnehmen; nach Theme-, Modus- oder Einstellungswechsel alle neu einordnen
+ * (Karten in Karten über ihre äußere Karte). Wieder eingehängte Ansichten melden sich über
+ * ihre hui-card (watchReconnect) und werden eingeordnet, falls sich inzwischen etwas geändert hat.
+ */
 function updateCards() {
   if (!supportsSheets) return;
   CONTROL_STYLES.__cards = CARD_STYLE;
-  if (cardHosts.size > 2000) for (const host of cardHosts) if (!host.isConnected) cardHosts.delete(host);
+  cardsKey = `${controlsActive}|${dropletPaint().fill}|${cardsMode()}`;
+  forgetDetached(cardHosts, 500);
+  for (const [el, card] of cardsWaiting) {
+    if (el.isConnected) continue;
+    // Abgehängt, solange sie noch ohne Fläche war: beim Wiedereinhängen neu einordnen
+    cardsWaiting.delete(el);
+    cardSizeWatch.unobserve(el);
+    card.__neumorphismCards = undefined;
+  }
   for (const host of cardHosts) {
     // Direkt im Dashboard ist jedes Kind von hui-card eine Karte, egal wie sie heißt
     const card = host.isConnected && host.firstElementChild;
     if (card && card.shadowRoot && typeof card.setConfig === "function") registerCard(card);
   }
-  const key = `${controlsActive}|${dropletPaint().fill}|${cardsMode()}`;
-  if (key === cardsKey) return;
-  cardsKey = key;
-  for (const card of knownCards) if (card.isConnected) scheduleCard(card);
 }
 
 // ---------------------------------------------------------------------------
@@ -1958,7 +2050,7 @@ function watchThirdParty(cls) {
   proto.connectedCallback = function (...args) {
     const result = connected?.apply(this, args);
     thirdPartyElements.add(this);
-    scheduleTick();
+    scheduleTick(250); // Karten, die ihren Inhalt ständig neu bauen: höchstens viermal pro Sekunde
     return result;
   };
   proto.__neumorphismWatched = true;
@@ -2052,11 +2144,12 @@ function foreignEnabled(key) {
 const foreignOn = (s = settings()) => controlsActive && s.apps === "full" && !saver();
 
 function updateFrames() {
-  if (frameHosts.size > 50) for (const host of frameHosts) if (!host.isConnected) frameHosts.delete(host);
-  const haCss = haFrameCss();
+  forgetDetached(frameHosts, 50);
+  let haCss = null; // nur bei Bedarf: liest alle Theme-Variablen
   for (const host of frameHosts) {
     if (!host.isConnected) continue;
     const iframes = [...host.querySelectorAll("iframe"), ...(host.shadowRoot?.querySelectorAll("iframe") || [])];
+    if (iframes.length) haCss ??= haFrameCss();
     for (const iframe of iframes) updateFrame(iframe, host, haCss);
     // Seite einer Integration direkt im Hauptfenster (z. B. WashData, Vacuum Agent): immer fremd
     const panel = host.localName === "ha-panel-custom" && host.firstElementChild;
@@ -2076,7 +2169,13 @@ function updateFrame(iframe, host, haCss) {
   if (host.localName === "ha-panel-custom") {
     // Seite einer Integration im eigenen Fenster: aus Home-Assistant-Bausteinen (HACS) oder eigene Oberfläche
     const registry = doc.defaultView.customElements;
-    const haPage = ["ha-svg-icon", "ha-icon-button", "ha-card"].some((tag) => registry?.get(tag));
+    const haTags = ["ha-svg-icon", "ha-icon-button", "ha-card"];
+    const haPage = haTags.some((tag) => registry?.get(tag));
+    if (!haPage && registry && !doc.__neumorphismWaiting) {
+      // Bausteine von Home Assistant kommen womöglich erst nach dem Laden (HACS): dann neu einordnen
+      doc.__neumorphismWaiting = true;
+      Promise.race(haTags.map((tag) => registry.whenDefined(tag))).then(() => scheduleTick());
+    }
     if (!haPage && doc.readyState !== "complete") return; // Bausteine werden noch geladen
     if (haPage) {
       safely(() => localBrandIcons(doc.defaultView));
@@ -2116,7 +2215,12 @@ function refreshBrandsToken() {
   if (!hass?.callWS || brands.pending || Date.now() - brands.time < BRANDS_TOKEN_AGE) return;
   brands.pending = true;
   hass.callWS({ type: "brands/access_token" }).then(
-    (result) => Object.assign(brands, { token: result?.token || "", time: Date.now(), pending: false }),
+    (result) => {
+      const token = result?.token || "";
+      const changed = token !== brands.token;
+      Object.assign(brands, { token, time: Date.now(), pending: false });
+      if (changed && token) scheduleTick(); // schon angezeigte Bilder umstellen
+    },
     () => Object.assign(brands, { time: Date.now(), pending: false }) // ältere Version: später erneut
   );
 }
@@ -2340,6 +2444,15 @@ function updateForeignElements() {
     }
     startScope({ key: el, doc: document, view: window, page: false, exception: context.key });
   }
+
+  // Geschlossene oder ersetzte Fenster (Add-on verlassen, neue Seite im Fenster): vergessen
+  for (const state of [...scopes.values()]) {
+    if (!state.page || (state.doc.defaultView && state.view.frameElement?.isConnected)) continue;
+    state.observer.disconnect();
+    clearTimeout(state.timer);
+    scopes.delete(state.key);
+  }
+  for (const doc of sheetSets.keys()) if (doc !== document && !doc.defaultView) sheetSets.delete(doc);
 
   const dark = haDark();
   for (const state of [...scopes.values()]) {
@@ -2593,7 +2706,20 @@ function foreignColors() {
 }
 
 let colorProbe = null;
+const rgbCache = new Map();
+
 function toRgb(color) {
+  let rgb = rgbCache.get(color);
+  if (rgb === undefined) {
+    if (rgbCache.size > 1000) rgbCache.clear();
+    rgb = readRgb(color);
+    // Mit Variablen hängt das Ergebnis vom Theme ab
+    if (!color.includes("var(")) rgbCache.set(color, rgb);
+  }
+  return rgb;
+}
+
+function readRgb(color) {
   if (!colorProbe) {
     colorProbe = document.createElement("div");
     colorProbe.style.cssText = "position:absolute;width:0;height:0;visibility:hidden;pointer-events:none;";
@@ -2624,7 +2750,6 @@ function startScope({ key, doc, view, page, exception }) {
     hookSheets: -1,
     dark: null,
     undo: new Map(), // Änderungen an Hell/Dunkel der Seite, zum Zurücksetzen
-    sheets: [],
     roots: new WeakSet(),
     queue: new Map(), // Element -> mit Inhalt?
     timer: 0,
@@ -2642,14 +2767,20 @@ function startScope({ key, doc, view, page, exception }) {
   return state;
 }
 
+const foreignMarkSheets = new WeakMap(); // Fenster -> Stylesheet für die Markierungen
+
 function observeForeignRoot(state, root) {
   if (state.roots.has(root)) return;
   state.roots.add(root);
   if (root instanceof state.view.ShadowRoot) {
-    const sheet = new state.view.CSSStyleSheet();
-    sheet.replaceSync(FOREIGN_MARK_STYLE);
-    root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
-    state.sheets.push(sheet);
+    // Ein gemeinsames Stylesheet je Fenster; wirkt nur auf markierte Elemente und bleibt deshalb hängen
+    let sheet = foreignMarkSheets.get(state.view);
+    if (!sheet) {
+      sheet = new state.view.CSSStyleSheet();
+      sheet.replaceSync(FOREIGN_MARK_STYLE);
+      foreignMarkSheets.set(state.view, sheet);
+    }
+    if (!root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
   }
   state.observer.observe(root, {
     subtree: true,
@@ -2683,7 +2814,6 @@ function resetScope(state) {
   scopes.delete(state.key);
   for (const undo of [...state.undo.values()].reverse()) safely(undo);
   if (state.page) state.doc.getElementById(FRAME_STYLE_ID)?.remove();
-  for (const sheet of state.sheets) sheet.replaceSync("");
   const selector = FX_MARKS.map((m) => `[${m}]`).join(",");
   const start = state.page ? state.doc : state.key;
   const stack = [start];
@@ -2912,7 +3042,18 @@ function writeForeign(el, result) {
 // Farbwähler (im Profil und in der Karte)
 // ---------------------------------------------------------------------------
 
+// Texte je Sprache nur einmal zusammenstellen (Home Assistant meldet sich bei jeder Zustandsänderung)
+let textsCache = null;
+
 function texts(hass) {
+  const language = hass?.language || navigator.language || "";
+  if (textsCache?.language !== language || textsCache.localize !== hass?.localize) {
+    textsCache = { language, localize: hass?.localize, value: buildTexts(hass) };
+  }
+  return textsCache.value;
+}
+
+function buildTexts(hass) {
   const de = (hass?.language || navigator.language || "").toLowerCase().startsWith("de");
   const loc = (key, fallback) => hass?.localize?.(key) || fallback;
   const t = (deText, enText) => (de ? deText : enText);
@@ -2933,6 +3074,29 @@ function texts(hass) {
     groupEvening: t("Abendmodus", "Evening mode"),
     groupAreas: t("Bereiche", "Areas"),
     groupDevice: t("Dieses Gerät", "This device"),
+    // Vorschau
+    previewTitle: t("Vorschau", "Preview"),
+    previewDemo: t("▶ Vorführen", "▶ Demonstrate"),
+    previewCollapse: t("Vorschau ein- oder ausblenden", "Show or hide preview"),
+    previewHint: t(
+      "Echte Kacheln mit Vorschau-Geräten: antippen zum Ausprobieren, geschaltet wird nichts.",
+      "Real tiles with preview devices: tap to try, nothing is switched."
+    ),
+    previewHeading: t("Wohnzimmer", "Living room"),
+    previewLampOn: t("Stehlampe", "Floor lamp"),
+    previewLampOff: t("Deckenlicht", "Ceiling light"),
+    eveningPreview: t("Abend ansehen", "Preview evening"),
+    customStyle: t("Eigene Einstellungen", "Custom settings"),
+    colorsFromTheme: t("Farben aus dem Theme", "Colors from theme"),
+    summaryRadius: t("Rundung", "Roundness"),
+    summaryFont: t("Schrift", "Font"),
+    summarySize: t("Größe", "Size"),
+    summaryDensity: t("Abstände", "Spacing"),
+    summarySections: t("Sektionen", "Sections"),
+    summaryCharts: t("Diagramme", "Charts"),
+    summaryCards: t("Karten", "Cards"),
+    summaryApps: t("Add-ons", "Add-ons"),
+    summaryOff: t("Aus", "Off"),
     // Speichern für
     scope: t("Einstellungen speichern für", "Save settings for"),
     scope_user: t("Meinen Benutzer", "My user"),
@@ -3114,6 +3278,9 @@ function texts(hass) {
     defaultsSaved: t("Als Standard für alle Benutzer gespeichert", "Saved as default for all users"),
     defaultsFailed: t("Standard konnte nicht gespeichert werden", "Could not save default"),
     automation: t("Von einer Automation festgelegt:", "Set by an automation:"),
+    overlay: t("Gerade überlagert, gespeichert wird trotzdem hier:", "Currently overridden, still saved here:"),
+    overlayEvening: t("Abendmodus", "Evening mode"),
+    overlayDashboard: t("Stil dieses Dashboards", "This dashboard's style"),
     automationReset: t("Aufheben", "Clear"),
     perUser: t(`Gilt für deinen Benutzer · Version ${VERSION}`, `Applies to your user · version ${VERSION}`),
     perDevice: t(`Gilt nur für dieses Gerät · Version ${VERSION}`, `Applies to this device only · version ${VERSION}`),
@@ -3129,6 +3296,28 @@ const ROWS = [
   { key: "primary", cssVar: "--primary-color" },
   { key: "accent", cssVar: "--accent-color" },
 ];
+
+// Aufgeklappte Gruppen und Vorschau ein/aus, gemerkt auf diesem Gerät
+const GROUPS_KEY = "neumorphism-picker-groups";
+const PREVIEW_KEY = "neumorphism-picker-preview";
+// Lampen nur für die Vorschau, es gibt sie nicht in Home Assistant
+const PREVIEW_LAMPS = ["light.neumorphism_preview_1", "light.neumorphism_preview_2"];
+
+function readJson(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // privates Fenster: nur für diese Sitzung
+  }
+}
 
 // Fertige Vorlagen; was fehlt, steht auf dem Standard
 const STYLE_PRESETS = {
@@ -3216,10 +3405,19 @@ const RANGES = {
   fontScale: { scale: 100, mark: null },
 };
 
+// Offene Einstellungen (Profil, Dashboard-Karten): bei jedem Takt aktualisiert
+const pickers = new Set();
+
+/** Hat sich etwas geändert, das die Einstellungen betrifft? (nicht jede Zustandsänderung) */
+const hassChanged = (a, b) =>
+  !a || a === b || ["selectedTheme", "themes", "user", "panels", "language", "localize", "config"].some((key) => a[key] !== b[key]) ||
+  a.states?.["sun.sun"] !== b.states?.["sun.sun"];
+
 class NeumorphismColorPicker extends HTMLElement {
   set hass(hass) {
+    const previous = this._hass;
     this._hass = hass;
-    this._render();
+    if (hassChanged(previous, hass)) this._render();
   }
 
   get hass() {
@@ -3227,13 +3425,35 @@ class NeumorphismColorPicker extends HTMLElement {
   }
 
   connectedCallback() {
+    pickers.add(this);
     this._render();
+  }
+
+  disconnectedCallback() {
+    pickers.delete(this);
+    // Vorschauen gelten nur, solange die Einstellungen offen sind
+    clearInterval(this._demo);
+    this._demo = 0;
+    const demo = this.shadowRoot?.querySelector(".pv-demo");
+    if (demo) demo.disabled = false;
+    let changed = false;
+    if (previewState.evening === this) {
+      previewState.evening = null;
+      changed = true;
+    }
+    if (previewState.owner === this) {
+      previewState.owner = null;
+      previewState.dashboard = "";
+      changed = true;
+    }
+    if (changed) scheduleTick();
   }
 
   _render() {
     if (!this._hass || !this.isConnected) return;
     if (!this.shadowRoot) this._build();
     this._update();
+    safely(() => this._updatePreview());
   }
 
   /** Wohin gespeichert wird (oben gewählt). */
@@ -3356,10 +3576,52 @@ class NeumorphismColorPicker extends HTMLElement {
           color: var(--primary-color); border-radius: var(--ha-border-radius-pill, 999px); padding: 9px 18px; font: inherit;
           font-size: 0.9rem; cursor: pointer; box-shadow: var(--ha-box-shadow-s); }
         button.action:active, .dot:active, .tint:active .swatch, .style:active { box-shadow: var(--neumorphism-inset-shadow, none); }
+        button.action.small { padding: 6px 14px; font-size: 0.82rem; }
+        button.action[aria-pressed="true"] { box-shadow: var(--neumorphism-inset-shadow-s, none); }
+        button.action:disabled { opacity: 0.5; cursor: default; }
+        /* Gruppen zum Aufklappen, in der Kopfzeile die aktuellen Werte */
+        .group { border-top: 1px solid var(--divider-color); }
+        .group-head { display: flex; width: 100%; align-items: center; gap: 12px; padding: 14px 4px; border: none; background: none;
+          cursor: pointer; text-align: left; font: inherit; color: var(--primary-text-color); border-radius: 12px; }
+        .g-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+        .g-title { font-size: 1rem; font-weight: var(--ha-font-weight-medium, 500); }
+        .g-summary { color: var(--secondary-text-color); font-size: 0.82rem; line-height: 1.35; }
+        .chevron { flex: none; width: 8px; height: 8px; margin: 0 8px 4px; border-right: 2px solid var(--secondary-text-color);
+          border-bottom: 2px solid var(--secondary-text-color); transform: rotate(45deg); transition: transform 200ms ease; }
+        .group.open > .group-head .chevron, .pv-collapse[aria-expanded="true"] .chevron { transform: rotate(225deg); margin-bottom: -4px; }
+        @media (prefers-reduced-motion: reduce) { .chevron, .segmented button { transition: none; } }
+        .group-body { padding: 0 0 18px; }
+        .group:not(.open) > .group-body { display: none; }
+        .group-body > .setting:first-child, .group-body > .grid:first-child > .setting:first-child { padding-top: 0; }
+        /* Vorschau mit echten Kacheln, bleibt beim Blättern oben */
+        .preview { position: sticky; top: 0; z-index: 3; margin: 14px -10px 6px; padding: 10px 10px 12px; border-radius: 22px;
+          background: var(--card-background-color); box-shadow: 0 10px 14px -10px rgba(var(--neumorphism-shadow-dark-rgb, 0, 0, 0), 0.5); }
+        .pv-bar { display: flex; align-items: center; gap: 10px; }
+        .pv-title { flex: 1; color: var(--secondary-text-color); font-size: 0.78rem; font-weight: var(--ha-font-weight-medium, 500);
+          letter-spacing: 0.06em; text-transform: uppercase; }
+        .pv-collapse { border: none; background: none; padding: 6px; cursor: pointer; display: flex; }
+        .preview.collapsed .pv-body { display: none; }
+        .pv-section { margin-top: 10px; padding: 12px; border-radius: calc(var(--ha-card-border-radius, 28px) + 12px); }
+        .pv-section[data-sections="well"] { box-shadow: var(--neumorphism-inset-shadow-l, var(--neumorphism-inset-shadow, none)); }
+        .pv-section[data-sections="raised"] { background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none);
+          box-shadow: var(--neumorphism-card-shadow, none); }
+        .pv-heading { margin: 0 4px 10px; color: var(--primary-text-color); font-size: var(--ha-font-size-l, 16px);
+          font-weight: var(--ha-font-weight-medium, 500); }
+        .pv-heading[data-emboss="on"] { text-shadow: ${EMBOSS_TEXT}; }
+        .pv-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .pv-hint { margin-top: 8px; }
+        :host(:not([in-profile])) .preview { top: var(--header-height, 0px); } /* Dashboard: unter der Titelleiste */
+        @media (max-height: 700px) { .preview { position: static; } }
+        .mini-chart { margin: 4px 0 8px; height: 64px; padding: 6px 10px; border-radius: var(--ha-border-radius-lg, 12px); }
+        .mini-chart[data-charts="theme"] { box-shadow: var(--neumorphism-inset-shadow-s, none); }
+        .mini-chart svg { width: 100%; height: 100%; overflow: visible; }
+        .mini-chart polyline { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+        .evening-preview { margin-top: 10px; }
       </style>
       <div class="headline"></div>
       <div class="info warning" hidden></div>
       <div class="notice automation" hidden><span></span><button class="action automation-reset" hidden></button></div>
+      <div class="notice overlay" hidden><span></span></div>
       <div class="setting wide" data-setting="scope">
         <div class="label"></div>
         <div class="segmented">${["user", "device", "dashboard"].map((scope) => `<button data-scope="${scope}"></button>`).join("")}</div>
@@ -3367,7 +3629,24 @@ class NeumorphismColorPicker extends HTMLElement {
         <div class="hint"></div>
       </div>
 
-      <h3 data-text="groupPresets"></h3>
+      <div class="preview" hidden>
+        <div class="pv-bar">
+          <span class="pv-title"></span>
+          <button class="action small pv-demo"></button>
+          <button class="pv-collapse" aria-expanded="true"><span class="chevron" aria-hidden="true"></span></button>
+        </div>
+        <div class="pv-body">
+          <div class="pv-section"><div class="pv-heading"></div><div class="pv-cards"></div></div>
+          <div class="hint pv-hint"></div>
+        </div>
+      </div>
+
+      <section class="group" data-group="presets">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupPresets"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="styles"></div>
       <div class="hint presets-hint"></div>
       <div class="style-actions">
@@ -3384,8 +3663,15 @@ class NeumorphismColorPicker extends HTMLElement {
         <button class="action code-apply"></button>
         <span class="message"></span>
       </div>
+        </div>
+      </section>
 
-      <h3 data-text="groupColors"></h3>
+      <section class="group" data-group="colors">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupColors"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="grid">
         ${ROWS.map(
           (row) => `
@@ -3409,40 +3695,92 @@ class NeumorphismColorPicker extends HTMLElement {
         <div class="tints">${CHOICES.tint.map((tint) => `<button class="tint" data-value="${tint}"><span class="swatch"></span><span class="name"></span></button>`).join("")}</div>
       </div>
       <div class="grid">${SEGMENTS.colors.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
+      <div class="mini-chart" aria-hidden="true">
+        <svg viewBox="0 0 200 60" preserveAspectRatio="none">
+          <polyline points="0,44 25,38 50,40 75,26 100,30 125,18 150,22 175,12 200,16" style="stroke: var(--graph-color-1, var(--color-1))"/>
+          <polyline points="0,52 25,48 50,50 75,42 100,45 125,36 150,40 175,33 200,35" style="stroke: var(--graph-color-2, var(--color-2))"/>
+          <polyline points="0,30 25,34 50,24 75,30 100,20 125,28 150,16 175,24 200,20" style="stroke: var(--graph-color-3, var(--color-3))"/>
+        </svg>
+      </div>
+        </div>
+      </section>
 
-      <h3 data-text="groupDepth"></h3>
+      <section class="group" data-group="depth">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupDepth"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="grid">
         ${rangeHtml("strength", -STRENGTH_MAX * STRENGTH_SCALE, STRENGTH_MAX * STRENGTH_SCALE, 5)}
         ${SEGMENTS.depth.map((name) => segmentHtml(name, CHOICES[name])).join("")}
       </div>
+        </div>
+      </section>
 
-      <h3 data-text="groupShape"></h3>
+      <section class="group" data-group="shape">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupShape"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="grid">
         ${rangeHtml("radius", 0, RADIUS_MAX * 100, 10)}
         ${rangeHtml("fontScale", FONT_SCALE_MIN * 100, FONT_SCALE_MAX * 100, 5)}
         ${SEGMENTS.shape.map((name) => segmentHtml(name, CHOICES[name])).join("")}
       </div>
+        </div>
+      </section>
 
-      <h3 data-text="groupMotion"></h3>
+      <section class="group" data-group="motion">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupMotion"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="grid">${SEGMENTS.motion.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
+        </div>
+      </section>
 
-      <h3 data-text="groupEvening"></h3>
+      <section class="group" data-group="evening">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupEvening"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="setting wide" data-setting="evening">
         <div class="label"></div>
         <div class="segmented multi">${EVENING_EFFECTS.map((effect) => `<button data-effect="${effect}"></button>`).join("")}</div>
         <div class="hint"></div>
+        <button class="action small evening-preview" aria-pressed="false"></button>
       </div>
+        </div>
+      </section>
 
-      <h3 data-text="groupAreas"></h3>
+      <section class="group" data-group="areas">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupAreas"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="grid">
         ${segmentHtml("cards", CHOICES.cards)}
         ${segmentHtml("apps", CHOICES.apps)}
       </div>
       <div class="apps-list" hidden></div>
       <div class="hint apps-exceptions" hidden></div>
+        </div>
+      </section>
 
-      <h3 data-text="groupDevice"></h3>
+      <section class="group" data-group="device">
+        <button class="group-head" aria-expanded="false">
+          <span class="g-text"><span class="g-title" data-text="groupDevice"></span><span class="g-summary"></span></span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="group-body">
       <div class="grid">${Object.entries(DEVICE_SEGMENTS).map(([name, values]) => segmentHtml(name, values, "data-device")).join("")}</div>
+        </div>
+      </section>
 
       <div class="footer">
         <span class="info per-user"></span>
@@ -3587,6 +3925,54 @@ class NeumorphismColorPicker extends HTMLElement {
       this._save(Object.fromEntries(SETTING_KEYS.map((key) => [key, undefined])))
     );
     root.querySelector(".defaults").addEventListener("click", () => this._saveDefaults());
+    // Gruppen auf- und zuklappen (gemerkt auf diesem Gerät)
+    const open = new Set(readJson(GROUPS_KEY) || ["presets"]);
+    for (const group of root.querySelectorAll(".group")) {
+      const head = group.querySelector(".group-head");
+      const set = (state) => {
+        group.classList.toggle("open", state);
+        head.setAttribute("aria-expanded", String(state));
+      };
+      set(open.has(group.dataset.group));
+      head.addEventListener("click", () => {
+        const state = !group.classList.contains("open");
+        set(state);
+        if (state) open.add(group.dataset.group);
+        else open.delete(group.dataset.group);
+        writeJson(GROUPS_KEY, [...open]);
+      });
+    }
+    // Vorschau
+    const previewEl = root.querySelector(".preview");
+    const collapse = root.querySelector(".pv-collapse");
+    const setCollapsed = (state) => {
+      previewEl.classList.toggle("collapsed", state);
+      collapse.setAttribute("aria-expanded", String(!state));
+    };
+    setCollapsed(readJson(PREVIEW_KEY) === "collapsed");
+    collapse.addEventListener("click", () => {
+      const state = !previewEl.classList.contains("collapsed");
+      setCollapsed(state);
+      writeJson(PREVIEW_KEY, state ? "collapsed" : "open");
+    });
+    root.querySelector(".pv-demo").addEventListener("click", () => this._demonstrate());
+    // Klicks in der Vorschau bleiben in der Vorschau (keine Detailansicht, keine Aktionen)
+    for (const name of ["hass-more-info", "hass-action"]) {
+      root.querySelector(".pv-cards").addEventListener(name, (ev) => {
+        ev.stopPropagation();
+        // Nur Antippen schaltet (Halten und Doppeltippen nicht)
+        const entity = ev.detail?.config?.entity;
+        if (name === "hass-action" && ev.detail?.action === "tap" && this._previewStates && entity in this._previewStates) {
+          this._togglePreview(entity);
+        }
+      }, true);
+    }
+    root.querySelector(".evening-preview").addEventListener("click", () => {
+      previewState.evening = previewState.evening ? null : this;
+      tick();
+      this._render();
+    });
+    safely(() => this._buildPreview());
     root.querySelector(".automation-reset").addEventListener("click", () =>
       this._hass.callService("neumorphism", "reset_style", {}).catch((err) => console.warn("Neumorphism:", err))
     );
@@ -3617,12 +4003,135 @@ class NeumorphismColorPicker extends HTMLElement {
     }
   }
 
+  /**
+   * Vorschau mit echten Kacheln von Home Assistant: zwei Lampen (an und aus) und eine Überschrift.
+   * Die Lampen gibt es nur hier; Schalten ändert nur ihren Zustand in der Vorschau.
+   */
+  async _buildPreview() {
+    const helpers = await window.loadCardHelpers?.();
+    if (!helpers?.createCardElement || !this.shadowRoot) return;
+    const t = texts(this._hass);
+    this._previewStates = { [PREVIEW_LAMPS[0]]: "on", [PREVIEW_LAMPS[1]]: "off" };
+    this._previewNames = { [PREVIEW_LAMPS[0]]: t.previewLampOn, [PREVIEW_LAMPS[1]]: t.previewLampOff };
+    const toggle = { action: "toggle" };
+    const tiles = PREVIEW_LAMPS.map((entity) =>
+      helpers.createCardElement({ type: "tile", entity, tap_action: toggle, icon_tap_action: toggle, hold_action: { action: "none" } })
+    );
+    this._previewCards = tiles;
+    this.shadowRoot.querySelector(".pv-cards").replaceChildren(...tiles);
+    this.shadowRoot.querySelector(".preview").hidden = false;
+    this._previewKey = "";
+    this._updatePreview();
+  }
+
+  /** Vorschau-Kacheln mit dem aktuellen Home Assistant und den Zuständen der Vorschau-Lampen. */
+  _updatePreview(force = false) {
+    const hass = this._hass;
+    if (!this._previewCards || !hass) return;
+    const key = JSON.stringify([hass.language, hass.themes?.darkMode, this._previewStates]);
+    if (!force && key === this._previewKey) return;
+    this._previewKey = key;
+    const now = new Date().toISOString();
+    const states = { ...hass.states };
+    for (const [entity, state] of Object.entries(this._previewStates)) {
+      states[entity] = {
+        entity_id: entity,
+        state,
+        attributes: {
+          friendly_name: this._previewNames[entity],
+          supported_color_modes: ["brightness"],
+          color_mode: state === "on" ? "brightness" : null,
+          brightness: state === "on" ? 180 : null,
+          supported_features: 0,
+        },
+        last_changed: now,
+        last_updated: now,
+        context: { id: "neumorphism", user_id: null, parent_id: null },
+      };
+    }
+    const preview = {
+      ...hass,
+      states,
+      // Nur die Vorschau-Lampen schalten, nie echte Geräte
+      callService: async (domain, service, data) => {
+        const ids = [].concat(data?.entity_id || []).filter((id) => id in this._previewStates);
+        for (const id of ids) {
+          const on = service === "toggle" ? this._previewStates[id] !== "on" : service === "turn_on";
+          this._previewStates[id] = on ? "on" : "off";
+        }
+        if (ids.length) this._updatePreview(true);
+      },
+    };
+    for (const card of this._previewCards) card.hass = preview;
+  }
+
+  _togglePreview(entity) {
+    this._previewStates[entity] = this._previewStates[entity] === "on" ? "off" : "on";
+    this._updatePreview(true);
+  }
+
+  /** Vorführen: Lampen dreimal umschalten, damit Leuchten, Tiefe und Animationen zu sehen sind. */
+  _demonstrate() {
+    if (this._demo || !this._previewStates) return;
+    const button = this.shadowRoot.querySelector(".pv-demo");
+    button.disabled = true;
+    let steps = 0;
+    this._demo = setInterval(() => {
+      for (const entity of PREVIEW_LAMPS) this._togglePreview(entity);
+      if (++steps >= 6) {
+        clearInterval(this._demo);
+        this._demo = 0;
+        button.disabled = false;
+      }
+    }, 900);
+  }
+
+  /** Kurzfassung der Werte einer Gruppe für ihre Kopfzeile. */
+  _summaries(t, current, styles) {
+    const label = (name, value) => (t[`${name}_${value}`] || String(value)).replace(/^[↖↑↗☀]\s*/, "");
+    const colorName = (key) => PRESETS.find(([, hex]) => hex === current[key])?.[0] || current[key];
+    const colors = current.primary || current.accent
+      ? `${colorName("primary") || t.fromTheme} / ${colorName("accent") || t.fromTheme}`
+      : t.colorsFromTheme;
+    const preset = styles.find((p) => sameStyle(current, p.values));
+    const strength = Math.round(current.strength * STRENGTH_SCALE);
+    const depth = [
+      `${t.strength} ${strength > 0 ? "+" : ""}${strength}`,
+      label("light", current.light),
+      label("surface", current.surface),
+      current.contrast === "high" ? `${t.contrast} ${label("contrast", "high")}` : "",
+      current.pressed === "on" ? t.pressed : "",
+      current.emboss === "on" ? t.emboss : "",
+      current.grain !== "off" ? `${t.grain} ${label("grain", current.grain)}` : "",
+    ];
+    const join = (items) => items.filter(Boolean).join(" · ");
+    return {
+      presets: preset ? preset.name : t.customStyle,
+      colors: join([colors, `${t.tint} ${label("tint", current.tint)}`, `${t.summaryCharts} ${label("charts", current.charts)}`]),
+      depth: join(depth),
+      shape: join([
+        `${t.summaryRadius} ${Math.round(current.radius * 100)} %`,
+        `${t.summaryFont} ${label("font", current.font)}`,
+        `${t.summarySize} ${Math.round(current.fontScale * 100)} %`,
+        `${t.summaryDensity} ${label("density", current.density)}`,
+        `${t.summarySections} ${label("sections", current.sections)}`,
+      ]),
+      motion: join([`${t.motion} ${label("motion", current.motion)}`, `${t.glow.split(" ")[0]} ${label("glow", current.glow)}`]),
+      evening: current.evening.length ? current.evening.map((effect) => t[`evening_${effect}`]).join(", ") : t.summaryOff,
+      areas: join([`${t.summaryCards} ${label("cards", current.cards)}`, `${t.summaryApps} ${label("apps", current.apps)}`]),
+      device: join([label("mode", device().mode || "user"), `${t.saver} ${label("saver", saver() ? "on" : "off")}`]),
+    };
+  }
+
   /** Administratoren: aktuelle Einstellungen als Standard für alle Benutzer (Integration). */
   async _saveDefaults() {
     const t = texts(this._hass);
     let message = t.defaultsSaved;
     try {
-      await this._hass.callWS({ type: "neumorphism/set_defaults", defaults: baseSettings(this._hass) });
+      // Nur was gewählt wurde: Werte des Themes bleiben offen und folgen künftigen Versionen
+      const target = this._target();
+      const defaults = { ...backend.defaults, ...userLayer(this._hass), ...(target.kind === "device" ? deviceLayer() : {}) };
+      await this._hass.callWS({ type: "neumorphism/set_defaults", defaults });
     } catch (err) {
       console.warn("Neumorphism:", err);
       message = t.defaultsFailed;
@@ -3695,10 +4204,31 @@ class NeumorphismColorPicker extends HTMLElement {
   }
 
 
-  /** Was für das gewählte Ziel gilt (beim Dashboard: wie auf diesem Dashboard). */
+  /**
+   * Was im gewählten Ziel eingestellt ist (mit allem darunter), ohne Abendmodus, Automationen und
+   * den Stil des Dashboards dieser Seite: Auswahl und Regler zeigen, was gespeichert wird.
+   */
   _current() {
+    return { ...baseSettings(this._hass, this._target()), ...preview };
+  }
+
+  /** Was gerade zu sehen ist (beim Dashboard: wie auf diesem Dashboard), für die Vorschau. */
+  _effective() {
     const target = this._target();
     return settings(this._hass, target.kind === "dashboard" ? target.dashboard : undefined);
+  }
+
+  /** Was gerade über dem gewählten Ziel liegt: Stil des Dashboards dieser Seite, Abendmodus. */
+  _overlays(t, current, effective, target) {
+    const differs = (keys) => keys.filter((key) => JSON.stringify(effective[key]) !== JSON.stringify(current[key]));
+    const labels = (keys) => [...new Set(keys.map((key) => t[SETTING_LABELS[key]]))].join(", ");
+    const out = [];
+    const page = target.kind === "dashboard" ? null : backend.dashboards[currentDashboard(this._hass)];
+    const dashboardKeys = page ? differs(Object.keys(page)) : [];
+    if (dashboardKeys.length) out.push(`${t.overlayDashboard} (${labels(dashboardKeys)})`);
+    const eveningKeys = eveningNow(this._hass) ? differs(Object.keys(eveningLayer(effective, this._hass))) : [];
+    if (eveningKeys.length) out.push(`${t.overlayEvening} (${labels(eveningKeys)})`);
+    return out;
   }
 
   _save(patch) {
@@ -3732,9 +4262,31 @@ class NeumorphismColorPicker extends HTMLElement {
     if (this._scope !== "dashboard") this._scope = own ? "device" : "user";
     if (this._scope === "dashboard" && !(isAdmin && backend.available)) this._scope = own ? "device" : "user";
     const target = this._target();
+    // Beim Bearbeiten eines Dashboards zeigt die Seite dessen Stil
+    // (bei mehreren offenen Einstellungen die zuerst gewählten)
+    const dashboard = target.kind === "dashboard" ? target.dashboard : "";
+    const owner = previewState.owner;
+    if (dashboard && (!owner || owner === this || !owner.isConnected) && (owner !== this || previewState.dashboard !== dashboard)) {
+      previewState.owner = this;
+      previewState.dashboard = dashboard;
+      scheduleTick(0);
+    } else if (!dashboard && owner === this) {
+      previewState.owner = null;
+      previewState.dashboard = "";
+      scheduleTick(0);
+    }
     const current = this._current();
+    const effective = this._effective();
     const dark = haDark();
     this.toggleAttribute("inactive", !active);
+
+    // Nur neu beschriften, wenn sich etwas geändert hat (Home Assistant meldet sich bei jeder Zustandsänderung)
+    const renderKey = JSON.stringify([
+      current, effective, target, device(), isAdmin, backend.available, backend.style, dark, active, hass.language,
+      ownPresets(hass), !!previewState.evening, (this._apps || []).map((app) => app.slug), targetLayer(target, hass),
+    ]);
+    if (renderKey === this._renderKey) return;
+    this._renderKey = renderKey;
 
     root.querySelector(".headline").textContent = t.title;
     const warning = root.querySelector(".warning");
@@ -3756,6 +4308,7 @@ class NeumorphismColorPicker extends HTMLElement {
       if (button.classList.contains("tint")) button.querySelector(".name").textContent = label;
       else button.textContent = label;
       button.classList.toggle("selected", current[name] === button.dataset.value);
+      button.setAttribute("aria-pressed", String(current[name] === button.dataset.value));
     }
     for (const button of root.querySelectorAll("button[data-effect]")) {
       button.textContent = t[`evening_${button.dataset.effect}`];
@@ -3768,6 +4321,7 @@ class NeumorphismColorPicker extends HTMLElement {
       button.textContent = t[`scope_${button.dataset.scope}`];
       button.hidden = button.dataset.scope === "dashboard" && !(isAdmin && backend.available);
       button.classList.toggle("selected", button.dataset.scope === target.kind);
+      button.setAttribute("aria-pressed", String(button.dataset.scope === target.kind));
     }
     const select = root.querySelector("select.dashboard");
     select.hidden = target.kind !== "dashboard";
@@ -3785,6 +4339,7 @@ class NeumorphismColorPicker extends HTMLElement {
       const name = button.closest("[data-setting]").dataset.setting;
       button.textContent = t[`${name}_${button.dataset.device}`];
       button.classList.toggle("selected", deviceValues[name] === button.dataset.device);
+      button.setAttribute("aria-pressed", String(deviceValues[name] === button.dataset.device));
     }
 
     // Vorlagen: fertige und eigene, die passende ist markiert
@@ -3807,6 +4362,23 @@ class NeumorphismColorPicker extends HTMLElement {
         .join("");
     }
     list.querySelectorAll(".style").forEach((button, i) => button.classList.toggle("selected", sameStyle(current, styles[i].values)));
+    const summaries = this._summaries(t, current, styles);
+    for (const group of root.querySelectorAll(".group")) group.querySelector(".g-summary").textContent = summaries[group.dataset.group] || "";
+
+    // Vorschau: Sektion wie eingestellt, Diagramm in den gewählten Farben, Abend ansehen
+    root.querySelector(".pv-title").textContent = t.previewTitle;
+    root.querySelector(".pv-hint").textContent = t.previewHint;
+    root.querySelector(".pv-demo").textContent = t.previewDemo;
+    root.querySelector(".pv-collapse").setAttribute("aria-label", t.previewCollapse);
+    root.querySelector(".pv-section").dataset.sections = effective.sections;
+    const heading = root.querySelector(".pv-heading");
+    heading.textContent = t.previewHeading;
+    heading.dataset.emboss = effective.emboss;
+    root.querySelector(".mini-chart").dataset.charts = effective.charts;
+    const eveningButton = root.querySelector(".evening-preview");
+    eveningButton.textContent = t.eveningPreview;
+    eveningButton.disabled = !current.evening.length && !previewState.evening;
+    eveningButton.setAttribute("aria-pressed", String(!!previewState.evening));
     root.querySelector(".presets-hint").textContent = t.presetsHint;
     root.querySelector(".preset-save").textContent = t.presetSave;
     root.querySelector(".preset-name").placeholder = t.presetName;
@@ -3859,6 +4431,11 @@ class NeumorphismColorPicker extends HTMLElement {
     const clear = root.querySelector(".automation-reset");
     clear.hidden = !isAdmin;
     clear.textContent = t.automationReset;
+    // Abendmodus oder Stil des Dashboards liegen gerade darüber
+    const overlays = this._overlays(t, current, effective, target);
+    const overlay = root.querySelector(".overlay");
+    overlay.hidden = !overlays.length;
+    overlay.querySelector("span").textContent = `${t.overlay} ${overlays.join(" · ")}`;
 
     // Zurücksetzen der Ebene, in die gerade gespeichert wird; Standard für alle nur für Administratoren
     const reset = root.querySelector(".reset");
@@ -3934,6 +4511,8 @@ function findDeep(selector) {
 let profilePicker = null;
 
 function injectIntoProfile() {
+  // Alle offenen Einstellungen: Einstellungen der Integration, dieses Geräts oder Vorschau geändert
+  for (const picker of pickers) picker._render();
   if (!location.pathname.startsWith("/profile")) return;
   if (profilePicker?.isConnected) {
     profilePicker.hass = getHass();
@@ -4049,7 +4628,7 @@ function sendReport() {
       out[prefix] = (out[prefix] || 0) + 1;
       return out;
     }, {}),
-    custom_cards: [...new Set([...knownCards].map((card) => card.localName))].sort(),
+    custom_cards: [...cardTags].sort(),
     embedded_pages: [...new Set([...frameHosts].map(hostKey).filter(Boolean))],
     foreign_areas: scopes.size,
     warnings: recentWarnings,
@@ -4073,7 +4652,10 @@ if (!customElements.get(PICKER_TAG)) {
   hookStateBadges();
   window.addEventListener("resize", scheduleLayout);
   // Theme- oder Moduswechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.
-  new MutationObserver(() => scheduleTick(0)).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  new MutationObserver(() => {
+    themeGeneration++;
+    scheduleTick(0);
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
   window.addEventListener("location-changed", () => scheduleTick(100));
   document.addEventListener("visibilitychange", () => !document.hidden && scheduleTick());
   // Einstellungen dieses Geräts in einem anderen Fenster geändert
@@ -4082,13 +4664,22 @@ if (!customElements.get(PICKER_TAG)) {
     deviceCache = null;
     tick();
   });
-  // Sicherheitsprüfung für alles, was sich nicht meldet (z. B. Sonnenstand für Licht und Abendmodus):
-  // alle 5 Sekunden, im Sparmodus alle 15, nicht bei verdeckter Seite.
+  // Sonnenstand (Licht nach der Sonne, Abendmodus) meldet sich nicht: alle 5 Sekunden, im Sparmodus
+  // alle 15, die Einstellungen prüfen (günstig). Dazu jede Minute eine vollständige Sicherheitsprüfung
+  // für alles andere. Nicht bei verdeckter Seite.
   let last = 0;
+  let lastFull = Date.now();
   setInterval(() => {
     if (document.hidden || Date.now() - last < (saver() ? 14900 : 4900)) return;
     last = Date.now();
-    tick();
+    if (last - lastFull > 59000) {
+      lastFull = last;
+      tick();
+    } else {
+      const before = applied;
+      safely(applySettings);
+      if (applied !== before) scheduleTick(0); // z. B. Sonnenuntergang: alles neu
+    }
   }, 5000);
   tick();
 

@@ -14,6 +14,7 @@ Die Integration
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -60,9 +61,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Schnittstelle zum Frontend und Aktionen, unabhängig vom Eintrag."""
     data = hass.data.setdefault(DOMAIN, {})
     store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.style")
-    stored = await store.async_load() or {}
-    dashboards = {url: clean(values) for url, values in (stored.get("dashboards") or {}).items() if isinstance(values, dict)}
-    data.update(store=store, style=clean(stored.get("style") or {}), dashboards=dashboards, defaults={}, reports={})
+    stored = await store.async_load()
+    if not isinstance(stored, dict):
+        stored = {}
+    style = stored.get("style")
+    dashboards = stored.get("dashboards")
+    dashboards = {
+        url: clean(values)
+        for url, values in (dashboards.items() if isinstance(dashboards, dict) else [])
+        if isinstance(values, dict)
+    }
+    data.update(store=store, style=clean(style) if isinstance(style, dict) else {}, dashboards=dashboards, defaults={}, reports={})
 
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_set_defaults)
@@ -71,18 +80,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def set_style(call: ServiceCall) -> None:
         """Vorgaben für alle Benutzer und Geräte, bis sie aufgehoben werden."""
-        data["style"] = clean({**data["style"], **call.data})
-        await _async_style_changed(hass)
+        await _async_set_style(hass, clean({**data["style"], **call.data}))
 
     async def reset_style(call: ServiceCall) -> None:
-        """Vorgaben ganz oder für einzelne Einstellungen aufheben."""
+        """Vorgaben ganz (ohne Angabe) oder für einzelne Einstellungen aufheben."""
         names = call.data.get("settings")
-        data["style"] = {key: value for key, value in data["style"].items() if names and key not in names}
-        await _async_style_changed(hass)
+        await _async_set_style(
+            hass, {key: value for key, value in data["style"].items() if names is not None and key not in names}
+        )
 
     hass.services.async_register(DOMAIN, SERVICE_SET_STYLE, set_style, schema=STYLE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_RESET_STYLE, reset_style, schema=RESET_SCHEMA)
     return True
+
+
+async def _async_set_style(hass: HomeAssistant, style: dict[str, Any]) -> None:
+    data = hass.data[DOMAIN]
+    if style == data["style"]:
+        return  # unverändert (z. B. Automation, die jede Minute dasselbe setzt): nichts speichern, nichts senden
+    data["style"] = style
+    await _async_style_changed(hass)
 
 
 async def _async_style_changed(hass: HomeAssistant) -> None:
@@ -145,12 +162,14 @@ async def ws_set_dashboard(hass: HomeAssistant, connection: websocket_api.Active
     dashboards = {url: values for url, values in data["dashboards"].items() if url != msg["url_path"]}
     if settings:
         dashboards[msg["url_path"]] = settings
-    data["dashboards"] = dashboards
-    await _async_style_changed(hass)
+    if dashboards != data["dashboards"]:
+        data["dashboards"] = dashboards
+        await _async_style_changed(hass)
     connection.send_result(msg["id"])
 
 
 REPORTS_MAX = 10
+REPORT_SIZE_MAX = 20000  # Zeichen; ein üblicher Bericht hat etwa 2000
 
 
 @websocket_api.websocket_command(
@@ -159,6 +178,9 @@ REPORTS_MAX = 10
 @callback
 def ws_report(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """Kurzer Bericht eines Geräts (Version, Einstellungen, erkannte Karten und Add-ons) für die Diagnose."""
+    if len(json.dumps(msg["report"], default=str)) > REPORT_SIZE_MAX or len(msg["device"]) > 64:
+        connection.send_error(msg["id"], websocket_api.ERR_INVALID_FORMAT, "Report too large")
+        return
     reports: dict[str, Any] = hass.data[DOMAIN]["reports"]
     reports.pop(msg["device"], None)
     reports[msg["device"]] = {"user_is_admin": connection.user.is_admin, **msg["report"]}
@@ -183,7 +205,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     add_extra_js_url(hass, JS_URL)
 
     @callback
-    def _inject_themes(_event: Event | None = None) -> None:
+    def _inject_themes(event: Event | None = None) -> None:
         """Eigene Themes ergänzen, auch nach `frontend.reload_themes`."""
         current = hass.data.get(DATA_THEMES, {})
         changed = {name: theme for name, theme in themes.items() if current.get(name) != theme}
@@ -191,6 +213,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
         hass.data[DATA_THEMES] = {**current, **changed}
         hass.bus.async_fire(EVENT_THEMES_UPDATED)
+        if event is not None:
+            # Neu geladen: Home Assistant hat dabei auch das Standard-Theme zurückgesetzt
+            hass.async_create_task(_async_restore_default_themes(hass, themes))
 
     _inject_themes()
     await _async_restore_default_themes(hass, themes)
@@ -216,6 +241,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         unsub()
     remove_extra_js_url(hass, JS_URL)
     data["defaults"] = {}
+    async_dispatcher_send(hass, SIGNAL_SETTINGS)
 
     themes = data.pop("themes", {})
     hass.data[DATA_THEMES] = {
@@ -244,12 +270,24 @@ async def _async_restore_default_themes(hass: HomeAssistant, themes: dict[str, A
         _LOGGER.debug("Gespeicherte Standard-Themes nicht lesbar", exc_info=True)
         return
 
-    changed = False
+    restore: dict[str, str] = {}
     if stored.get(DATA_DEFAULT_THEME) in themes and hass.data.get(DATA_DEFAULT_THEME) == "default":
-        hass.data[DATA_DEFAULT_THEME] = stored[DATA_DEFAULT_THEME]
-        changed = True
+        restore["name"] = stored[DATA_DEFAULT_THEME]
     if stored.get(DATA_DEFAULT_DARK_THEME) in themes and not hass.data.get(DATA_DEFAULT_DARK_THEME):
-        hass.data[DATA_DEFAULT_DARK_THEME] = stored[DATA_DEFAULT_DARK_THEME]
-        changed = True
-    if changed:
-        hass.bus.async_fire(EVENT_THEMES_UPDATED)
+        restore["name_dark"] = stored[DATA_DEFAULT_DARK_THEME]
+    if not restore:
+        return
+    # Über die Aktion des Frontends: setzt auch die Farbe der App (Manifest) und meldet die Änderung
+    try:
+        await hass.services.async_call("frontend", "set_theme", restore, blocking=True)
+    except Exception:  # noqa: BLE001 - reine Komfortfunktion, darf den Start nicht stören
+        _LOGGER.debug("Standard-Theme nicht wiederhergestellt", exc_info=True)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Integration entfernt: Stile der Dashboards und Vorgaben aus Automationen mit löschen."""
+    data = hass.data.get(DOMAIN, {})
+    if store := data.get("store"):
+        await store.async_remove()
+    data.update(style={}, dashboards={})
+    async_dispatcher_send(hass, SIGNAL_SETTINGS)

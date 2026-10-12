@@ -42,6 +42,12 @@ Updates kommen über HACS, mit Versionsnummer und Änderungen (siehe [CHANGELOG]
 
 Sobald im Profil das Theme „Neumorphism“ gewählt ist, erscheinen im Bereich „Design“ unter dem Design-Modus alle Einstellungen. Änderungen sind sofort zu sehen, Farben und Regler schon während des Ziehens.
 
+Die Einstellungen sind in Gruppen geordnet, die sich auf- und zuklappen lassen. Jede Gruppe zeigt in ihrer Kopfzeile die aktuellen Werte, so bleibt der Überblick auch zugeklappt. Welche Gruppen offen sind, merkt sich das Gerät.
+
+**Vorschau**: Oben in den Einstellungen liegen zwei echte Kacheln mit Vorschau-Lampen, eine an, eine aus. Sie bleiben beim Blättern sichtbar, so lässt sich jede Änderung direkt daran ablesen: Leuchten, Zustand als Tiefe, Rundung, Schrift, Sektionen, Prägung und mehr. Antippen schaltet die Lampen um, **Vorführen** schaltet sie ein paar Mal hin und her, damit Animationen und Leuchten zu sehen sind. Geschaltet wird dabei nichts Echtes. Außerdem gibt es eine kleine Diagramm-Vorschau bei *Diagramme* und **Abend ansehen** beim Abendmodus, das den Abend sofort zeigt, solange es gedrückt ist. Beim Bearbeiten eines Dashboards zeigt die Seite dessen Stil.
+
+Auswahl und Regler zeigen immer, was gespeichert ist. Liegt gerade etwas darüber, etwa der Abendmodus oder der eigene Stil des Dashboards, auf dem die Einstellungskarte liegt, nennt ein Hinweis oben, was überlagert ist.
+
 **Vorlagen**
 - Fertige Stile per Klick: *Klassisch*, *Warm & weich*, *Kontrastreich*, *Flach & modern*, *Mint* und *Papier*. Sie stellen das Aussehen auf einmal ein, Bereiche und Abendmodus bleiben. Danach lässt sich alles weiter anpassen
 - **Als Vorlage speichern** legt das aktuelle Aussehen unter einem Namen ab, auf allen Geräten deines Benutzers

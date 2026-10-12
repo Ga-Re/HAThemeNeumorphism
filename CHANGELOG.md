@@ -1,5 +1,32 @@
 # Änderungen
 
+## 8.1.0
+
+**Einstellungen**
+- Vorschau mit echten Kacheln: zwei Vorschau-Lampen oben in den Einstellungen zeigen jede Änderung sofort (Leuchten, Zustand als Tiefe, Rundung, Schrift, Sektionen, Prägung), bleiben beim Blättern sichtbar und lassen sich zuklappen. *Vorführen* schaltet sie ein paar Mal um, damit Animationen und Leuchten zu sehen sind; geschaltet wird nichts Echtes
+- Diagramm-Vorschau bei *Diagramme*, *Abend ansehen* beim Abendmodus
+- Beim Bearbeiten eines Dashboards zeigt die Seite dessen Stil
+- Übersichtlicher: Gruppen zum Auf- und Zuklappen, in der Kopfzeile jeweils die aktuellen Werte; offene Gruppen merkt sich das Gerät
+- Auswahl und Regler zeigen immer, was gespeichert wird, auch während Abendmodus oder der Stil eines Dashboards darüber liegen; ein Hinweis nennt, was gerade überlagert ist (vorher sprang z. B. die Effektstärke abends nach dem Loslassen auf die Hälfte)
+- Gewählte Werte werden Screenreadern als gedrückt gemeldet
+
+**Korrekturen**
+- Knöpfe in der Fußzeile von Dialogen (Abbrechen, Speichern) verloren ihren Schatten
+- Eigene Karten, die beim Laden versteckt sind (eingeklappt, in Pop-ups, in Tabs), werden geformt, sobald sie sichtbar werden
+- Die Einstellungskarte auf einem Dashboard wurde selbst wie eine fremde Karte umgeformt
+- „Hell“ oder „Dunkel“ für dieses Gerät gilt nur noch mit dem Neumorphism-Theme; vorher blieb der Modus nach einem Theme-Wechsel ohne Einstellmöglichkeit erzwungen
+- Nach „Themes neu laden“ bleibt Neumorphism das Standard-Theme des Servers, samt Farbe der App
+- „Stil aufheben“ mit leerer Auswahl hebt nichts mehr auf (vorher alles)
+- „Als Standard für alle“ übernimmt nur noch gewählte Werte; was auf dem Standard des Themes steht, folgt künftigen Versionen
+- Beim Entfernen der Integration werden Stile der Dashboards und Vorgaben aus Automationen mit gelöscht
+
+**Weniger Rechenlast und Speicher**
+- Lang laufende Geräte (z. B. Wandtablets): Karten, Knöpfe, Seiten und Fenster von Add-ons, die nicht mehr angezeigt werden, werden sofort vergessen; Stylesheets sammeln sich nicht mehr an
+- Die Einstellungen im Profil und in der Karte rechnen nur noch bei Änderungen, nicht bei jeder Zustandsänderung in Home Assistant
+- Ruhende Geräte prüfen alle 5 Sekunden nur noch den Sonnenstand, alles andere einmal pro Minute
+- Karten, die sich ständig ändern, werden höchstens viermal pro Sekunde neu eingeordnet; Farben der Schatten werden nur nach Änderungen neu gelesen
+- Automationen, die immer wieder denselben Stil setzen, schreiben nichts mehr auf die Festplatte
+
 ## 8.0.1
 
 - Aktion „Stil festlegen“: Die Auswahl für Körnung, Eigene Karten und Add-ons zeigt wieder alle Werte (An/Aus wurden falsch gelesen)
