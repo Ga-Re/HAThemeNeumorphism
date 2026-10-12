@@ -156,6 +156,18 @@ def browser_checks() -> None:
         problems: list[str] = []
         page.on("pageerror", lambda err: problems.append(f"Seitenfehler: {err}"))
         page.on("console", lambda msg: problems.append(msg.text) if "Neumorphism:" in msg.text else None)
+        # Was mit dem Skript passiert (für die Fehlersuche, falls es nicht lädt)
+        started = time.monotonic()
+        module_log: list[str] = []
+
+        def note(text: str) -> None:
+            module_log.append(f"{time.monotonic() - started:6.1f}s {text}")
+
+        page.on("request", lambda r: note(f"Anfrage {r.url[-60:]}") if "neumorphism-colors" in r.url else None)
+        page.on("requestfinished", lambda r: note(f"geladen {r.response().status if r.response() else '?'}") if "neumorphism-colors" in r.url else None)
+        page.on("requestfailed", lambda r: note(f"fehlgeschlagen {r.failure}") if "neumorphism-colors" in r.url else None)
+        page.on("console", lambda msg: note(f"Konsole: {msg.text[:200]}") if msg.type == "error" else None)
+        page.on("framenavigated", lambda frame: note(f"Seite {frame.url[-60:]}") if frame == page.main_frame else None)
 
         page.goto(BASE + "/")
         page.wait_for_selector("input[name=username]", timeout=60000)
@@ -173,8 +185,12 @@ def browser_checks() -> None:
         try:
             page.wait_for_function("() => !!customElements.get('neumorphism-color-picker')", timeout=60000)
             check("Skript geladen", True)
-        except Exception:  # noqa: BLE001
-            check("Skript geladen", False)
+        except Exception as err:  # noqa: BLE001
+            check("Skript geladen", False, repr(err)[:200])
+            listed = page.evaluate("() => [...document.scripts].some((s) => s.textContent.includes('neumorphism-colors'))")
+            print(f"     Skript in der Startseite eingetragen: {listed}")
+            for line in module_log[-25:]:
+                print(f"     {line}")
         for dark in (False, True):
             mode = "dunkel" if dark else "hell"
             page.evaluate(
