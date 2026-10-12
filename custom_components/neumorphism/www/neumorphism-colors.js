@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.2.0";
+const VERSION = "8.2.1";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -998,7 +998,19 @@ const EMBOSS_LIGHT = "rgba(var(--neumorphism-shadow-light-rgb), 0.9)";
 const EMBOSS_DARK = "rgba(var(--neumorphism-shadow-dark-rgb), 0.55)";
 const LIGHT_X = "var(--neumorphism-light-x, 1)";
 const LIGHT_Y = "var(--neumorphism-light-y, 1)";
-const EMBOSS_TEXT = `calc(1px * ${LIGHT_X}) calc(1px * ${LIGHT_Y}) 1px ${EMBOSS_LIGHT}, calc(-1px * ${LIGHT_X}) calc(-1px * ${LIGHT_Y}) 1px ${EMBOSS_DARK}`;
+/**
+ * Schrift wie ins Material gedrückt: Die Buchstaben sind ein Fenster auf eine dunkle Fläche (der
+ * Hintergrund, nur in den Buchstaben sichtbar). Darüber liegt die Schrift, etwas zur Fläche hin
+ * abgetönt und um k Pixel vom Licht weg versetzt; frei bleibt innen nur die Kante zum Licht hin, die
+ * im Schatten liegt. Außen auf der Gegenseite fängt eine helle Lippe das Licht. Nur die Füllung der
+ * Schrift wird durchsichtig, Symbole behalten ihre Farbe (currentColor).
+ */
+const embossText = (k = 1) => `-webkit-text-fill-color: transparent;
+  background-color: color-mix(in srgb, rgb(var(--neumorphism-shadow-dark-rgb)) 70%, black);
+  -webkit-background-clip: text; background-clip: text;
+  text-shadow: calc(${k}px * ${LIGHT_X}) calc(${k}px * ${LIGHT_Y}) 0 color-mix(in srgb, currentColor 80%, var(--card-background-color)),
+    calc(${1.6 * k}px * ${LIGHT_X}) calc(${1.6 * k}px * ${LIGHT_Y}) ${1.2 * k}px rgba(var(--neumorphism-shadow-light-rgb), 0.9);`;
+const EMBOSS_TEXT = embossText();
 const EMBOSS_ICON = `drop-shadow(calc(1px * ${LIGHT_X}) calc(1px * ${LIGHT_Y}) 0 ${EMBOSS_LIGHT}) drop-shadow(calc(-1px * ${LIGHT_X}) calc(-1px * ${LIGHT_Y}) 0.5px ${EMBOSS_DARK})`;
 const FEATURE_STYLES = {
   // Aktive Geräte leuchten sanft in ihrer Zustandsfarbe
@@ -1054,16 +1066,16 @@ const FEATURE_STYLES = {
   },
   // Prägung: Überschriften und große Symbole wirken ins Material geprägt
   emboss: {
-    "hui-root": `.main-title { text-shadow: ${EMBOSS_TEXT}; }`,
-    "hass-subpage": `.main-title { text-shadow: ${EMBOSS_TEXT}; }`,
-    "hass-tabs-subpage": `.main-title { text-shadow: ${EMBOSS_TEXT}; }`,
-    "ha-top-app-bar-fixed": `.title { text-shadow: ${EMBOSS_TEXT}; }`,
-    "ha-sidebar": `.title { text-shadow: ${EMBOSS_TEXT}; }`,
-    "ha-card": `.card-header { text-shadow: ${EMBOSS_TEXT}; }`,
-    "hui-heading-card": `.title, h2 { text-shadow: ${EMBOSS_TEXT}; } ha-state-icon, ha-icon { --nm-icon-emboss: ${EMBOSS_ICON}; }`,
-    "hui-entities-card": `.card-header { text-shadow: ${EMBOSS_TEXT}; }`,
-    "hui-glance-card": `.card-header { text-shadow: ${EMBOSS_TEXT}; }`,
-    "hui-markdown-card": `.card-header { text-shadow: ${EMBOSS_TEXT}; }`,
+    "hui-root": `.main-title { ${EMBOSS_TEXT} }`,
+    "hass-subpage": `.main-title { ${EMBOSS_TEXT} }`,
+    "hass-tabs-subpage": `.main-title { ${EMBOSS_TEXT} }`,
+    "ha-top-app-bar-fixed": `.title { ${EMBOSS_TEXT} }`,
+    "ha-sidebar": `.title { ${EMBOSS_TEXT} }`,
+    "ha-card": `.card-header { ${EMBOSS_TEXT} }`,
+    "hui-heading-card": `.title, h2 { ${EMBOSS_TEXT} } ha-state-icon, ha-icon { --nm-icon-emboss: ${EMBOSS_ICON}; }`,
+    "hui-entities-card": `.card-header { ${EMBOSS_TEXT} }`,
+    "hui-glance-card": `.card-header { ${EMBOSS_TEXT} }`,
+    "hui-markdown-card": `.card-header { ${EMBOSS_TEXT} }`,
     "hui-button-card": `ha-state-icon { --nm-icon-emboss: ${EMBOSS_ICON}; }`,
   },
   // Diagramme: Fläche eingelassen (die Farben setzt chartVars)
@@ -3430,7 +3442,6 @@ const chartSample = (colors, inset) =>
   `<i class="s-chart${inset ? " inset" : ""}"><svg viewBox="0 0 60 30" preserveAspectRatio="none">${CHART_LINES.map(
     (points, i) => `<polyline points="${points}" style="stroke:${colors[i]}"/>`
   ).join("")}</svg></i>`;
-const EMBOSS_SAMPLE = `calc(1.5px * ${LIGHT_X}) calc(1.5px * ${LIGHT_Y}) 1px ${EMBOSS_LIGHT}, calc(-1.5px * ${LIGHT_X}) calc(-1.5px * ${LIGHT_Y}) 1.5px ${EMBOSS_DARK}`;
 const beforeAfter = (before, after) => `${before}<span class="s-arrow">›</span>${after}`;
 const swatch = (bg) => `<i class="s-swatch" style="background:${bg}"></i>`;
 
@@ -3459,7 +3470,7 @@ const SAMPLES = {
     const small = { ...c.light, strength: c.vivid, contrast: c.contrast, d: 2.5, blur: 6 };
     return `<i class="s-dot" style="box-shadow:${sampleShadow({ ...small, inset: value === "on" })}">${bulb(LAMP_ON)}</i><i class="s-dot" style="box-shadow:${sampleShadow(small)}">${bulb(LAMP_OFF)}</i>`;
   },
-  emboss: (value) => `<b class="s-big" style="text-shadow:${value === "on" ? EMBOSS_SAMPLE : "none"}">Aa</b>`,
+  emboss: (value) => `<b class="s-big${value === "on" ? " embossed" : ""}">Aa</b>`,
   // Auf der kleinen Fläche dichter und kräftiger, sonst wäre kein Unterschied zu sehen
   grain: (value) => `<i class="s-tile s-grain" style="--grain:${Math.min(1, (GRAIN[value] || 0) * 2)}"></i>`,
   font: (value) => `<b class="s-font" style="font-family:${FONTS[value] ? `'${FONTS[value].family}', ` : ""}Roboto, Noto, sans-serif">Aa</b>`,
@@ -3753,6 +3764,7 @@ class NeumorphismColorPicker extends HTMLElement {
         .s-dot svg { width: 16px; height: 16px; }
         .s-dot.glow { box-shadow: var(--s-raised-s), 0 0 14px 3px color-mix(in srgb, ${LAMP_ON} 55%, transparent); }
         .s-big { font-size: 26px; font-weight: 700; line-height: 1; }
+        .s-big.embossed { ${embossText(1.5)} }
         .s-grain { position: relative; overflow: hidden; width: 44px; box-shadow: var(--s-raised); }
         .s-grain::after { content: ""; position: absolute; inset: 0; background: url(/neumorphism_static/grain.png) repeat; background-size: 70px;
           opacity: var(--grain); mix-blend-mode: soft-light; }

@@ -1,5 +1,9 @@
 # Änderungen
 
+## 8.2.1
+
+- Prägung: Überschriften wirken jetzt wirklich ins Material gedrückt, mit einer Schattenkante innen zum Licht hin und einer hellen Lippe außen auf der Gegenseite (vorher nur ein Schatten außen, der bei heller Schrift wie eine Kontur aussah). Das Muster in den Einstellungen zeigt denselben Effekt
+
 ## 8.2.0
 
 **Einstellungen**
