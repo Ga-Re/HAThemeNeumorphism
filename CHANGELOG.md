@@ -1,5 +1,9 @@
 # Änderungen
 
+## 8.4.2
+
+- Im Dunkelmodus zeigen Updates und HACS das dunkle Symbol einer Integration (wie Home Assistant selbst), auch nach einem Wechsel zwischen hell und dunkel
+
 ## 8.4.1
 
 - Hintergrund: Vorgaben als Farbpunkte, angeordnet wie bei Primär- und Akzentfarbe (Name beim Darüberfahren)

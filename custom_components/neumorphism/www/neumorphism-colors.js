@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.4.1";
+const VERSION = "8.4.2";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -2228,10 +2228,17 @@ function refreshBrandsToken() {
   );
 }
 
+/**
+ * Adresse bei Home Assistant; im Dunkelmodus das dunkle Bild wie in Home Assistant selbst
+ * (gibt es keins, liefert Home Assistant für Integrationen das helle).
+ */
 const localBrandUrl = (url) => {
   const match = brands.token && typeof url === "string" && url.match(BRANDS_CDN);
-  return match ? `/api/brands/integration/${match[1]}/${match[2]}?token=${brands.token}` : null;
+  if (!match) return null;
+  const image = haDark() && !match[2].startsWith("dark_") ? `dark_${match[2]}` : match[2];
+  return `/api/brands/integration/${match[1]}/${image}?token=${brands.token}`;
 };
+const brandBadges = new Set(); // umgestellte Zustandsbilder (für den Wechsel hell/dunkel)
 
 /**
  * Bilder von Zuständen im Hauptfenster, z. B. die Updates aus HACS in den Einstellungen:
@@ -2245,12 +2252,32 @@ function hookStateBadges() {
     proto.updated = function (...args) {
       const result = updated?.apply(this, args);
       const match = this.style.backgroundImage.match(/^url\("?(https:\/\/brands\.home-assistant\.io\/[^")]+)"?\)$/);
-      const local = match && localBrandUrl(match[1]);
-      if (local) this.style.backgroundImage = `url("${local}")`;
+      if (match) this.__neumorphismBrand = match[1];
+      safely(() => applyBrandBadge(this));
       return result;
     };
     proto.__neumorphismBrands = true;
   });
+}
+
+function applyBrandBadge(badge) {
+  const local = badge.__neumorphismBrand && localBrandUrl(badge.__neumorphismBrand);
+  if (!local) return;
+  brandBadges.add(badge);
+  const css = `url("${local}")`;
+  if (badge.style.backgroundImage !== css) badge.style.backgroundImage = css;
+}
+
+/** Wechsel hell/dunkel: schon umgestellte Bilder im Hauptfenster neu setzen. */
+let brandMode = null;
+function updateBrandMode() {
+  const dark = haDark();
+  if (dark === brandMode) return;
+  brandMode = dark;
+  for (const badge of brandBadges) {
+    if (!badge.isConnected) brandBadges.delete(badge);
+    else applyBrandBadge(badge);
+  }
 }
 
 /** Stellt Bilder von brands.home-assistant.io im Fenster win auf Home Assistant um. */
@@ -2279,11 +2306,13 @@ function localBrandIcons(win) {
       return setAttribute.call(this, name, value);
     };
   }
-  // Schon angezeigte Bilder (einmal pro Schlüssel)
-  if (win.__neumorphismBrandsToken === brands.token) return;
-  win.__neumorphismBrandsToken = brands.token;
-  for (const img of findAllDeep('img[src^="https://brands.home-assistant.io/"]', win.document)) {
-    img.setAttribute("src", img.getAttribute("src"));
+  // Schon angezeigte Bilder (einmal pro Schlüssel und Modus); umgestellte über ihre ursprüngliche Adresse
+  const key = `${brands.token}|${haDark()}`;
+  if (win.__neumorphismBrandsToken === key) return;
+  win.__neumorphismBrandsToken = key;
+  for (const img of findAllDeep('img[src^="https://brands.home-assistant.io/"], img[src^="/api/brands/integration/"]', win.document)) {
+    const original = brandOriginals.get(img) || img.getAttribute("src");
+    if (original.startsWith("https://")) img.setAttribute("src", original);
   }
 }
 
@@ -4638,6 +4667,7 @@ const PROFILE_TAGS = ["ha-theme-settings", "ha-pick-theme-row"];
 
 function tick() {
   safely(refreshBrandsToken);
+  safely(updateBrandMode);
   safely(applySettings);
   safely(injectIntoProfile);
   safely(updateDroplets);
