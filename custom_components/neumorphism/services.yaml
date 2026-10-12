@@ -22,6 +22,10 @@ set_style:
             - "rose"
             - "blue"
             - "primary"
+    background_color:
+      required: false
+      selector:
+        color_rgb:
     strength:
       required: false
       selector:
@@ -175,6 +179,7 @@ reset_style:
             - "primary_color"
             - "accent_color"
             - "background"
+            - "background_color"
             - "strength"
             - "light_direction"
             - "surface"

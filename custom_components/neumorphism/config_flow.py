@@ -72,7 +72,7 @@ class NeumorphismOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            for name in ("primary_color", "accent_color"):
+            for name in ("primary_color", "accent_color", "background_color"):
                 value = (user_input.get(name) or "").strip()
                 if not value:
                     continue

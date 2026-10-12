@@ -19,6 +19,7 @@
           "primary_color": "Primary color",
           "accent_color": "Accent color",
           "background": "Background",
+          "background_color": "Custom background color",
           "strength": "Effect strength",
           "light_direction": "Light direction",
           "surface": "Surface",
@@ -42,6 +43,7 @@
           "primary_color": "Buttons, icons, selection. As #rrggbb, e.g. #3d7bfd.",
           "accent_color": "Switches and highlights. As #rrggbb.",
           "background": "Tint of the surfaces.",
+          "background_color": "Instead of a preset: tint of this color for all surfaces, in light mode also its lightness (limited so the shadows still work). As #rrggbb. Takes precedence over “Background”.",
           "strength": "-100 to 100. Positive raised, 0 flat, negative inverted.",
           "light_direction": "Where the light comes from; shadows fall on the opposite side. “Follow the sun” follows the position of the sun.",
           "surface": "Raised surfaces even, convex or concave.",
@@ -185,6 +187,7 @@
         "primary_color": "Primary color",
         "accent_color": "Accent color",
         "background": "Background",
+        "background_color": "Custom background color",
         "strength": "Effect strength",
         "light_direction": "Light direction",
         "surface": "Surface",
@@ -222,6 +225,10 @@
         "background": {
           "name": "Background",
           "description": "Tint of the surfaces."
+        },
+        "background_color": {
+          "name": "Custom background color",
+          "description": "Instead of a preset: tint of this color for all surfaces, in light mode also its lightness (limited so the shadows still work)."
         },
         "strength": {
           "name": "Effect strength",

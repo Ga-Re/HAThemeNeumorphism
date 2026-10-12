@@ -39,6 +39,8 @@ FIELDS: dict[str, tuple[str, str, Any]] = {
     "primary_color": ("primary", "color", None),
     "accent_color": ("accent", "color", None),
     "background": ("tint", "choice", TINTS),
+    # Eigene Hintergrundfarbe; geht "background" vor (im Frontend derselbe Schlüssel)
+    "background_color": ("tint", "color", None),
     "strength": ("strength", "scale", (-100, 100, 50)),
     "light_direction": ("light", "choice", LIGHTS),
     "surface": ("surface", "choice", SURFACES),

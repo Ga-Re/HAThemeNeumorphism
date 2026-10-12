@@ -80,7 +80,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def set_style(call: ServiceCall) -> None:
         """Vorgaben für alle Benutzer und Geräte, bis sie aufgehoben werden."""
-        await _async_set_style(hass, clean({**data["style"], **call.data}))
+        style = {**data["style"], **call.data}
+        # Hintergrund als Name oder eigene Farbe: die zuletzt angegebene gilt
+        if "background" in call.data and "background_color" not in call.data:
+            style.pop("background_color", None)
+        await _async_set_style(hass, clean(style))
 
     async def reset_style(call: ServiceCall) -> None:
         """Vorgaben ganz (ohne Angabe) oder für einzelne Einstellungen aufheben."""

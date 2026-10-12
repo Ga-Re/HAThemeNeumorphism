@@ -1,5 +1,10 @@
 # Änderungen
 
+## 8.3.0
+
+- Eigene Hintergrundfarbe: Unter *Hintergrund* öffnet *Eigene* einen Farbwähler. Hell wird der Hintergrund genau diese Farbe (Helligkeit so weit begrenzt, dass die Schatten wirken), dunkel ein dunkler Ton im selben Farbton; Schatten, Mulden und Schieber passen sich an. Änderungen sind schon beim Ziehen zu sehen
+- Auch als Standard für alle (Optionen der Integration) und in der Aktion „Stil festlegen“ als *Eigene Hintergrundfarbe*
+
 ## 8.2.1
 
 - Prägung: Überschriften wirken jetzt wirklich ins Material gedrückt, mit einer Schattenkante innen zum Licht hin und einer hellen Lippe außen auf der Gegenseite (vorher nur ein Schatten außen, der bei heller Schrift wie eine Kontur aussah). Das Muster in den Einstellungen zeigt denselben Effekt

@@ -19,6 +19,7 @@
           "primary_color": "Primärfarbe",
           "accent_color": "Akzentfarbe",
           "background": "Hintergrund",
+          "background_color": "Eigene Hintergrundfarbe",
           "strength": "Effektstärke",
           "light_direction": "Lichtrichtung",
           "surface": "Oberfläche",
@@ -42,6 +43,7 @@
           "primary_color": "Buttons, Symbole, Auswahl. Als #rrggbb, z. B. #3d7bfd.",
           "accent_color": "Schalter und Hervorhebungen. Als #rrggbb.",
           "background": "Farbton der Flächen.",
+          "background_color": "Statt einer Vorgabe: Farbton dieser Farbe für alle Flächen, im hellen Modus auch ihre Helligkeit (begrenzt, damit die Schatten wirken). Als #rrggbb. Geht „Hintergrund“ vor.",
           "strength": "-100 bis 100. Positiv erhaben, 0 flach, negativ umgekehrt.",
           "light_direction": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite. „Nach der Sonne“ folgt dem Sonnenstand.",
           "surface": "Erhabene Flächen eben, gewölbt oder gemuldet.",
@@ -185,6 +187,7 @@
         "primary_color": "Primärfarbe",
         "accent_color": "Akzentfarbe",
         "background": "Hintergrund",
+        "background_color": "Eigene Hintergrundfarbe",
         "strength": "Effektstärke",
         "light_direction": "Lichtrichtung",
         "surface": "Oberfläche",
@@ -222,6 +225,10 @@
         "background": {
           "name": "Hintergrund",
           "description": "Farbton der Flächen."
+        },
+        "background_color": {
+          "name": "Eigene Hintergrundfarbe",
+          "description": "Statt einer Vorgabe: Farbton dieser Farbe für alle Flächen, im hellen Modus auch ihre Helligkeit (begrenzt, damit die Schatten wirken)."
         },
         "strength": {
           "name": "Effektstärke",

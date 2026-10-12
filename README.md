@@ -56,7 +56,7 @@ Auswahl und Regler zeigen immer, was gespeichert ist. Liegt gerade etwas darübe
 **Farben**
 - **Primärfarbe**: Buttons, Symbole, ausgewählte Einträge, Fortschrittsbalken
 - **Akzentfarbe**: Schalter, Checkboxen, Hervorhebungen
-- **Hintergrund**: Farbton aller Flächen, *Standard* (kühles Grau), *Grau*, *Warm*, *Sand*, *Mint*, *Rosé*, *Blau* oder passend zur *Primärfarbe*. Hell und dunkel jeweils in der passenden Helligkeit
+- **Hintergrund**: Farbton aller Flächen, *Standard* (kühles Grau), *Grau*, *Warm*, *Sand*, *Mint*, *Rosé*, *Blau* oder passend zur *Primärfarbe*. Hell und dunkel jeweils in der passenden Helligkeit Mit *Eigene* wählst du jede Farbe selbst: Im hellen Modus wird der Hintergrund genau diese Farbe (sehr dunkle oder sehr helle Farben werden so weit angepasst, dass die Schatten noch wirken), im dunklen Modus ein dunkler Ton im selben Farbton. Schatten, Mulden und Schieber passen sich mit an
 - **Diagramme**: *Themenfarben* färbt Verlauf, Statistik und andere Diagramme passend zu Primär- und Akzentfarbe und lässt ihre Fläche ein; *Wie Home Assistant* lässt sie unverändert
 
 Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
