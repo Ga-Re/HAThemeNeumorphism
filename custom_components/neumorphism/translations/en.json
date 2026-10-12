@@ -20,6 +20,7 @@
           "accent_color": "Accent color",
           "background": "Background",
           "background_color": "Custom background color",
+          "background_intensity": "Background intensity",
           "strength": "Effect strength",
           "light_direction": "Light direction",
           "surface": "Surface",
@@ -43,6 +44,7 @@
           "accent_color": "Switches and highlights. As #rrggbb.",
           "background": "Tint of the surfaces.",
           "background_color": "Instead of a preset: tint of this color for all surfaces, in light mode also its lightness (limited so the shadows still work). As #rrggbb. Takes precedence over “Background”.",
+          "background_intensity": "How colorful the surfaces are: 0 gray, 100 as chosen, 200 twice as strong (percent).",
           "strength": "-100 to 100. Positive raised, 0 flat, negative inverted.",
           "light_direction": "Where the light comes from; shadows fall on the opposite side. “Follow the sun” follows the position of the sun.",
           "surface": "Raised surfaces even, convex or concave.",
@@ -180,6 +182,7 @@
         "accent_color": "Accent color",
         "background": "Background",
         "background_color": "Custom background color",
+        "background_intensity": "Background intensity",
         "strength": "Effect strength",
         "light_direction": "Light direction",
         "surface": "Surface",
@@ -220,6 +223,10 @@
         "background_color": {
           "name": "Custom background color",
           "description": "Instead of a preset: tint of this color for all surfaces, in light mode also its lightness (limited so the shadows still work)."
+        },
+        "background_intensity": {
+          "name": "Background intensity",
+          "description": "How colorful the surfaces are: 0 gray, 100 as chosen, 200 twice as strong (percent)."
         },
         "strength": {
           "name": "Effect strength",

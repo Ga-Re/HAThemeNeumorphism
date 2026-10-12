@@ -26,6 +26,15 @@ set_style:
       required: false
       selector:
         color_rgb:
+    background_intensity:
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 200
+          step: 10
+          unit_of_measurement: "%"
+          mode: slider
     strength:
       required: false
       selector:
@@ -176,6 +185,7 @@ reset_style:
             - "accent_color"
             - "background"
             - "background_color"
+            - "background_intensity"
             - "strength"
             - "light_direction"
             - "surface"

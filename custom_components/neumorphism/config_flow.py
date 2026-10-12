@@ -47,8 +47,8 @@ def _selector(name: str, kind: str, values: Any) -> Any:
         return TextSelector()
     if kind == "scale":
         low, high, _ = values
-        config = NumberSelectorConfig(min=low, max=high, step=10 if name == "roundness" else 5, mode=NumberSelectorMode.SLIDER)
-        if name in ("roundness", "font_size"):
+        config = NumberSelectorConfig(min=low, max=high, step=10 if name in ("roundness", "background_intensity") else 5, mode=NumberSelectorMode.SLIDER)
+        if name in ("roundness", "font_size", "background_intensity"):
             config["unit_of_measurement"] = "%"
         return NumberSelector(config)
     return SelectSelector(

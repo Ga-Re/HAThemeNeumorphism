@@ -20,6 +20,7 @@
           "accent_color": "Akzentfarbe",
           "background": "Hintergrund",
           "background_color": "Eigene Hintergrundfarbe",
+          "background_intensity": "Intensität des Hintergrunds",
           "strength": "Effektstärke",
           "light_direction": "Lichtrichtung",
           "surface": "Oberfläche",
@@ -43,6 +44,7 @@
           "accent_color": "Schalter und Hervorhebungen. Als #rrggbb.",
           "background": "Farbton der Flächen.",
           "background_color": "Statt einer Vorgabe: Farbton dieser Farbe für alle Flächen, im hellen Modus auch ihre Helligkeit (begrenzt, damit die Schatten wirken). Als #rrggbb. Geht „Hintergrund“ vor.",
+          "background_intensity": "Wie farbig die Flächen sind: 0 grau, 100 wie gewählt, 200 doppelt so kräftig (Prozent).",
           "strength": "-100 bis 100. Positiv erhaben, 0 flach, negativ umgekehrt.",
           "light_direction": "Woher das Licht fällt; die Schatten liegen auf der Gegenseite. „Nach der Sonne“ folgt dem Sonnenstand.",
           "surface": "Erhabene Flächen eben, gewölbt oder gemuldet.",
@@ -180,6 +182,7 @@
         "accent_color": "Akzentfarbe",
         "background": "Hintergrund",
         "background_color": "Eigene Hintergrundfarbe",
+        "background_intensity": "Intensität des Hintergrunds",
         "strength": "Effektstärke",
         "light_direction": "Lichtrichtung",
         "surface": "Oberfläche",
@@ -220,6 +223,10 @@
         "background_color": {
           "name": "Eigene Hintergrundfarbe",
           "description": "Statt einer Vorgabe: Farbton dieser Farbe für alle Flächen, im hellen Modus auch ihre Helligkeit (begrenzt, damit die Schatten wirken)."
+        },
+        "background_intensity": {
+          "name": "Intensität des Hintergrunds",
+          "description": "Wie farbig die Flächen sind: 0 grau, 100 wie gewählt, 200 doppelt so kräftig (Prozent)."
         },
         "strength": {
           "name": "Effektstärke",

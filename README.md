@@ -57,6 +57,7 @@ Auswahl und Regler zeigen immer, was gespeichert ist. Liegt gerade etwas darübe
 - **Primärfarbe**: Buttons, Symbole, ausgewählte Einträge, Fortschrittsbalken
 - **Akzentfarbe**: Schalter, Checkboxen, Hervorhebungen
 - **Hintergrund**: Farbwähler wie bei Primär- und Akzentfarbe, darunter Vorgaben als Farbpunkte: *Standard* (kühles Grau), *Grau*, *Warm*, *Sand*, *Mint*, *Rosé*, *Blau* und *Primärfarbe*. Eine selbst gewählte helle Farbe gilt genau so im hellen Modus, eine dunkle genau so im dunklen; die Helligkeit wird nur so weit begrenzt, dass die Schatten noch wirken. Der jeweils andere Modus bekommt denselben Farbton in passender Helligkeit. *Primärfarbe* ist dasselbe, als würdest du die Primärfarbe selbst als Hintergrund wählen. Schatten, Mulden und Schieber passen sich mit an
+- **Intensität des Hintergrunds**: wie farbig die Flächen sind, von 0 % (grau) über 100 % (wie gewählt) bis 200 % (doppelt so kräftig). Gilt für die Vorgaben und für eine eigene Farbe
 - **Diagramme**: *Themenfarben* färbt Verlauf, Statistik und andere Diagramme passend zu Primär- und Akzentfarbe und lässt ihre Fläche ein; *Wie Home Assistant* lässt sie unverändert
 
 Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
@@ -125,7 +126,7 @@ actions:
       glow: true
 ```
 
-Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `background_color` (eigene Hintergrundfarbe, Farbwähler oder `"#rrggbb"`), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`, `sun`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`, `modern`, `legible`), `font_size` (85 bis 130), `density` (`compact`, `normal`, `airy`), `sections` (`open`, `well`, `raised`), `pressed`, `animations` und `glow` (`true`/`false`), `grain` (`off`, `fine`, `strong`), `charts` (`theme`, `standard`), `evening` (Liste aus `warm`, `flat`, `dark`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
+Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `background_color` (eigene Hintergrundfarbe, Farbwähler oder `"#rrggbb"`), `background_intensity` (0 bis 200), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`, `sun`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`, `modern`, `legible`), `font_size` (85 bis 130), `density` (`compact`, `normal`, `airy`), `sections` (`open`, `well`, `raised`), `pressed`, `animations` und `glow` (`true`/`false`), `grain` (`off`, `fine`, `strong`), `charts` (`theme`, `standard`), `evening` (Liste aus `warm`, `flat`, `dark`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
 
 Die Vorgaben gelten, auch über einen Neustart hinweg, bis **`neumorphism.reset_style`** sie aufhebt, ganz oder nur einzelne:
 

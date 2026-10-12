@@ -1,5 +1,9 @@
 # Änderungen
 
+## 8.5.0
+
+- Regler *Intensität des Hintergrunds*: 0 % grau, 100 % wie gewählt, bis 200 % doppelt so kräftig; gilt für Vorgaben und eigene Farbe, die Farbpunkte zeigen sie gleich mit. Auch in den Optionen und in der Aktion „Stil festlegen“ (`background_intensity`)
+
 ## 8.4.2
 
 - Im Dunkelmodus zeigen Updates und HACS das dunkle Symbol einer Integration (wie Home Assistant selbst), auch nach einem Wechsel zwischen hell und dunkel

@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.4.2";
+const VERSION = "8.5.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -48,6 +48,7 @@ const STRENGTH_SCALE = 50;
 const RADIUS_MAX = 2;
 // Schriftgröße als Faktor (Regler in Prozent)
 const FONT_SCALE_MIN = 0.85;
+const TINT_STRENGTH_MAX = 2; // Intensität des Hintergrunds: 0 grau, 1 wie vorgesehen, 2 doppelt so kräftig
 const FONT_SCALE_MAX = 1.3;
 
 // ---------------------------------------------------------------------------
@@ -202,6 +203,10 @@ const clampRadius = (value) => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(RADIUS_MAX, Math.max(0, number)) : null;
 };
+const clampTintStrength = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(TINT_STRENGTH_MAX, Math.max(0, number)) : null;
+};
 const clampFontScale = (value) => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, number)) : null;
@@ -234,6 +239,7 @@ const USER_KEYS = {
   light: "neumorphismLight",
   surface: "neumorphismSurface",
   tint: "neumorphismTint",
+  tintStrength: "neumorphismTintStrength",
   radius: "neumorphismRadius",
   font: "neumorphismFont",
   contrast: "neumorphismContrast",
@@ -258,6 +264,7 @@ const BUILTIN = {
   light: "top_left",
   surface: "flat",
   tint: "standard",
+  tintStrength: 1,
   radius: 1,
   font: "standard",
   contrast: "normal",
@@ -283,6 +290,7 @@ function parseSetting(key, value) {
   if (key === "strength") return clampStrength(value);
   if (key === "radius") return clampRadius(value);
   if (key === "fontScale") return clampFontScale(value);
+  if (key === "tintStrength") return clampTintStrength(value);
   if (key === "appsOff") return Array.isArray(value) ? value.filter((v) => typeof v === "string") : null;
   if (key === "evening") return Array.isArray(value) ? EVENING_EFFECTS.filter((effect) => value.includes(effect)) : null;
   if (key === "tint" && normalize(value)) return normalize(value); // eigene Farbe
@@ -507,7 +515,19 @@ function customPalette(hex, dark) {
 
 const isCustomTint = (tint) => typeof tint === "string" && tint.startsWith("#");
 
-function tintPalette(tint, dark, primary) {
+/** Palette des Hintergrunds; intensity verstärkt oder mindert die Farbigkeit aller Töne (0: grau). */
+function tintPalette(tint, dark, primary, intensity = 1) {
+  const palette = basePalette(tint, dark, primary);
+  if (intensity === 1) return palette;
+  const out = {};
+  for (const [name, hex] of Object.entries(palette)) {
+    const [L, C, h] = hexToOklch(hex);
+    out[name] = oklchToHex(L, Math.min(0.16, C * intensity), h);
+  }
+  return out;
+}
+
+function basePalette(tint, dark, primary) {
   const base = BASE_PALETTE[dark ? "dark" : "light"];
   if (isCustomTint(tint)) return customPalette(tint, dark);
   // Primärfarbe: genau wie die Primärfarbe als eigene Hintergrundfarbe
@@ -525,9 +545,9 @@ function tintPalette(tint, dark, primary) {
   return out;
 }
 
-function tintVars(tint, dark, primary) {
-  if (!TINTS[tint] && !isCustomTint(tint)) return {};
-  const p = tintPalette(tint, dark, primary);
+function tintVars(tint, dark, primary, intensity = 1) {
+  if (!TINTS[tint] && !isCustomTint(tint) && intensity === 1) return {};
+  const p = tintPalette(tint, dark, primary, intensity);
   return {
     "primary-background-color": p.bg,
     "card-background-color": p.bg,
@@ -677,7 +697,7 @@ function settingsVars(s, dark, hass = getHass()) {
   Object.assign(vars, lightVars(s.light, hass));
   if (s.radius !== 1) vars["neumorphism-radius"] = String(s.radius);
   if (s.surface !== "flat") vars["neumorphism-surface-image"] = `var(--neumorphism-${s.surface})`;
-  Object.assign(vars, tintVars(s.tint, dark, primary));
+  Object.assign(vars, tintVars(s.tint, dark, primary, s.tintStrength));
   if (s.contrast === "high") Object.assign(vars, contrastVars(dark));
   Object.assign(vars, readableVars(vars, dark, s.contrast === "high"));
   Object.assign(vars, fontVars(s.font), densityVars(s.density));
@@ -3231,6 +3251,9 @@ function buildTexts(hass) {
       "Rounded: Nunito. Modern: Inter. Legible: Atkinson Hyperlegible. Shipped with the integration."
     ),
     fontScale: t("Schriftgröße", "Font size"),
+    tintStrength: t("Intensität des Hintergrunds", "Background intensity"),
+    tintStrengthHint: t("Wie farbig die Flächen sind: 0 % grau, 100 % wie gewählt, 200 % doppelt so kräftig.", "How colorful the surfaces are: 0 % gray, 100 % as chosen, 200 % twice as strong."),
+    tintGray: t("grau", "gray"),
     density: t("Abstände", "Spacing"),
     density_compact: t("Kompakt", "Compact"),
     density_normal: "Normal",
@@ -3402,7 +3425,7 @@ const DEVICE_SEGMENTS = {
 // Bezeichnungen für den Hinweis auf Werte aus Automationen
 const SETTING_LABELS = {
   primary: "primary", accent: "accent", strength: "strength", light: "light", surface: "surface", tint: "tint",
-  radius: "radius", font: "font", contrast: "contrast", glow: "glow", motion: "motion", sections: "sections",
+  radius: "radius", tintStrength: "tintStrength", font: "font", contrast: "contrast", glow: "glow", motion: "motion", sections: "sections",
   pressed: "pressed", grain: "grain", density: "density", fontScale: "fontScale", charts: "charts",
   evening: "groupEvening", cards: "cards", apps: "apps", appsOff: "apps",
 };
@@ -3508,8 +3531,8 @@ const SAMPLES = {
       : `<i class="s-app" style="background:${c.dark ? "#1f1f1f" : "#fff"}"><i style="background:${c.dark ? "#2d2d2d" : "#f1f1f1"}"></i><i style="background:#2196f3;box-shadow:none"></i></i>`,
   // Dieses Gerät: wie beim Benutzer (hell oder dunkel) oder fest
   mode: (value, c) => {
-    const light = tintPalette(c.s.tint, false, c.primary).bg;
-    const dark = tintPalette(c.s.tint, true, c.primary).bg;
+    const light = tintPalette(c.s.tint, false, c.primary, c.s.tintStrength).bg;
+    const dark = tintPalette(c.s.tint, true, c.primary, c.s.tintStrength).bg;
     if (value === "light") return swatch(light);
     if (value === "dark") return swatch(dark);
     return `<i class="s-swatch"><i style="background:${light}"></i><i style="background:${dark}"></i></i>`;
@@ -3518,13 +3541,13 @@ const SAMPLES = {
 
 // Abendmodus: vorher und nachher
 const EFFECT_SAMPLES = {
-  warm: (c) => beforeAfter(swatch(c.bg), swatch(tintPalette("warm", c.dark, c.primary).bg)),
+  warm: (c) => beforeAfter(swatch(c.bg), swatch(tintPalette("warm", c.dark, c.primary, c.s.tintStrength).bg)),
   flat: (c) =>
     beforeAfter(
       `<i class="s-mini" style="box-shadow:${sampleShadow({ ...c.light, strength: c.vivid, d: 3, blur: 7 })}"></i>`,
       `<i class="s-mini" style="box-shadow:${sampleShadow({ ...c.light, strength: c.vivid / 2, d: 3, blur: 7 })}"></i>`
     ),
-  dark: (c) => beforeAfter(swatch(tintPalette(c.s.tint, false, c.primary).bg), swatch(tintPalette(c.s.tint, true, c.primary).bg)),
+  dark: (c) => beforeAfter(swatch(tintPalette(c.s.tint, false, c.primary, c.s.tintStrength).bg), swatch(tintPalette(c.s.tint, true, c.primary, c.s.tintStrength).bg)),
 };
 
 // Regler: der aktuelle Wert, auch während des Ziehens
@@ -3572,6 +3595,7 @@ const RANGES = {
   strength: { scale: STRENGTH_SCALE, mark: 50 },
   radius: { scale: 100, mark: 0 },
   fontScale: { scale: 100, mark: null },
+  tintStrength: { scale: 100, mark: 50 },
 };
 
 // Offene Einstellungen (Profil, Dashboard-Karten): bei jedem Takt aktualisiert
@@ -3885,6 +3909,7 @@ class NeumorphismColorPicker extends HTMLElement {
         </div>
         <div class="presets">${CHOICES.tint.map((tint) => `<button class="dot tint" data-value="${tint}"></button>`).join("")}</div>
       </div>
+      ${rangeHtml("tintStrength", 0, TINT_STRENGTH_MAX * 100, 10)}
       <div class="grid">${SEGMENTS.colors.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
         </div>
       </section>
@@ -4182,7 +4207,7 @@ class NeumorphismColorPicker extends HTMLElement {
     const c = {
       s: current, dark, light, vivid, contrast, primary, t, hass: this._hass,
       accent: current.accent || THEME_ACCENT,
-      bg: tintPalette(current.tint, dark, primary).bg,
+      bg: tintPalette(current.tint, dark, primary, current.tintStrength).bg,
       haColors: HA_CHART_COLORS.map((fallback, i) => css.getPropertyValue(`--color-${i + 1}`).trim() || fallback),
     };
     // Gemeinsame Schatten der Muster
@@ -4233,7 +4258,7 @@ class NeumorphismColorPicker extends HTMLElement {
     const join = (items) => items.filter(Boolean).join(" · ");
     return {
       presets: preset ? preset.name : t.customStyle,
-      colors: join([colors, `${t.tint} ${isCustomTint(current.tint) ? `${t.tint_custom} ${current.tint}` : label("tint", current.tint)}`, `${t.summaryCharts} ${label("charts", current.charts)}`]),
+      colors: join([colors, `${t.tint} ${isCustomTint(current.tint) ? `${t.tint_custom} ${current.tint}` : label("tint", current.tint)}${current.tintStrength !== 1 ? ` ${Math.round(current.tintStrength * 100)} %` : ""}`, `${t.summaryCharts} ${label("charts", current.charts)}`]),
       depth: join(depth),
       shape: join([
         `${t.summaryRadius} ${Math.round(current.radius * 100)} %`,
@@ -4484,7 +4509,7 @@ class NeumorphismColorPicker extends HTMLElement {
       list.dataset.key = stylesKey;
       list.innerHTML = styles
         .map((p) => {
-          const bg = tintPalette(p.values.tint || "standard", dark, primaryOf(p.values)).bg;
+          const bg = tintPalette(p.values.tint || "standard", dark, primaryOf(p.values), p.values.tintStrength ?? 1).bg;
           const name = p.name.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
           const del = p.own ? `<span class="delete" role="button" aria-label="${t.presetDelete}" title="${t.presetDelete}">×</span>` : "";
           return `<button class="style" ${p.attr}><span class="swatch" style="background:${bg};--dot:${primaryOf(p.values)}"></span>${name}${del}</button>`;
@@ -4519,7 +4544,7 @@ class NeumorphismColorPicker extends HTMLElement {
     tintInput.setAttribute("aria-label", t.tint);
     root.querySelector('[data-setting="tint"] .value').textContent = ownTint ? current.tint : t[`tint_${current.tint}`];
     for (const button of root.querySelectorAll("button.tint")) {
-      button.style.background = tintPalette(button.dataset.value, dark, primary).bg;
+      button.style.background = tintPalette(button.dataset.value, dark, primary, current.tintStrength).bg;
     }
 
     // Regler
@@ -4530,6 +4555,9 @@ class NeumorphismColorPicker extends HTMLElement {
     const radius = Math.round(current.radius * 100);
     this._range(root.querySelector('[data-setting="radius"] input'), radius, 0);
     root.querySelector('[data-setting="radius"] .value').textContent = radius === 0 ? `0 % (${t.square})` : `${radius} %`;
+    const tintStrength = Math.round(current.tintStrength * 100);
+    this._range(root.querySelector('[data-setting="tintStrength"] input'), tintStrength, 50);
+    root.querySelector('[data-setting="tintStrength"] .value').textContent = tintStrength === 0 ? `0 % (${t.tintGray})` : `${tintStrength} %`;
     const fontScale = Math.round(current.fontScale * 100);
     this._range(root.querySelector('[data-setting="fontScale"] input'), fontScale, null);
     root.querySelector('[data-setting="fontScale"] .value').textContent = `${fontScale} %`;
