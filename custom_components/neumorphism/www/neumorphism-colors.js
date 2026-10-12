@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.5.0";
+const VERSION = "8.5.1";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -956,6 +956,12 @@ const CONTROL_STYLES = {
   "hass-tabs-subpage": `
     .toolbar { border-bottom: none !important; position: relative; z-index: 2; overflow-x: clip; }
     .toolbar::after { ${HEADER_FADE} }
+    /* Schmal liegt die Reiterleiste unten, absolut zur ganzen Seite: dann darf die Titelleiste nicht
+       ihr Bezugsrahmen sein. Der weiche Übergang hängt dann an der Inhaltszeile der Titelleiste. */
+    :host([narrow]) .toolbar { position: static; overflow-x: visible; }
+    :host([narrow]) .toolbar::after { content: none; }
+    :host([narrow]) .toolbar-content { z-index: 2; }
+    :host([narrow]) .toolbar-content::after { ${HEADER_FADE} }
     .toolbar-content, #toolbar-icon { position: relative; }
     #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
     .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${GROUP} }

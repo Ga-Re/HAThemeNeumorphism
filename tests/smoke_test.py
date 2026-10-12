@@ -128,6 +128,25 @@ def onboard() -> str:
     return token
 
 
+# Lage aller absolut oder fest positionierten Bausteine (z. B. Reiterleiste unten am Handy), durch alle
+# Shadow-DOMs hindurch. Das Theme darf Flächen formen, aber nichts an eine andere Stelle schieben.
+LAYOUT_SIGNATURE = """() => {
+  const out = {};
+  for (const el of findAllDeep('*')) {
+    const cs = getComputedStyle(el);
+    if (!['absolute', 'fixed', 'sticky'].includes(cs.position) || el.closest('svg, ha-ripple')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 24 || r.height < 16 || r.bottom < 0 || r.top > innerHeight) continue;
+    const cls = typeof el.className === 'string' ? el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+    const key = `${el.getRootNode().host?.localName || 'doc'}>${el.localName}${el.id ? '#' + el.id : ''}${cls ? '.' + cls : ''}`;
+    if (!out[key]) out[key] = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+  }
+  return out;
+}"""
+# Nicht das Profil: dort schieben die Einstellungen des Themes den Inhalt darunter gewollt nach unten
+LAYOUT_PAGES = ["/config/integrations/dashboard", "/config/automation/dashboard", "/config/dashboard", "/developer-tools/state", "/history"]
+
+
 def browser_checks() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as pw:
@@ -182,6 +201,36 @@ def browser_checks() -> None:
             page.screenshot(path=str(OUTPUT / f"profil-{mode}.png"), full_page=True)
             go("/config/integrations/dashboard")
             page.screenshot(path=str(OUTPUT / f"einstellungen-{mode}.png"))
+
+        # Aufbau wie im Standard-Theme, am Handy und am großen Bildschirm
+        for width, height, label in ((390, 844, "schmal"), (1280, 900, "breit")):
+            page.set_viewport_size({"width": width, "height": height})
+            def compare(path: str) -> dict[str, str]:
+                found = {}
+                for theme in ("default", "Neumorphism"):
+                    page.evaluate(
+                        "(theme) => document.querySelector('home-assistant').dispatchEvent(new CustomEvent('settheme', { detail: { theme, dark: false } }))",
+                        theme,
+                    )
+                    page.wait_for_timeout(800)
+                    go(path)
+                    found[theme] = page.evaluate(LAYOUT_SIGNATURE)
+                out = {}
+                for key, a in found["default"].items():
+                    b = found["Neumorphism"].get(key)
+                    if b and any(abs(x - y) > 30 for x, y in zip(a, b)):
+                        out[key] = f"{path} {key} {a} -> {b}"
+                return out
+
+            moved: list[str] = []
+            for path in [dashboard, *LAYOUT_PAGES]:
+                first = compare(path)
+                # Nur, was sich beim zweiten Messen wiederholt (nicht z. B. ein Hinweis, der gerade erscheint)
+                second = compare(path) if first else {}
+                moved += [text for key, text in second.items() if key in first]
+            check(f"Aufbau wie im Standard-Theme ({label})", not moved, "; ".join(moved[:4]))
+            page.screenshot(path=str(OUTPUT / f"aufbau-{label}.png"))
+        page.set_viewport_size({"width": 1280, "height": 900})
 
         # Eine Einstellung ändern und prüfen, dass sie wirkt
         page.evaluate("() => document.querySelector('home-assistant').dispatchEvent(new CustomEvent('settheme', { detail: { dark: false, neumorphismTint: 'mint', neumorphismStrength: -1 } }))")

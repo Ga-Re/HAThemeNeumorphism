@@ -1,5 +1,10 @@
 # Änderungen
 
+## 8.5.1
+
+- Am Handy lag auf Seiten mit Reitern (z. B. Geräte & Dienste, Automationen, Bereiche) die Reiterleiste oben über der Titelleiste statt unten; Suche und Titel waren verdeckt. Behoben
+- Automatischer Test: Seiten werden am Handy und am großen Bildschirm mit dem Standard-Theme verglichen; nichts darf an eine andere Stelle rutschen
+
 ## 8.5.0
 
 - Regler *Intensität des Hintergrunds*: 0 % grau, 100 % wie gewählt, bis 200 % doppelt so kräftig; gilt für Vorgaben und eigene Farbe, die Farbpunkte zeigen sie gleich mit. Auch in den Optionen und in der Aktion „Stil festlegen“ (`background_intensity`)
