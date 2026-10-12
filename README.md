@@ -44,7 +44,7 @@ Sobald im Profil das Theme „Neumorphism“ gewählt ist, erscheinen im Bereich
 
 Die Einstellungen sind in Gruppen geordnet, die sich auf- und zuklappen lassen. Jede Gruppe zeigt in ihrer Kopfzeile die aktuellen Werte, so bleibt der Überblick auch zugeklappt. Welche Gruppen offen sind, merkt sich das Gerät.
 
-**Vorschau**: Oben in den Einstellungen liegen zwei echte Kacheln mit Vorschau-Lampen, eine an, eine aus. Sie bleiben beim Blättern sichtbar, so lässt sich jede Änderung direkt daran ablesen: Leuchten, Zustand als Tiefe, Rundung, Schrift, Sektionen, Prägung und mehr. Antippen schaltet die Lampen um, **Vorführen** schaltet sie ein paar Mal hin und her, damit Animationen und Leuchten zu sehen sind. Geschaltet wird dabei nichts Echtes. Außerdem gibt es eine kleine Diagramm-Vorschau bei *Diagramme* und **Abend ansehen** beim Abendmodus, das den Abend sofort zeigt, solange es gedrückt ist. Beim Bearbeiten eines Dashboards zeigt die Seite dessen Stil.
+**Vorschau an jeder Einstellung**: Jede Auswahl zeigt im Kleinen, was sie bewirkt, noch bevor du sie wählst. Bei der Lichtrichtung siehst du, wo das Licht steht und wohin der Schatten fällt, bei der Oberfläche die Wölbung, bei der Schrift die Schrift selbst, bei *Zustand als Tiefe* eine eingeschaltete Lampe gedrückt, bei den Animationen einen Knopf, der einsinkt, beim Leuchten eine leuchtende Lampe, bei den Sektionen Mulde oder Platte, bei den Diagrammen die Farben und beim Abendmodus vorher und nachher. Die Regler für Effektstärke, Rundung und Schriftgröße zeigen den aktuellen Wert schon während des Ziehens an einem Beispiel. Die Muster passen sich Licht, Effektstärke und Kontrast an, die gerade eingestellt sind. **Abend ansehen** beim Abendmodus zeigt den Abend sofort auf der ganzen Seite, solange es gedrückt ist. Beim Bearbeiten eines Dashboards zeigt die Seite dessen Stil.
 
 Auswahl und Regler zeigen immer, was gespeichert ist. Liegt gerade etwas darüber, etwa der Abendmodus oder der eigene Stil des Dashboards, auf dem die Einstellungskarte liegt, nennt ein Hinweis oben, was überlagert ist.
 
@@ -104,7 +104,7 @@ Oben in den Einstellungen wählst du, wofür gespeichert wird:
 
 Unter **Dieses Gerät** gibt es außerdem:
 
-- **Hell oder dunkel**: *Wie im Profil* oder fest *Hell* oder *Dunkel* nur für dieses Gerät, etwa ein Tablet, das immer dunkel bleiben soll
+- **Ausnahme für hell oder dunkel**: Hell oder dunkel stellst du im Profil beim *Design-Modus* von Home Assistant ein (Auto, Hell, Dunkel); das gilt für deinen Benutzer auf allen Geräten, eine zweite Einstellung brauchst du dafür nicht. Nur wenn ein einzelnes Gerät abweichen soll, etwa ein Wandtablet mit demselben Benutzer, das immer dunkel bleibt, wählst du hier *Immer hell* oder *Immer dunkel*. *Keine* folgt dem Design-Modus. Die Ausnahme gilt nur, solange das Neumorphism-Theme gewählt ist
 - **Sparmodus**: für schwache Geräte. Ohne Tropfenformen, Animationen und weichgezeichneten Hintergrund hinter Dialogen; Add-ons bleiben unverändert, eigene Karten bekommen nur den Rahmen
 
 ### Standard für alle Benutzer

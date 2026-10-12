@@ -1,5 +1,12 @@
 # Änderungen
 
+## 8.2.0
+
+**Einstellungen**
+- Vorschau an jeder Einstellung statt einer allgemeinen Vorschau: jede Auswahl zeigt im Kleinen, was sie bewirkt (Lichtrichtung mit Lichtquelle und Schatten, Oberfläche, Kontrast, Zustand als Tiefe, Prägung, Körnung, Schrift, Abstände, Sektionen, Diagramme, Animationen, Leuchten, Abendmodus vorher und nachher, Eigene Karten, Add-ons, Hell oder dunkel)
+- Effektstärke, Rundung und Schriftgröße zeigen den Wert schon beim Ziehen an einem Beispiel
+- Hell oder dunkel für dieses Gerät heißt jetzt „Ausnahme für hell oder dunkel“ (Keine, Immer hell, Immer dunkel); der Hinweis erklärt, dass der Design-Modus von Home Assistant schon für alle Geräte des Benutzers gilt
+
 ## 8.1.0
 
 **Einstellungen**

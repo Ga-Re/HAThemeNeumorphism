@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.1.0";
+const VERSION = "8.2.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -3057,6 +3057,7 @@ function buildTexts(hass) {
   const de = (hass?.language || navigator.language || "").toLowerCase().startsWith("de");
   const loc = (key, fallback) => hass?.localize?.(key) || fallback;
   const t = (deText, enText) => (de ? deText : enText);
+  const themeMode = loc("ui.panel.profile.themes.theme_mode", t("Design-Modus", "Theme mode"));
   return {
     title: "Neumorphism",
     primary: loc("ui.panel.profile.themes.primary_color", t("Primärfarbe", "Primary color")),
@@ -3075,16 +3076,6 @@ function buildTexts(hass) {
     groupAreas: t("Bereiche", "Areas"),
     groupDevice: t("Dieses Gerät", "This device"),
     // Vorschau
-    previewTitle: t("Vorschau", "Preview"),
-    previewDemo: t("▶ Vorführen", "▶ Demonstrate"),
-    previewCollapse: t("Vorschau ein- oder ausblenden", "Show or hide preview"),
-    previewHint: t(
-      "Echte Kacheln mit Vorschau-Geräten: antippen zum Ausprobieren, geschaltet wird nichts.",
-      "Real tiles with preview devices: tap to try, nothing is switched."
-    ),
-    previewHeading: t("Wohnzimmer", "Living room"),
-    previewLampOn: t("Stehlampe", "Floor lamp"),
-    previewLampOff: t("Deckenlicht", "Ceiling light"),
     eveningPreview: t("Abend ansehen", "Preview evening"),
     customStyle: t("Eigene Einstellungen", "Custom settings"),
     colorsFromTheme: t("Farben aus dem Theme", "Colors from theme"),
@@ -3158,10 +3149,10 @@ function buildTexts(hass) {
     inverted: t("umgekehrt", "inverted"),
     flat: t("flach", "flat"),
     light: t("Lichtrichtung", "Light direction"),
-    light_top_left: t("↖ Oben links", "↖ Top left"),
-    light_top: t("↑ Oben", "↑ Top"),
-    light_top_right: t("↗ Oben rechts", "↗ Top right"),
-    light_sun: t("☀ Sonne", "☀ Sun"),
+    light_top_left: t("Oben links", "Top left"),
+    light_top: t("Oben", "Top"),
+    light_top_right: t("Oben rechts", "Top right"),
+    light_sun: t("Sonne", "Sun"),
     lightHint: t(
       "Woher das Licht fällt; die Schatten liegen auf der Gegenseite. Sonne: wandert mit dem Sonnenstand, morgens von links, abends von rechts.",
       "Where the light comes from; shadows fall on the opposite side. Sun: follows the sun, from the left in the morning, from the right in the evening."
@@ -3262,11 +3253,16 @@ function buildTexts(hass) {
     apps_off: t("Aus", "Off"),
     appsExceptions: t("Abgewählte behalten ihr eigenes Aussehen.", "Unchecked ones keep their own look."),
     // Dieses Gerät
-    mode: t("Hell oder dunkel", "Light or dark"),
-    mode_user: t("Wie im Profil", "As in profile"),
-    mode_light: t("Hell", "Light"),
-    mode_dark: t("Dunkel", "Dark"),
-    modeHint: t("Nur für dieses Gerät, unabhängig von der Einstellung „Modus“ oben.", "Only for this device, regardless of the “Mode” setting above."),
+    mode: t("Ausnahme für hell oder dunkel", "Light or dark exception"),
+    mode_user: t("Keine", "None"),
+    modeSummary_user: t(`Hell/Dunkel wie ${themeMode}`, `Light/dark as ${themeMode}`),
+    mode_light: t("Immer hell", "Always light"),
+    mode_dark: t("Immer dunkel", "Always dark"),
+    modeHint: t(
+      `Hell oder dunkel stellst du oben beim „${themeMode}“ ein, das gilt für deinen Benutzer auf allen Geräten. Hier nur, wenn dieses eine Gerät abweichen soll, z. B. ein Wandtablet, das immer dunkel bleibt.`,
+      `Light or dark is set above under “${themeMode}”, for your user on all devices. Use this only if this one device should differ, e.g. a wall tablet that always stays dark.`
+    ),
+    sampleRoom: t("Wohnzimmer", "Living room"),
     saver: t("Sparmodus", "Saver mode"),
     saver_off: t("Aus", "Off"),
     saver_on: t("An", "On"),
@@ -3297,11 +3293,8 @@ const ROWS = [
   { key: "accent", cssVar: "--accent-color" },
 ];
 
-// Aufgeklappte Gruppen und Vorschau ein/aus, gemerkt auf diesem Gerät
+// Aufgeklappte Gruppen, gemerkt auf diesem Gerät
 const GROUPS_KEY = "neumorphism-picker-groups";
-const PREVIEW_KEY = "neumorphism-picker-preview";
-// Lampen nur für die Vorschau, es gibt sie nicht in Home Assistant
-const PREVIEW_LAMPS = ["light.neumorphism_preview_1", "light.neumorphism_preview_2"];
 
 function readJson(key) {
   try {
@@ -3384,10 +3377,157 @@ const SETTING_LABELS = {
   evening: "groupEvening", cards: "cards", apps: "apps", appsOff: "apps",
 };
 
+// ---------------------------------------------------------------------------
+// Muster in den Einstellungen: jede Auswahl zeigt im Kleinen, was sie bewirkt
+// ---------------------------------------------------------------------------
+
+/**
+ * Schatten wie im Theme, aber mit eigenen Werten: Muster zeigen auch Auswahlen, die gerade nicht
+ * gelten (die Schatten-Variablen des Themes sind auf <html> schon ausgerechnet).
+ */
+function sampleShadow({ x = 1, y = 1, strength = 1, contrast = 0, inset = false, d = 4, blur = 9 } = {}) {
+  const s = inset ? -strength : strength;
+  const k = Math.abs(s);
+  const pre = s < 0 ? "inset " : "";
+  const a = Math.round(k * (1 + 0.5 * contrast) * 100) / 100;
+  const px = (n) => `${Math.round(n * 10) / 10}px`;
+  const out = [];
+  if (k) {
+    out.push(`${pre}${px(d * k * x)} ${px(d * k * y)} ${px(blur * k)} rgba(var(--neumorphism-shadow-dark-rgb), calc(var(--neumorphism-shadow-dark-alpha, 0.65) * ${a}))`);
+    out.push(`${pre}${px(-d * k * x)} ${px(-d * k * y)} ${px(blur * k)} rgba(var(--neumorphism-shadow-light-rgb), calc(var(--neumorphism-shadow-light-alpha, 0.9) * ${a}))`);
+  }
+  if (contrast) out.push(`${inset ? "inset " : ""}0 0 0 1px rgba(var(--rgb-primary-text-color), 0.16)`);
+  return out.join(", ") || "none";
+}
+
+/** Lichtrichtung als Zahlen: Versatz der Schatten und Winkel der Wölbung. */
+function lightOf(light, hass) {
+  const vars = lightVars(light, hass);
+  return {
+    x: Number(vars["neumorphism-light-x"] ?? 1),
+    y: Number(vars["neumorphism-light-y"] ?? 1),
+    angle: parseFloat(vars["neumorphism-light-angle"] ?? 135),
+  };
+}
+
+/** Wölbung wie im Theme: Glanz zum Licht hin, Schatten auf der Gegenseite (gemuldet umgekehrt). */
+function surfaceImage(surface, strength, angle) {
+  if (surface === "flat" || !strength) return "none";
+  const p = Math.round(Math.min(1, Math.abs(strength)) * 100);
+  let [from, to] = ["var(--neumorphism-sheen)", "var(--neumorphism-shade)"];
+  if ((surface === "concave") !== (strength < 0)) [from, to] = [to, from];
+  return `linear-gradient(${angle}deg, color-mix(in srgb, ${from} ${p}%, transparent), color-mix(in srgb, ${to} ${p}%, transparent))`;
+}
+
+const BULB_PATH =
+  "M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21V20H9V21Z";
+const bulb = (color) => `<svg viewBox="0 0 24 24"><path fill="${color}" d="${BULB_PATH}"/></svg>`;
+const LAMP_ON = "var(--state-light-active-color, var(--amber-color, #ffc107))";
+const LAMP_OFF = "var(--state-inactive-color, var(--disabled-text-color, #9aa2b1))";
+const CHART_LINES = ["0,22 12,18 24,19 36,10 48,12 60,4", "0,27 12,25 24,26 36,21 48,23 60,18", "0,13 12,16 24,9 36,14 48,7 60,11"];
+const HA_CHART_COLORS = ["#4269d0", "#f4bd4a", "#ff725c"];
+const chartSample = (colors, inset) =>
+  `<i class="s-chart${inset ? " inset" : ""}"><svg viewBox="0 0 60 30" preserveAspectRatio="none">${CHART_LINES.map(
+    (points, i) => `<polyline points="${points}" style="stroke:${colors[i]}"/>`
+  ).join("")}</svg></i>`;
+const EMBOSS_SAMPLE = `calc(1.5px * ${LIGHT_X}) calc(1.5px * ${LIGHT_Y}) 1px ${EMBOSS_LIGHT}, calc(-1.5px * ${LIGHT_X}) calc(-1.5px * ${LIGHT_Y}) 1.5px ${EMBOSS_DARK}`;
+const beforeAfter = (before, after) => `${before}<span class="s-arrow">›</span>${after}`;
+const swatch = (bg) => `<i class="s-swatch" style="background:${bg}"></i>`;
+
+/**
+ * Muster je Auswahl. c: aktuelle Einstellungen (s), Modus (dark), Licht (light), deutliche
+ * Effektstärke (vivid), Kontrast (contrast), Farben (primary, accent), Home Assistant (hass), Texte (t).
+ */
+const SAMPLES = {
+  // Lichtquelle als Punkt, Schatten auf der Gegenseite
+  light: (value, c) => {
+    const l = lightOf(value, c.hass);
+    const len = Math.hypot(l.x, l.y) || 1;
+    const dot = `left:calc(50% - 4px + ${Math.round((-l.x / len) * 17)}px);top:calc(50% - 4px + ${Math.round((-l.y / len) * 15)}px)`;
+    const shadow = sampleShadow({ ...l, strength: c.vivid, contrast: c.contrast });
+    return `<i class="s-stage"><i class="s-tile" style="box-shadow:${shadow};background-image:${surfaceImage(c.s.surface, c.vivid, l.angle)}"></i><i class="s-sun${value === "sun" ? " sun" : ""}" style="${dot}"></i></i>`;
+  },
+  surface: (value, c) =>
+    `<i class="s-ball" style="box-shadow:${sampleShadow({ ...c.light, strength: c.vivid, contrast: c.contrast })};background-image:${surfaceImage(value, c.vivid, c.light.angle)}"></i>`,
+  contrast: (value, c) => {
+    const high = value === "high";
+    const [text, text2] = (high ? CONTRAST_TEXT : THEME_TEXT)[c.dark ? "dark" : "light"];
+    return `<i class="s-card" style="box-shadow:${sampleShadow({ ...c.light, strength: c.vivid, contrast: high ? 1 : 0 })}"><b style="color:${text}">Aa</b><u style="background:${text2}"></u></i>`;
+  },
+  // Eingeschaltetes Gerät (Lampe an) gedrückt, ausgeschaltetes erhaben
+  pressed: (value, c) => {
+    const small = { ...c.light, strength: c.vivid, contrast: c.contrast, d: 2.5, blur: 6 };
+    return `<i class="s-dot" style="box-shadow:${sampleShadow({ ...small, inset: value === "on" })}">${bulb(LAMP_ON)}</i><i class="s-dot" style="box-shadow:${sampleShadow(small)}">${bulb(LAMP_OFF)}</i>`;
+  },
+  emboss: (value) => `<b class="s-big" style="text-shadow:${value === "on" ? EMBOSS_SAMPLE : "none"}">Aa</b>`,
+  // Auf der kleinen Fläche dichter und kräftiger, sonst wäre kein Unterschied zu sehen
+  grain: (value) => `<i class="s-tile s-grain" style="--grain:${Math.min(1, (GRAIN[value] || 0) * 2)}"></i>`,
+  font: (value) => `<b class="s-font" style="font-family:${FONTS[value] ? `'${FONTS[value].family}', ` : ""}Roboto, Noto, sans-serif">Aa</b>`,
+  density: (value) => {
+    const gap = { compact: 2, normal: 4, airy: 7 }[value];
+    return `<i class="s-grid" style="gap:${gap}px;padding:${gap}px">${"<i></i>".repeat(4)}</i>`;
+  },
+  sections: (value) => `<i class="s-section ${value}"><i></i><i></i></i>`,
+  charts: (value, c) =>
+    value === "theme" ? chartSample(Object.values(chartVars(c.primary, c.accent, c.dark)), true) : chartSample(c.haColors, false),
+  motion: (value) => `<i class="s-press${value === "on" ? " anim" : ""}"></i>`,
+  glow: (value) => `<i class="s-dot${value === "on" ? " glow" : ""}">${bulb(LAMP_ON)}</i>`,
+  cards: (value) => `<i class="s-custom ${value}"><i></i></i>`,
+  // Oberfläche eines Add-ons: angepasst oder wie vom Add-on vorgesehen
+  apps: (value, c) =>
+    value === "full"
+      ? `<i class="s-app full"><i></i><i></i></i>`
+      : `<i class="s-app" style="background:${c.dark ? "#1f1f1f" : "#fff"}"><i style="background:${c.dark ? "#2d2d2d" : "#f1f1f1"}"></i><i style="background:#2196f3;box-shadow:none"></i></i>`,
+  // Dieses Gerät: wie beim Benutzer (hell oder dunkel) oder fest
+  mode: (value, c) => {
+    const light = tintPalette(c.s.tint, false, c.primary).bg;
+    const dark = tintPalette(c.s.tint, true, c.primary).bg;
+    if (value === "light") return swatch(light);
+    if (value === "dark") return swatch(dark);
+    return `<i class="s-swatch"><i style="background:${light}"></i><i style="background:${dark}"></i></i>`;
+  },
+};
+
+// Abendmodus: vorher und nachher
+const EFFECT_SAMPLES = {
+  warm: (c) => beforeAfter(swatch(c.bg), swatch(tintPalette("warm", c.dark, c.primary).bg)),
+  flat: (c) =>
+    beforeAfter(
+      `<i class="s-mini" style="box-shadow:${sampleShadow({ ...c.light, strength: c.vivid, d: 3, blur: 7 })}"></i>`,
+      `<i class="s-mini" style="box-shadow:${sampleShadow({ ...c.light, strength: c.vivid / 2, d: 3, blur: 7 })}"></i>`
+    ),
+  dark: (c) => beforeAfter(swatch(tintPalette(c.s.tint, false, c.primary).bg), swatch(tintPalette(c.s.tint, true, c.primary).bg)),
+};
+
+// Regler: der aktuelle Wert, auch während des Ziehens
+const RANGE_SAMPLES = {
+  strength: (c) => {
+    const o = { ...c.light, strength: c.s.strength, contrast: c.contrast };
+    return `<i class="s-tile" style="box-shadow:${sampleShadow(o)}"></i><i class="s-well" style="box-shadow:${sampleShadow({ ...o, inset: true })}"></i><i class="s-press" style="box-shadow:${sampleShadow({ ...o, d: 2.5, blur: 6 })}"></i>`;
+  },
+  radius: (c) => {
+    const r = c.s.radius;
+    return `<i class="s-card wide" style="border-radius:${Math.round(14 * r)}px"></i><i class="s-press" style="border-radius:${Math.round(Math.min(10, 10 * r))}px"></i><i class="s-mini" style="border-radius:${Math.round(Math.min(11, 6 * r))}px"></i>`;
+  },
+  fontScale: (c) =>
+    `<span class="s-text" style="font-size:${Math.round(15 * c.s.fontScale)}px">${c.t.sampleRoom}</span><span class="s-text quiet" style="font-size:${Math.round(13 * c.s.fontScale)}px">21,5 °C</span>`,
+};
+
+// Schriften für die Muster: alle bekannt machen (geladen wird eine Datei erst, wenn sie gebraucht wird)
+function ensureSampleFonts() {
+  if (document.getElementById("neumorphism-sample-fonts")) return;
+  const style = document.createElement("style");
+  style.id = "neumorphism-sample-fonts";
+  style.textContent = Object.keys(FONTS).map(fontFaces).join("\n");
+  document.head.appendChild(style);
+}
+
 const segmentHtml = (name, values, attr = "data-value") => `
   <div class="setting${WIDE_SEGMENTS.includes(name) ? " wide" : ""}" data-setting="${name}">
     <div class="label"></div>
-    <div class="segmented">${values.map((value) => `<button ${attr}="${value}"></button>`).join("")}</div>
+    <div class="segmented${SAMPLES[name] ? " visual" : ""}">${values
+      .map((value) => `<button ${attr}="${value}">${SAMPLES[name] ? '<span class="sample" aria-hidden="true"></span><span class="text"></span>' : ""}</button>`)
+      .join("")}</div>
     <div class="hint"></div>
   </div>`;
 
@@ -3395,6 +3535,7 @@ const rangeHtml = (name, min, max, step) => `
   <div class="setting wide" data-setting="${name}">
     <div class="setting-head"><span class="label"></span><span class="value"></span></div>
     <input type="range" min="${min}" max="${max}" step="${step}">
+    ${RANGE_SAMPLES[name] ? '<div class="range-sample" aria-hidden="true"></div>' : ""}
     <div class="hint"></div>
   </div>`;
 
@@ -3432,10 +3573,6 @@ class NeumorphismColorPicker extends HTMLElement {
   disconnectedCallback() {
     pickers.delete(this);
     // Vorschauen gelten nur, solange die Einstellungen offen sind
-    clearInterval(this._demo);
-    this._demo = 0;
-    const demo = this.shadowRoot?.querySelector(".pv-demo");
-    if (demo) demo.disabled = false;
     let changed = false;
     if (previewState.evening === this) {
       previewState.evening = null;
@@ -3453,7 +3590,6 @@ class NeumorphismColorPicker extends HTMLElement {
     if (!this._hass || !this.isConnected) return;
     if (!this.shadowRoot) this._build();
     this._update();
-    safely(() => this._updatePreview());
   }
 
   /** Wohin gespeichert wird (oben gewählt). */
@@ -3588,36 +3724,73 @@ class NeumorphismColorPicker extends HTMLElement {
         .g-summary { color: var(--secondary-text-color); font-size: 0.82rem; line-height: 1.35; }
         .chevron { flex: none; width: 8px; height: 8px; margin: 0 8px 4px; border-right: 2px solid var(--secondary-text-color);
           border-bottom: 2px solid var(--secondary-text-color); transform: rotate(45deg); transition: transform 200ms ease; }
-        .group.open > .group-head .chevron, .pv-collapse[aria-expanded="true"] .chevron { transform: rotate(225deg); margin-bottom: -4px; }
+        .group.open > .group-head .chevron { transform: rotate(225deg); margin-bottom: -4px; }
         @media (prefers-reduced-motion: reduce) { .chevron, .segmented button { transition: none; } }
-        .group-body { padding: 0 0 18px; }
+        .group-body { margin-top: -10px; padding: 0 0 18px; } /* erste Zeile (auch zweispaltig) dicht unter der Kopfzeile */
         .group:not(.open) > .group-body { display: none; }
-        .group-body > .setting:first-child, .group-body > .grid:first-child > .setting:first-child { padding-top: 0; }
-        /* Vorschau mit echten Kacheln, bleibt beim Blättern oben */
-        .preview { position: sticky; top: 0; z-index: 3; margin: 14px -10px 6px; padding: 10px 10px 12px; border-radius: 22px;
-          background: var(--card-background-color); box-shadow: 0 10px 14px -10px rgba(var(--neumorphism-shadow-dark-rgb, 0, 0, 0), 0.5); }
-        .pv-bar { display: flex; align-items: center; gap: 10px; }
-        .pv-title { flex: 1; color: var(--secondary-text-color); font-size: 0.78rem; font-weight: var(--ha-font-weight-medium, 500);
-          letter-spacing: 0.06em; text-transform: uppercase; }
-        .pv-collapse { border: none; background: none; padding: 6px; cursor: pointer; display: flex; }
-        .preview.collapsed .pv-body { display: none; }
-        .pv-section { margin-top: 10px; padding: 12px; border-radius: calc(var(--ha-card-border-radius, 28px) + 12px); }
-        .pv-section[data-sections="well"] { box-shadow: var(--neumorphism-inset-shadow-l, var(--neumorphism-inset-shadow, none)); }
-        .pv-section[data-sections="raised"] { background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none);
-          box-shadow: var(--neumorphism-card-shadow, none); }
-        .pv-heading { margin: 0 4px 10px; color: var(--primary-text-color); font-size: var(--ha-font-size-l, 16px);
-          font-weight: var(--ha-font-weight-medium, 500); }
-        .pv-heading[data-emboss="on"] { text-shadow: ${EMBOSS_TEXT}; }
-        .pv-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .pv-hint { margin-top: 8px; }
-        :host(:not([in-profile])) .preview { top: var(--header-height, 0px); } /* Dashboard: unter der Titelleiste */
-        @media (max-height: 700px) { .preview { position: static; } }
-        .mini-chart { margin: 4px 0 8px; height: 64px; padding: 6px 10px; border-radius: var(--ha-border-radius-lg, 12px); }
-        .mini-chart[data-charts="theme"] { box-shadow: var(--neumorphism-inset-shadow-s, none); }
-        .mini-chart svg { width: 100%; height: 100%; overflow: visible; }
-        .mini-chart polyline { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
         .evening-preview { margin-top: 10px; }
+        /* Auswahl mit Mustern: jede Möglichkeit zeigt im Kleinen, was sie bewirkt */
+        .segmented.visual { display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 6px; padding: 6px; border-radius: 20px; }
+        .segmented.visual button { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 10px 4px 8px;
+          border-radius: 15px; white-space: normal; line-height: 1.2; }
+        .segmented.visual .text { text-align: center; }
+        .sample { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 44px; pointer-events: none;
+          color: var(--primary-text-color); font-weight: normal; }
+        .range-sample { display: flex; align-items: center; gap: 18px; min-height: 44px; padding: 8px 6px 2px; pointer-events: none; }
+        :where(.sample, .range-sample) i { display: block; flex: none; font-style: normal; }
+        .s-tile, .s-well { width: 32px; height: 32px; border-radius: 9px; background-color: var(--card-background-color); }
+        .s-stage { position: relative; width: 56px; height: 44px; display: grid; place-items: center; }
+        .s-sun { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #fffbe6; box-shadow: 0 0 6px 2px rgba(255, 214, 102, 0.85); }
+        .s-sun.sun { background: #ffd54f; }
+        .s-ball { width: 32px; height: 32px; border-radius: 50%; background-color: var(--card-background-color); }
+        .s-card { display: flex; flex-direction: column; justify-content: center; gap: 3px; width: 48px; height: 32px; box-sizing: border-box;
+          padding: 0 8px; border-radius: 9px; background: var(--card-background-color); }
+        .s-card.wide { width: 58px; height: 38px; box-shadow: var(--s-raised); }
+        .s-card b { font-size: 13px; line-height: 1; }
+        .s-card u { display: block; width: 70%; height: 3px; border-radius: 2px; text-decoration: none; }
+        .s-dot { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--card-background-color);
+          box-shadow: var(--s-raised-s); }
+        .s-dot svg { width: 16px; height: 16px; }
+        .s-dot.glow { box-shadow: var(--s-raised-s), 0 0 14px 3px color-mix(in srgb, ${LAMP_ON} 55%, transparent); }
+        .s-big { font-size: 26px; font-weight: 700; line-height: 1; }
+        .s-grain { position: relative; overflow: hidden; width: 44px; box-shadow: var(--s-raised); }
+        .s-grain::after { content: ""; position: absolute; inset: 0; background: url(/neumorphism_static/grain.png) repeat; background-size: 70px;
+          opacity: var(--grain); mix-blend-mode: soft-light; }
+        .s-font { font-size: 22px; font-weight: 500; line-height: 1; }
+        .s-grid { display: grid; grid-template-columns: 12px 12px; border-radius: 7px; }
+        .s-grid > i { height: 9px; border-radius: 3px; background: var(--card-background-color); box-shadow: var(--s-raised-s); }
+        .s-section { display: flex; gap: 4px; padding: 5px; border-radius: 10px; }
+        .s-section > i { width: 14px; height: 22px; border-radius: 5px; background: var(--card-background-color); box-shadow: var(--s-raised-s); }
+        .s-section.well { box-shadow: var(--s-inset); }
+        .s-section.raised { background: var(--card-background-color); box-shadow: var(--s-raised); }
+        .s-chart { width: 54px; height: 30px; box-sizing: border-box; padding: 3px 5px; border-radius: 8px; }
+        .s-chart.inset { box-shadow: var(--s-inset); }
+        .s-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+        .s-chart polyline { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+        .s-press { width: 38px; height: 20px; border-radius: 10px; background: var(--card-background-color); box-shadow: var(--s-raised); }
+        @media (prefers-reduced-motion: no-preference) { .s-press.anim { animation: s-press 1.8s ease-in-out infinite; } }
+        @keyframes s-press { 0%, 40%, 100% { box-shadow: var(--s-raised); transform: none; } 55%, 80% { box-shadow: var(--s-inset); transform: scale(0.94); } }
+        .s-mini { width: 24px; height: 24px; border-radius: 6px; background: var(--card-background-color); box-shadow: var(--s-raised-s); }
+        .s-custom { display: grid; place-items: center; width: 48px; height: 32px; border-radius: 8px; background: var(--card-background-color); }
+        .s-custom > i { width: 26px; height: 10px; border-radius: 5px; }
+        .s-custom.full, .s-custom.frame { box-shadow: var(--s-raised); }
+        .s-custom.full > i { background: var(--card-background-color); box-shadow: var(--s-raised-s); }
+        .s-custom.frame > i, .s-custom.off > i { background: rgba(var(--rgb-primary-text-color), 0.12); }
+        .s-custom.off { border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(var(--rgb-primary-text-color), 0.2); }
+        .s-custom.off > i { border-radius: 2px; }
+        .s-app { display: flex; flex-direction: column; align-items: center; width: 48px; height: 32px; overflow: hidden; border-radius: 6px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+        .s-app > i:first-child { align-self: stretch; height: 8px; }
+        .s-app > i:last-child { width: 24px; height: 9px; margin-top: 6px; border-radius: 4px; }
+        .s-app.full { background: var(--primary-background-color); box-shadow: var(--s-raised-s); }
+        .s-app.full > i:last-child { border-radius: 5px; background: var(--card-background-color); box-shadow: var(--s-raised-s); }
+        .s-swatch { display: flex; width: 30px; height: 24px; overflow: hidden; border-radius: 7px; box-shadow: var(--s-raised-s); }
+        .s-swatch > i { flex: 1; }
+        .s-arrow { color: var(--secondary-text-color); font-size: 15px; }
+        .s-text { color: var(--primary-text-color); line-height: 1.2; }
+        .s-text.quiet { color: var(--secondary-text-color); }
       </style>
+      <style class="sample-vars"></style>
       <div class="headline"></div>
       <div class="info warning" hidden></div>
       <div class="notice automation" hidden><span></span><button class="action automation-reset" hidden></button></div>
@@ -3627,18 +3800,6 @@ class NeumorphismColorPicker extends HTMLElement {
         <div class="segmented">${["user", "device", "dashboard"].map((scope) => `<button data-scope="${scope}"></button>`).join("")}</div>
         <select class="dashboard" hidden></select>
         <div class="hint"></div>
-      </div>
-
-      <div class="preview" hidden>
-        <div class="pv-bar">
-          <span class="pv-title"></span>
-          <button class="action small pv-demo"></button>
-          <button class="pv-collapse" aria-expanded="true"><span class="chevron" aria-hidden="true"></span></button>
-        </div>
-        <div class="pv-body">
-          <div class="pv-section"><div class="pv-heading"></div><div class="pv-cards"></div></div>
-          <div class="hint pv-hint"></div>
-        </div>
       </div>
 
       <section class="group" data-group="presets">
@@ -3695,13 +3856,6 @@ class NeumorphismColorPicker extends HTMLElement {
         <div class="tints">${CHOICES.tint.map((tint) => `<button class="tint" data-value="${tint}"><span class="swatch"></span><span class="name"></span></button>`).join("")}</div>
       </div>
       <div class="grid">${SEGMENTS.colors.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
-      <div class="mini-chart" aria-hidden="true">
-        <svg viewBox="0 0 200 60" preserveAspectRatio="none">
-          <polyline points="0,44 25,38 50,40 75,26 100,30 125,18 150,22 175,12 200,16" style="stroke: var(--graph-color-1, var(--color-1))"/>
-          <polyline points="0,52 25,48 50,50 75,42 100,45 125,36 150,40 175,33 200,35" style="stroke: var(--graph-color-2, var(--color-2))"/>
-          <polyline points="0,30 25,34 50,24 75,30 100,20 125,28 150,16 175,24 200,20" style="stroke: var(--graph-color-3, var(--color-3))"/>
-        </svg>
-      </div>
         </div>
       </section>
 
@@ -3750,7 +3904,7 @@ class NeumorphismColorPicker extends HTMLElement {
         <div class="group-body">
       <div class="setting wide" data-setting="evening">
         <div class="label"></div>
-        <div class="segmented multi">${EVENING_EFFECTS.map((effect) => `<button data-effect="${effect}"></button>`).join("")}</div>
+        <div class="segmented multi visual">${EVENING_EFFECTS.map((effect) => `<button data-effect="${effect}"><span class="sample" aria-hidden="true"></span><span class="text"></span></button>`).join("")}</div>
         <div class="hint"></div>
         <button class="action small evening-preview" aria-pressed="false"></button>
       </div>
@@ -3942,37 +4096,12 @@ class NeumorphismColorPicker extends HTMLElement {
         writeJson(GROUPS_KEY, [...open]);
       });
     }
-    // Vorschau
-    const previewEl = root.querySelector(".preview");
-    const collapse = root.querySelector(".pv-collapse");
-    const setCollapsed = (state) => {
-      previewEl.classList.toggle("collapsed", state);
-      collapse.setAttribute("aria-expanded", String(!state));
-    };
-    setCollapsed(readJson(PREVIEW_KEY) === "collapsed");
-    collapse.addEventListener("click", () => {
-      const state = !previewEl.classList.contains("collapsed");
-      setCollapsed(state);
-      writeJson(PREVIEW_KEY, state ? "collapsed" : "open");
-    });
-    root.querySelector(".pv-demo").addEventListener("click", () => this._demonstrate());
-    // Klicks in der Vorschau bleiben in der Vorschau (keine Detailansicht, keine Aktionen)
-    for (const name of ["hass-more-info", "hass-action"]) {
-      root.querySelector(".pv-cards").addEventListener(name, (ev) => {
-        ev.stopPropagation();
-        // Nur Antippen schaltet (Halten und Doppeltippen nicht)
-        const entity = ev.detail?.config?.entity;
-        if (name === "hass-action" && ev.detail?.action === "tap" && this._previewStates && entity in this._previewStates) {
-          this._togglePreview(entity);
-        }
-      }, true);
-    }
     root.querySelector(".evening-preview").addEventListener("click", () => {
       previewState.evening = previewState.evening ? null : this;
       tick();
       this._render();
     });
-    safely(() => this._buildPreview());
+    ensureSampleFonts();
     root.querySelector(".automation-reset").addEventListener("click", () =>
       this._hass.callService("neumorphism", "reset_style", {}).catch((err) => console.warn("Neumorphism:", err))
     );
@@ -4003,87 +4132,47 @@ class NeumorphismColorPicker extends HTMLElement {
     }
   }
 
-  /**
-   * Vorschau mit echten Kacheln von Home Assistant: zwei Lampen (an und aus) und eine Überschrift.
-   * Die Lampen gibt es nur hier; Schalten ändert nur ihren Zustand in der Vorschau.
-   */
-  async _buildPreview() {
-    const helpers = await window.loadCardHelpers?.();
-    if (!helpers?.createCardElement || !this.shadowRoot) return;
-    const t = texts(this._hass);
-    this._previewStates = { [PREVIEW_LAMPS[0]]: "on", [PREVIEW_LAMPS[1]]: "off" };
-    this._previewNames = { [PREVIEW_LAMPS[0]]: t.previewLampOn, [PREVIEW_LAMPS[1]]: t.previewLampOff };
-    const toggle = { action: "toggle" };
-    const tiles = PREVIEW_LAMPS.map((entity) =>
-      helpers.createCardElement({ type: "tile", entity, tap_action: toggle, icon_tap_action: toggle, hold_action: { action: "none" } })
-    );
-    this._previewCards = tiles;
-    this.shadowRoot.querySelector(".pv-cards").replaceChildren(...tiles);
-    this.shadowRoot.querySelector(".preview").hidden = false;
-    this._previewKey = "";
-    this._updatePreview();
-  }
-
-  /** Vorschau-Kacheln mit dem aktuellen Home Assistant und den Zuständen der Vorschau-Lampen. */
-  _updatePreview(force = false) {
-    const hass = this._hass;
-    if (!this._previewCards || !hass) return;
-    const key = JSON.stringify([hass.language, hass.themes?.darkMode, this._previewStates]);
-    if (!force && key === this._previewKey) return;
-    this._previewKey = key;
-    const now = new Date().toISOString();
-    const states = { ...hass.states };
-    for (const [entity, state] of Object.entries(this._previewStates)) {
-      states[entity] = {
-        entity_id: entity,
-        state,
-        attributes: {
-          friendly_name: this._previewNames[entity],
-          supported_color_modes: ["brightness"],
-          color_mode: state === "on" ? "brightness" : null,
-          brightness: state === "on" ? 180 : null,
-          supported_features: 0,
-        },
-        last_changed: now,
-        last_updated: now,
-        context: { id: "neumorphism", user_id: null, parent_id: null },
-      };
-    }
-    const preview = {
-      ...hass,
-      states,
-      // Nur die Vorschau-Lampen schalten, nie echte Geräte
-      callService: async (domain, service, data) => {
-        const ids = [].concat(data?.entity_id || []).filter((id) => id in this._previewStates);
-        for (const id of ids) {
-          const on = service === "toggle" ? this._previewStates[id] !== "on" : service === "turn_on";
-          this._previewStates[id] = on ? "on" : "off";
-        }
-        if (ids.length) this._updatePreview(true);
-      },
+  /** Muster in den Auswahlen (jede zeigt, was sie bewirkt) und an den Reglern (aktueller Wert). */
+  _renderSamples(t, current, dark) {
+    const root = this.shadowRoot;
+    const primary = current.primary || THEME_PRIMARY;
+    const light = lightOf(current.light, this._hass);
+    // Mit wenig Effektstärke wären die Unterschiede kaum zu sehen
+    const vivid = Math.abs(current.strength) < 0.4 ? (current.strength < 0 ? -1 : 1) : current.strength;
+    const contrast = current.contrast === "high" ? 1 : 0;
+    const css = getComputedStyle(document.documentElement);
+    const c = {
+      s: current, dark, light, vivid, contrast, primary, t, hass: this._hass,
+      accent: current.accent || THEME_ACCENT,
+      bg: tintPalette(current.tint, dark, primary).bg,
+      haColors: HA_CHART_COLORS.map((fallback, i) => css.getPropertyValue(`--color-${i + 1}`).trim() || fallback),
     };
-    for (const card of this._previewCards) card.hass = preview;
-  }
-
-  _togglePreview(entity) {
-    this._previewStates[entity] = this._previewStates[entity] === "on" ? "off" : "on";
-    this._updatePreview(true);
-  }
-
-  /** Vorführen: Lampen dreimal umschalten, damit Leuchten, Tiefe und Animationen zu sehen sind. */
-  _demonstrate() {
-    if (this._demo || !this._previewStates) return;
-    const button = this.shadowRoot.querySelector(".pv-demo");
-    button.disabled = true;
-    let steps = 0;
-    this._demo = setInterval(() => {
-      for (const entity of PREVIEW_LAMPS) this._togglePreview(entity);
-      if (++steps >= 6) {
-        clearInterval(this._demo);
-        this._demo = 0;
-        button.disabled = false;
-      }
-    }, 900);
+    // Gemeinsame Schatten der Muster
+    const shadow = { ...light, strength: vivid, contrast };
+    const vars = {
+      "--s-raised": sampleShadow(shadow),
+      "--s-raised-s": sampleShadow({ ...shadow, d: 2, blur: 4 }),
+      "--s-inset": sampleShadow({ ...shadow, inset: true, d: 3, blur: 7 }),
+    };
+    const holder = root.querySelector("style.sample-vars");
+    const text = `:host { ${Object.entries(vars).map(([name, value]) => `${name}: ${value};`).join(" ")} }`;
+    if (holder.textContent !== text) holder.textContent = text;
+    const set = (el, html) => {
+      if (el.__sample === html) return; // gleiches Muster: nicht neu zeichnen (Animationen laufen weiter)
+      el.__sample = html;
+      el.innerHTML = html;
+    };
+    for (const button of root.querySelectorAll(".segmented.visual button")) {
+      const name = button.closest("[data-setting]").dataset.setting;
+      const html = button.dataset.effect
+        ? EFFECT_SAMPLES[button.dataset.effect](c)
+        : SAMPLES[name]?.(button.dataset.value ?? button.dataset.device, c);
+      if (html !== undefined) set(button.querySelector(".sample"), html);
+    }
+    for (const [name, render] of Object.entries(RANGE_SAMPLES)) {
+      const el = root.querySelector(`[data-setting="${name}"] .range-sample`);
+      if (el) set(el, render(c));
+    }
   }
 
   /** Kurzfassung der Werte einer Gruppe für ihre Kopfzeile. */
@@ -4119,7 +4208,7 @@ class NeumorphismColorPicker extends HTMLElement {
       motion: join([`${t.motion} ${label("motion", current.motion)}`, `${t.glow.split(" ")[0]} ${label("glow", current.glow)}`]),
       evening: current.evening.length ? current.evening.map((effect) => t[`evening_${effect}`]).join(", ") : t.summaryOff,
       areas: join([`${t.summaryCards} ${label("cards", current.cards)}`, `${t.summaryApps} ${label("apps", current.apps)}`]),
-      device: join([label("mode", device().mode || "user"), `${t.saver} ${label("saver", saver() ? "on" : "off")}`]),
+      device: join([device().mode ? label("mode", device().mode) : t.modeSummary_user, `${t.saver} ${label("saver", saver() ? "on" : "off")}`]),
     };
   }
 
@@ -4305,13 +4394,12 @@ class NeumorphismColorPicker extends HTMLElement {
     for (const button of root.querySelectorAll("button[data-value]")) {
       const name = button.closest("[data-setting]").dataset.setting;
       const label = t[`${name}_${button.dataset.value}`];
-      if (button.classList.contains("tint")) button.querySelector(".name").textContent = label;
-      else button.textContent = label;
+      (button.querySelector(".name, .text") || button).textContent = label;
       button.classList.toggle("selected", current[name] === button.dataset.value);
       button.setAttribute("aria-pressed", String(current[name] === button.dataset.value));
     }
     for (const button of root.querySelectorAll("button[data-effect]")) {
-      button.textContent = t[`evening_${button.dataset.effect}`];
+      button.querySelector(".text").textContent = t[`evening_${button.dataset.effect}`];
       button.classList.toggle("selected", current.evening.includes(button.dataset.effect));
       button.setAttribute("aria-pressed", String(current.evening.includes(button.dataset.effect)));
     }
@@ -4337,7 +4425,7 @@ class NeumorphismColorPicker extends HTMLElement {
     const deviceValues = { mode: device().mode || "user", saver: saver() ? "on" : "off" };
     for (const button of root.querySelectorAll("button[data-device]")) {
       const name = button.closest("[data-setting]").dataset.setting;
-      button.textContent = t[`${name}_${button.dataset.device}`];
+      (button.querySelector(".text") || button).textContent = t[`${name}_${button.dataset.device}`];
       button.classList.toggle("selected", deviceValues[name] === button.dataset.device);
       button.setAttribute("aria-pressed", String(deviceValues[name] === button.dataset.device));
     }
@@ -4365,16 +4453,9 @@ class NeumorphismColorPicker extends HTMLElement {
     const summaries = this._summaries(t, current, styles);
     for (const group of root.querySelectorAll(".group")) group.querySelector(".g-summary").textContent = summaries[group.dataset.group] || "";
 
-    // Vorschau: Sektion wie eingestellt, Diagramm in den gewählten Farben, Abend ansehen
-    root.querySelector(".pv-title").textContent = t.previewTitle;
-    root.querySelector(".pv-hint").textContent = t.previewHint;
-    root.querySelector(".pv-demo").textContent = t.previewDemo;
-    root.querySelector(".pv-collapse").setAttribute("aria-label", t.previewCollapse);
-    root.querySelector(".pv-section").dataset.sections = effective.sections;
-    const heading = root.querySelector(".pv-heading");
-    heading.textContent = t.previewHeading;
-    heading.dataset.emboss = effective.emboss;
-    root.querySelector(".mini-chart").dataset.charts = effective.charts;
+    // Muster in den Auswahlen und an den Reglern
+    this._renderSamples(t, current, dark);
+    // Abend ansehen
     const eveningButton = root.querySelector(".evening-preview");
     eveningButton.textContent = t.eveningPreview;
     eveningButton.disabled = !current.evening.length && !previewState.evening;
