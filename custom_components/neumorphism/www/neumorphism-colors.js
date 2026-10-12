@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.4.0";
+const VERSION = "8.4.1";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -484,21 +484,23 @@ const BASE_PALETTE = {
 const rgbTriplet = (hex) => hexToRgb(hex).map((c) => Math.round(c * 255)).join(", ");
 
 /**
- * Eigene Hintergrundfarbe: Farbton und Sättigung der Farbe; hell auch ihre Helligkeit, begrenzt auf
- * einen Bereich, in dem die Schatten noch wirken, dunkel die Helligkeit des Themes. Alle Töne der
+ * Eigene Hintergrundfarbe (auch "Primärfarbe"): Eine helle Farbe gilt genau so im hellen Modus, eine
+ * dunkle genau so im dunklen, jeweils mit begrenzter Helligkeit, damit die Schatten noch wirken. Der
+ * andere Modus bekommt denselben Farbton in seiner üblichen Helligkeit, etwas ruhiger. Alle Töne der
  * Palette (Mulden, Spuren, Schatten) werden mitverschoben.
  */
 function customPalette(hex, dark) {
   const base = BASE_PALETTE[dark ? "dark" : "light"];
   const [L, C, h] = hexToOklch(hex);
   const [baseL, baseC] = hexToOklch(base.bg);
-  const shift = dark ? 0 : Math.min(0.97, Math.max(0.78, L)) - baseL;
-  const chroma = Math.min(C, dark ? 0.03 : 0.09);
+  const own = dark === L < 0.5; // die Farbe gehört zu diesem Modus
+  const target = !own ? baseL : dark ? Math.min(0.48, Math.max(0.18, L)) : Math.min(0.98, Math.max(0.8, L));
+  const chroma = Math.min(C, own ? (dark ? 0.06 : 0.08) : 0.03);
   const out = {};
   for (const [name, color] of Object.entries(base)) {
     const [Lb, Cb] = hexToOklch(color);
     const c = baseC ? Math.min(0.12, chroma * (Cb / baseC)) : chroma;
-    out[name] = oklchToHex(Math.min(1, Math.max(0, Lb + shift)), c, h);
+    out[name] = oklchToHex(Math.min(1, Math.max(0, Lb + target - baseL)), c, h);
   }
   return out;
 }
@@ -508,6 +510,8 @@ const isCustomTint = (tint) => typeof tint === "string" && tint.startsWith("#");
 function tintPalette(tint, dark, primary) {
   const base = BASE_PALETTE[dark ? "dark" : "light"];
   if (isCustomTint(tint)) return customPalette(tint, dark);
+  // Primärfarbe: genau wie die Primärfarbe als eigene Hintergrundfarbe
+  if (tint === "primary") return customPalette(primary || THEME_PRIMARY, dark);
   const spec = TINTS[tint];
   if (!spec) return base;
   const bgChroma = hexToOklch(base.bg)[1];
@@ -3644,13 +3648,7 @@ class NeumorphismColorPicker extends HTMLElement {
         .setting { padding: 14px 0 2px; }
         .setting-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
         .bg-block { padding-top: 6px; }
-        .bg-block .tints { padding-top: 4px; }
-        .tints, .styles { display: flex; flex-wrap: wrap; gap: 14px 10px; padding: 10px 2px 4px; }
-        .tint { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 58px; padding: 0; border: none;
-          background: none; cursor: pointer; color: var(--secondary-text-color); font: inherit; font-size: 0.75rem; }
-        .tint .swatch { width: 34px; height: 34px; border-radius: 50%; box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
-        .tint.selected { color: var(--primary-text-color); }
-        .tint.selected .swatch { outline: 2px solid var(--primary-color); }
+        .styles { display: flex; flex-wrap: wrap; gap: 14px 10px; padding: 10px 2px 4px; }
         .style { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border: none; cursor: pointer;
           border-radius: var(--ha-border-radius-pill, 999px); background: var(--card-background-color);
           background-image: var(--neumorphism-surface-image, none); box-shadow: var(--neumorphism-raised-shadow, none);
@@ -3693,7 +3691,7 @@ class NeumorphismColorPicker extends HTMLElement {
           transition: box-shadow 200ms ease, color 200ms ease; }
         .segmented button.selected { background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none);
           color: var(--primary-color); font-weight: var(--ha-font-weight-medium, 500); box-shadow: var(--neumorphism-raised-shadow, none); }
-        button:focus-visible, .dot:focus-visible, .tint:focus-visible .swatch { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+        button:focus-visible, .dot:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
         .apps-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 16px; margin: 8px 0 2px; }
         .apps-list label { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer;
           color: var(--primary-text-color); font-size: 0.9rem; }
@@ -3708,7 +3706,7 @@ class NeumorphismColorPicker extends HTMLElement {
         button.action { border: none; background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none);
           color: var(--primary-color); border-radius: var(--ha-border-radius-pill, 999px); padding: 9px 18px; font: inherit;
           font-size: 0.9rem; cursor: pointer; box-shadow: var(--ha-box-shadow-s); }
-        button.action:active, .dot:active, .tint:active .swatch, .style:active { box-shadow: var(--neumorphism-inset-shadow, none); }
+        button.action:active, .dot:active, .style:active { box-shadow: var(--neumorphism-inset-shadow, none); }
         button.action.small { padding: 6px 14px; font-size: 0.82rem; }
         button.action[aria-pressed="true"] { box-shadow: var(--neumorphism-inset-shadow-s, none); }
         button.action:disabled { opacity: 0.5; cursor: default; }
@@ -3856,7 +3854,7 @@ class NeumorphismColorPicker extends HTMLElement {
             <div class="value"></div>
           </div>
         </div>
-        <div class="tints">${CHOICES.tint.map((tint) => `<button class="tint" data-value="${tint}"><span class="swatch"></span><span class="name"></span></button>`).join("")}</div>
+        <div class="presets">${CHOICES.tint.map((tint) => `<button class="dot tint" data-value="${tint}"></button>`).join("")}</div>
       </div>
       <div class="grid">${SEGMENTS.colors.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
         </div>
@@ -4404,7 +4402,12 @@ class NeumorphismColorPicker extends HTMLElement {
     for (const button of root.querySelectorAll("button[data-value]")) {
       const name = button.closest("[data-setting]").dataset.setting;
       const label = t[`${name}_${button.dataset.value}`];
-      (button.querySelector(".name, .text") || button).textContent = label;
+      if (button.classList.contains("dot")) {
+        button.title = label;
+        button.setAttribute("aria-label", `${t[name]}: ${label}`);
+      } else {
+        (button.querySelector(".text") || button).textContent = label;
+      }
       button.classList.toggle("selected", current[name] === button.dataset.value);
       button.setAttribute("aria-pressed", String(current[name] === button.dataset.value));
     }
@@ -4487,7 +4490,7 @@ class NeumorphismColorPicker extends HTMLElement {
     tintInput.setAttribute("aria-label", t.tint);
     root.querySelector('[data-setting="tint"] .value').textContent = ownTint ? current.tint : t[`tint_${current.tint}`];
     for (const button of root.querySelectorAll("button.tint")) {
-      button.querySelector(".swatch").style.background = tintPalette(button.dataset.value, dark, primary).bg;
+      button.style.background = tintPalette(button.dataset.value, dark, primary).bg;
     }
 
     // Regler

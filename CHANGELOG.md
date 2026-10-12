@@ -1,5 +1,10 @@
 # Änderungen
 
+## 8.4.1
+
+- Hintergrund: Vorgaben als Farbpunkte, angeordnet wie bei Primär- und Akzentfarbe (Name beim Darüberfahren)
+- Einheitliche Berechnung: *Primärfarbe* als Hintergrund ergibt genau dasselbe wie die Primärfarbe als eigene Hintergrundfarbe. Eine helle eigene Farbe gilt genau im hellen Modus, eine dunkle genau im dunklen (vorher wurde eine dunkle Farbe im dunklen Modus nur als Farbton genutzt)
+
 ## 8.4.0
 
 - Hintergrund: Farbwähler im selben Aufbau wie Primär- und Akzentfarbe (großer runder Farbwähler mit Beschreibung und aktuellem Wert), darunter die Vorgaben
