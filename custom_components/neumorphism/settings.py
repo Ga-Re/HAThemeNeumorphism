@@ -51,7 +51,6 @@ FIELDS: dict[str, tuple[str, str, Any]] = {
     "density": ("density", "choice", DENSITIES),
     "sections": ("sections", "choice", SECTIONS),
     "pressed": ("pressed", "switch", SWITCHES),
-    "emboss": ("emboss", "switch", SWITCHES),
     "grain": ("grain", "choice", GRAINS),
     "charts": ("charts", "choice", CHARTS),
     "animations": ("motion", "switch", SWITCHES),

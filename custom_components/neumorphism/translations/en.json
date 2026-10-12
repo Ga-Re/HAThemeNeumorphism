@@ -30,7 +30,6 @@
           "density": "Spacing",
           "sections": "Sections",
           "pressed": "State as depth",
-          "emboss": "Embossing",
           "grain": "Grain",
           "charts": "Charts",
           "animations": "Animations",
@@ -54,7 +53,6 @@
           "density": "Compact, normal or airy.",
           "sections": "In section dashboards, the cards of each section in an inset well or on a raised plate.",
           "pressed": "Devices that are on appear pressed (inset), devices that are off raised.",
-          "emboss": "Headings and large icons look pressed into the material.",
           "grain": "Fine texture on all surfaces.",
           "charts": "In theme colors with an inset area or as in Home Assistant.",
           "animations": "Buttons sink in when pressed, switches and selections glide.",
@@ -131,12 +129,6 @@
         "off": "Off"
       }
     },
-    "emboss": {
-      "options": {
-        "on": "On",
-        "off": "Off"
-      }
-    },
     "animations": {
       "options": {
         "on": "On",
@@ -198,7 +190,6 @@
         "density": "Spacing",
         "sections": "Sections",
         "pressed": "State as depth",
-        "emboss": "Embossing",
         "grain": "Grain",
         "charts": "Charts",
         "animations": "Animations",
@@ -269,10 +260,6 @@
         "pressed": {
           "name": "State as depth",
           "description": "Devices that are on appear pressed (inset), devices that are off raised."
-        },
-        "emboss": {
-          "name": "Embossing",
-          "description": "Headings and large icons look pressed into the material."
         },
         "grain": {
           "name": "Grain",

@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.3.0";
+const VERSION = "8.4.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -218,7 +218,6 @@ const CHOICES = {
   motion: ["on", "off"],
   sections: ["open", "well", "raised"],
   pressed: ["off", "on"],
-  emboss: ["off", "on"],
   grain: ["off", "fine", "strong"],
   density: ["compact", "normal", "airy"],
   charts: ["theme", "standard"],
@@ -242,7 +241,6 @@ const USER_KEYS = {
   motion: "neumorphismMotion",
   sections: "neumorphismSections",
   pressed: "neumorphismPressed",
-  emboss: "neumorphismEmboss",
   grain: "neumorphismGrain",
   density: "neumorphismDensity",
   fontScale: "neumorphismFontScale",
@@ -267,7 +265,6 @@ const BUILTIN = {
   motion: "on",
   sections: "open",
   pressed: "off",
-  emboss: "off",
   grain: "off",
   density: "normal",
   fontScale: 1,
@@ -870,10 +867,10 @@ const CONTROL_STYLES = {
     :host { background-image: ${SHEEN}; }
     :host(:focus-visible) { ${FOCUS} }
   `,
-  // Symbole: Prägung und Leuchten (siehe FEATURE_STYLES) auf dem inneren Symbol, weil der Baustein
-  // selbst teils einen eigenen Filter trägt (z. B. Helligkeit einer Lampe)
+  // Symbole: Leuchten (siehe FEATURE_STYLES) auf dem inneren Symbol, weil der Baustein selbst
+  // teils einen eigenen Filter trägt (z. B. Helligkeit einer Lampe)
   "ha-state-icon": `
-    ha-icon, ha-svg-icon { filter: var(--nm-icon-emboss,) var(--nm-icon-glow,); }
+    ha-icon, ha-svg-icon { filter: var(--nm-icon-glow,); }
   `,
   // Umschalter in Listen und Einstellungen
   "ha-switch": `
@@ -1017,25 +1014,6 @@ const CONTROL_STYLES = {
 const GLOW_ICON = "drop-shadow(0 0 5px color-mix(in srgb, currentColor 70%, transparent))";
 const NOT_UNKNOWN = ':not([data-state="unavailable"]):not([data-state="unknown"])';
 const motion = (css) => `@media (prefers-reduced-motion: no-preference) { ${css} }`;
-// Prägung: heller Rand auf der Seite zum Licht hin innen, Schatten auf der Gegenseite (wie eingeprägt)
-const EMBOSS_LIGHT = "rgba(var(--neumorphism-shadow-light-rgb), 0.9)";
-const EMBOSS_DARK = "rgba(var(--neumorphism-shadow-dark-rgb), 0.55)";
-const LIGHT_X = "var(--neumorphism-light-x, 1)";
-const LIGHT_Y = "var(--neumorphism-light-y, 1)";
-/**
- * Schrift wie ins Material gedrückt: Die Buchstaben sind ein Fenster auf eine dunkle Fläche (der
- * Hintergrund, nur in den Buchstaben sichtbar). Darüber liegt die Schrift, etwas zur Fläche hin
- * abgetönt und um k Pixel vom Licht weg versetzt; frei bleibt innen nur die Kante zum Licht hin, die
- * im Schatten liegt. Außen auf der Gegenseite fängt eine helle Lippe das Licht. Nur die Füllung der
- * Schrift wird durchsichtig, Symbole behalten ihre Farbe (currentColor).
- */
-const embossText = (k = 1) => `-webkit-text-fill-color: transparent;
-  background-color: color-mix(in srgb, rgb(var(--neumorphism-shadow-dark-rgb)) 70%, black);
-  -webkit-background-clip: text; background-clip: text;
-  text-shadow: calc(${k}px * ${LIGHT_X}) calc(${k}px * ${LIGHT_Y}) 0 color-mix(in srgb, currentColor 80%, var(--card-background-color)),
-    calc(${1.6 * k}px * ${LIGHT_X}) calc(${1.6 * k}px * ${LIGHT_Y}) ${1.2 * k}px rgba(var(--neumorphism-shadow-light-rgb), 0.9);`;
-const EMBOSS_TEXT = embossText();
-const EMBOSS_ICON = `drop-shadow(calc(1px * ${LIGHT_X}) calc(1px * ${LIGHT_Y}) 0 ${EMBOSS_LIGHT}) drop-shadow(calc(-1px * ${LIGHT_X}) calc(-1px * ${LIGHT_Y}) 0.5px ${EMBOSS_DARK})`;
 const FEATURE_STYLES = {
   // Aktive Geräte leuchten sanft in ihrer Zustandsfarbe
   glow: {
@@ -1087,20 +1065,6 @@ const FEATURE_STYLES = {
     "hui-tile-card": `ha-card.active { --ha-card-box-shadow: ${INSET_L}; }`,
     "hui-button-card": `ha-card[style*="--state-color"]:not([style*="inactive"]):not([style*="unavailable"]) { --ha-card-box-shadow: ${INSET_L}; }`,
     "hui-entity-badge": `ha-badge.active { --ha-card-box-shadow: ${INSET}; }`,
-  },
-  // Prägung: Überschriften und große Symbole wirken ins Material geprägt
-  emboss: {
-    "hui-root": `.main-title { ${EMBOSS_TEXT} }`,
-    "hass-subpage": `.main-title { ${EMBOSS_TEXT} }`,
-    "hass-tabs-subpage": `.main-title { ${EMBOSS_TEXT} }`,
-    "ha-top-app-bar-fixed": `.title { ${EMBOSS_TEXT} }`,
-    "ha-sidebar": `.title { ${EMBOSS_TEXT} }`,
-    "ha-card": `.card-header { ${EMBOSS_TEXT} }`,
-    "hui-heading-card": `.title, h2 { ${EMBOSS_TEXT} } ha-state-icon, ha-icon { --nm-icon-emboss: ${EMBOSS_ICON}; }`,
-    "hui-entities-card": `.card-header { ${EMBOSS_TEXT} }`,
-    "hui-glance-card": `.card-header { ${EMBOSS_TEXT} }`,
-    "hui-markdown-card": `.card-header { ${EMBOSS_TEXT} }`,
-    "hui-button-card": `ha-state-icon { --nm-icon-emboss: ${EMBOSS_ICON}; }`,
   },
   // Diagramme: Fläche eingelassen (die Farben setzt chartVars)
   charts: {
@@ -1159,7 +1123,6 @@ const FEATURE_ON = {
   glow: (s) => s.glow === "on",
   motion: (s) => s.motion === "on" && !saver(),
   pressed: (s) => s.pressed === "on",
-  emboss: (s) => s.emboss === "on",
   charts: (s) => s.charts === "theme",
   wells: (s) => s.sections === "well",
   plates: (s) => s.sections === "raised",
@@ -3170,6 +3133,7 @@ function buildTexts(hass) {
     tint_blue: t("Blau", "Blue"),
     tint_primary: t("Primärfarbe", "Primary"),
     tint_custom: t("Eigene", "Custom"),
+    tintHint: t("Flächen, Mulden und Schatten", "Surfaces, wells and shadows"),
     charts: t("Diagramme", "Charts"),
     charts_theme: t("Themenfarben", "Theme colors"),
     charts_standard: t("Wie Home Assistant", "As Home Assistant"),
@@ -3216,10 +3180,6 @@ function buildTexts(hass) {
       "Eingeschaltete Geräte erscheinen gedrückt wie ein eingerasteter Taster, ausgeschaltete erhaben.",
       "Devices that are on appear pressed like a latched push button, devices that are off raised."
     ),
-    emboss: t("Prägung", "Embossing"),
-    emboss_off: t("Aus", "Off"),
-    emboss_on: t("An", "On"),
-    embossHint: t("Überschriften und große Symbole wirken ins Material geprägt.", "Headings and large icons look pressed into the material."),
     grain: t("Körnung", "Grain"),
     grain_off: t("Aus", "Off"),
     grain_fine: t("Fein", "Fine"),
@@ -3356,7 +3316,7 @@ const STYLE_PRESETS = {
   contrast: { tint: "gray", contrast: "high", strength: 1.4, font: "legible" },
   flat: { strength: 0.3, radius: 0.6, font: "modern", glow: "off", density: "compact" },
   mint: { tint: "mint", primary: "#14a7a0", surface: "concave", grain: "fine", radius: 1.2 },
-  paper: { tint: "sand", grain: "strong", emboss: "on", pressed: "on", font: "round", radius: 0.8, accent: "#e5534b" },
+  paper: { tint: "sand", grain: "strong", pressed: "on", font: "round", radius: 0.8, accent: "#e5534b" },
 };
 const MAX_OWN_PRESETS = 20;
 const CODE_PREFIX = "NEUMORPHISM-1:";
@@ -3395,7 +3355,7 @@ const sameStyle = (s, values) => STYLE_KEYS.every((key) => JSON.stringify(s[key]
 // Auswahlfelder je Gruppe. Gespeichert wird wie die übrigen Einstellungen.
 const SEGMENTS = {
   colors: ["charts"],
-  depth: ["light", "surface", "contrast", "pressed", "emboss", "grain"],
+  depth: ["light", "surface", "contrast", "pressed", "grain"],
   shape: ["font", "density", "sections"],
   motion: ["motion", "glow"],
 };
@@ -3410,7 +3370,7 @@ const DEVICE_SEGMENTS = {
 const SETTING_LABELS = {
   primary: "primary", accent: "accent", strength: "strength", light: "light", surface: "surface", tint: "tint",
   radius: "radius", font: "font", contrast: "contrast", glow: "glow", motion: "motion", sections: "sections",
-  pressed: "pressed", emboss: "emboss", grain: "grain", density: "density", fontScale: "fontScale", charts: "charts",
+  pressed: "pressed", grain: "grain", density: "density", fontScale: "fontScale", charts: "charts",
   evening: "groupEvening", cards: "cards", apps: "apps", appsOff: "apps",
 };
 
@@ -3495,7 +3455,6 @@ const SAMPLES = {
     const small = { ...c.light, strength: c.vivid, contrast: c.contrast, d: 2.5, blur: 6 };
     return `<i class="s-dot" style="box-shadow:${sampleShadow({ ...small, inset: value === "on" })}">${bulb(LAMP_ON)}</i><i class="s-dot" style="box-shadow:${sampleShadow(small)}">${bulb(LAMP_OFF)}</i>`;
   },
-  emboss: (value) => `<b class="s-big${value === "on" ? " embossed" : ""}">Aa</b>`,
   // Auf der kleinen Fläche dichter und kräftiger, sonst wäre kein Unterschied zu sehen
   grain: (value) => `<i class="s-tile s-grain" style="--grain:${Math.min(1, (GRAIN[value] || 0) * 2)}"></i>`,
   font: (value) => `<b class="s-font" style="font-family:${FONTS[value] ? `'${FONTS[value].family}', ` : ""}Roboto, Noto, sans-serif">Aa</b>`,
@@ -3684,19 +3643,14 @@ class NeumorphismColorPicker extends HTMLElement {
         .dot.selected { outline: 2px solid var(--primary-text-color); }
         .setting { padding: 14px 0 2px; }
         .setting-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+        .bg-block { padding-top: 6px; }
+        .bg-block .tints { padding-top: 4px; }
         .tints, .styles { display: flex; flex-wrap: wrap; gap: 14px 10px; padding: 10px 2px 4px; }
         .tint { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 58px; padding: 0; border: none;
           background: none; cursor: pointer; color: var(--secondary-text-color); font: inherit; font-size: 0.75rem; }
         .tint .swatch { width: 34px; height: 34px; border-radius: 50%; box-shadow: var(--ha-box-shadow-s); outline-offset: 3px; }
         .tint.selected { color: var(--primary-text-color); }
         .tint.selected .swatch { outline: 2px solid var(--primary-color); }
-        .custom-tint .swatch { position: relative; overflow: hidden; }
-        .custom-tint:not(.selected) .swatch { background: conic-gradient(from 90deg, #f3dede, #f3efd9, #ddf1df, #d9eef3, #dcdcf5, #f1dcf0, #f3dede) !important; }
-        .custom-tint .swatch::after { content: "+"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--secondary-text-color);
-          font-size: 18px; pointer-events: none; }
-        .custom-tint.selected .swatch::after { content: ""; }
-        .custom-tint input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0; }
-        .custom-tint:focus-within .swatch { outline: 2px solid var(--primary-color); outline-offset: 3px; }
         .style { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border: none; cursor: pointer;
           border-radius: var(--ha-border-radius-pill, 999px); background: var(--card-background-color);
           background-image: var(--neumorphism-surface-image, none); box-shadow: var(--neumorphism-raised-shadow, none);
@@ -3795,8 +3749,6 @@ class NeumorphismColorPicker extends HTMLElement {
           box-shadow: var(--s-raised-s); }
         .s-dot svg { width: 16px; height: 16px; }
         .s-dot.glow { box-shadow: var(--s-raised-s), 0 0 14px 3px color-mix(in srgb, ${LAMP_ON} 55%, transparent); }
-        .s-big { font-size: 26px; font-weight: 700; line-height: 1; }
-        .s-big.embossed { ${embossText(1.5)} }
         .s-grain { position: relative; overflow: hidden; width: 44px; box-shadow: var(--s-raised); }
         .s-grain::after { content: ""; position: absolute; inset: 0; background: url(/neumorphism_static/grain.png) repeat; background-size: 70px;
           opacity: var(--grain); mix-blend-mode: soft-light; }
@@ -3895,9 +3847,16 @@ class NeumorphismColorPicker extends HTMLElement {
           </div>`
         ).join("")}
       </div>
-      <div class="setting" data-setting="tint">
-        <div class="label"></div>
-        <div class="tints">${CHOICES.tint.map((tint) => `<button class="tint" data-value="${tint}"><span class="swatch"></span><span class="name"></span></button>`).join("")}<label class="tint custom-tint"><span class="swatch"><input type="color"></span><span class="name"></span></label></div>
+      <div class="setting wide bg-block" data-setting="tint">
+        <div class="row">
+          <div class="picker"><input type="color" class="tint-input"></div>
+          <div class="text">
+            <div class="label"></div>
+            <div class="hint"></div>
+            <div class="value"></div>
+          </div>
+        </div>
+        <div class="tints">${CHOICES.tint.map((tint) => `<button class="tint" data-value="${tint}"><span class="swatch"></span><span class="name"></span></button>`).join("")}</div>
       </div>
       <div class="grid">${SEGMENTS.colors.map((name) => segmentHtml(name, CHOICES[name])).join("")}</div>
         </div>
@@ -4015,7 +3974,7 @@ class NeumorphismColorPicker extends HTMLElement {
       button.addEventListener("click", () => this._save({ [name]: button.dataset.value }));
     }
     // Eigene Hintergrundfarbe
-    const customTint = root.querySelector(".custom-tint input");
+    const customTint = root.querySelector(".tint-input");
     customTint.addEventListener("input", () => {
       preview.tint = customTint.value;
       applySettings();
@@ -4242,7 +4201,6 @@ class NeumorphismColorPicker extends HTMLElement {
       label("surface", current.surface),
       current.contrast === "high" ? `${t.contrast} ${label("contrast", "high")}` : "",
       current.pressed === "on" ? t.pressed : "",
-      current.emboss === "on" ? t.emboss : "",
       current.grain !== "off" ? `${t.grain} ${label("grain", current.grain)}` : "",
     ];
     const join = (items) => items.filter(Boolean).join(" · ");
@@ -4522,14 +4480,12 @@ class NeumorphismColorPicker extends HTMLElement {
 
     // Hintergrund: Farbmuster im aktuellen Modus
     const primary = current.primary || THEME_PRIMARY;
-    const custom = root.querySelector(".custom-tint");
+    // Hintergrund: Farbwähler wie bei Primär- und Akzentfarbe, darunter die Vorgaben
+    const tintInput = root.querySelector(".tint-input");
     const ownTint = isCustomTint(current.tint);
-    custom.classList.toggle("selected", ownTint);
-    custom.querySelector(".name").textContent = t.tint_custom;
-    custom.querySelector(".swatch").style.background = ownTint ? tintPalette(current.tint, dark, primary).bg : "";
-    const customInput = custom.querySelector("input");
-    customInput.setAttribute("aria-label", `${t.tint}: ${t.tint_custom}`);
-    if (root.activeElement !== customInput) customInput.value = ownTint ? current.tint : tintPalette(current.tint, false, primary).bg;
+    if (root.activeElement !== tintInput) tintInput.value = ownTint ? current.tint : tintPalette(current.tint, dark, primary).bg;
+    tintInput.setAttribute("aria-label", t.tint);
+    root.querySelector('[data-setting="tint"] .value').textContent = ownTint ? current.tint : t[`tint_${current.tint}`];
     for (const button of root.querySelectorAll("button.tint")) {
       button.querySelector(".swatch").style.background = tintPalette(button.dataset.value, dark, primary).bg;
     }

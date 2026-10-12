@@ -111,10 +111,6 @@ set_style:
       required: false
       selector:
         boolean:
-    emboss:
-      required: false
-      selector:
-        boolean:
     grain:
       required: false
       selector:
@@ -190,7 +186,6 @@ reset_style:
             - "density"
             - "sections"
             - "pressed"
-            - "emboss"
             - "grain"
             - "charts"
             - "animations"

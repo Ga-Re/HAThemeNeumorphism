@@ -30,7 +30,6 @@
           "density": "Abstände",
           "sections": "Sektionen",
           "pressed": "Zustand als Tiefe",
-          "emboss": "Prägung",
           "grain": "Körnung",
           "charts": "Diagramme",
           "animations": "Animationen",
@@ -54,7 +53,6 @@
           "density": "Kompakt, normal oder luftig.",
           "sections": "In Dashboards mit Sektionen die Karten jeder Sektion in einer eingelassenen Mulde oder auf einer herausgehobenen Platte.",
           "pressed": "Eingeschaltete Geräte erscheinen gedrückt (eingelassen), ausgeschaltete erhaben.",
-          "emboss": "Überschriften und große Symbole wirken ins Material geprägt.",
           "grain": "Feine Struktur auf allen Flächen.",
           "charts": "In Themenfarben mit eingelassener Fläche oder wie in Home Assistant.",
           "animations": "Knöpfe sinken beim Drücken ein, Schalter und Auswahl gleiten.",
@@ -131,12 +129,6 @@
         "off": "Aus"
       }
     },
-    "emboss": {
-      "options": {
-        "on": "An",
-        "off": "Aus"
-      }
-    },
     "animations": {
       "options": {
         "on": "An",
@@ -198,7 +190,6 @@
         "density": "Abstände",
         "sections": "Sektionen",
         "pressed": "Zustand als Tiefe",
-        "emboss": "Prägung",
         "grain": "Körnung",
         "charts": "Diagramme",
         "animations": "Animationen",
@@ -269,10 +260,6 @@
         "pressed": {
           "name": "Zustand als Tiefe",
           "description": "Eingeschaltete Geräte erscheinen gedrückt (eingelassen), ausgeschaltete erhaben."
-        },
-        "emboss": {
-          "name": "Prägung",
-          "description": "Überschriften und große Symbole wirken ins Material geprägt."
         },
         "grain": {
           "name": "Körnung",

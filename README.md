@@ -13,7 +13,7 @@ Das Design gilt überall: auf den Dashboards, in allen Seiten von Home Assistant
 - **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen. Die gewählte Ansicht in der Titelleiste läuft beim Wischen wie ein Tropfen in die Knöpfe hinein, die übrigen Ansichten blenden an den Rändern weich aus
 - **Aktive Geräte leuchten** sanft in ihrer Zustandsfarbe oder erscheinen **gedrückt wie ein eingerasteter Taster**, **Knöpfe sinken beim Drücken ein**, Schalter und Auswahl gleiten
 - **Vorlagen** per Klick, eigene speichern und als Code teilen
-- **Alles einstellbar im Profil**: Primär- und Akzentfarbe, Farbton des Hintergrunds, Effektstärke von −100 bis +100 (im negativen Bereich umgekehrt), Lichtrichtung bis hin zum **Licht nach der Sonne**, gewölbte oder gemuldete Oberfläche, Kontrast, **Prägung**, **Körnung**, Rundung, vier Schriften, Schriftgröße, Abstände, Sektionen eingelassen oder herausgehoben, **Diagramme in Themenfarben**
+- **Alles einstellbar im Profil**: Primär- und Akzentfarbe, Farbton des Hintergrunds, Effektstärke von −100 bis +100 (im negativen Bereich umgekehrt), Lichtrichtung bis hin zum **Licht nach der Sonne**, gewölbte oder gemuldete Oberfläche, Kontrast, **Körnung**, Rundung, vier Schriften, Schriftgröße, Abstände, Sektionen eingelassen oder herausgehoben, **Diagramme in Themenfarben**
 - **Abendmodus**: ab Sonnenuntergang wärmer, flacher oder dunkel
 - Einstellungen gelten **pro Benutzer** auf allen Geräten, **nur für ein Gerät** (etwa ein Wandtablet, auch mit festem Hell- oder Dunkelmodus) oder **für ein Dashboard**
 - **Standard für alle Benutzer** legt der Administrator fest, **Automationen** können den Stil ändern
@@ -67,7 +67,6 @@ Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
 - **Oberfläche**: erhabene Flächen *flach*, *gewölbt* wie ein Kissen oder *gemuldet* wie eine Schale
 - **Kontrast**: *Hoch* macht Schrift, Linien und Schatten kräftiger und legt eine feine Kante um jede Fläche, für helle Umgebungen oder bessere Lesbarkeit
 - **Zustand als Tiefe**: Eingeschaltete Geräte erscheinen gedrückt wie ein eingerasteter Taster, ausgeschaltete erhaben, in Kacheln, Schaltflächen und Abzeichen
-- **Prägung**: Überschriften und große Symbole wirken ins Material geprägt
 - **Körnung**: *Fein* oder *Kräftig* legt eine feine Struktur wie Papier oder Stoff über alle Flächen
 
 **Form und Schrift**
@@ -92,7 +91,7 @@ Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
 
 ![Oben links: gewölbt mit Licht von oben. Oben rechts: Sand, dunkel, hoher Kontrast. Unten links: Mint mit runder Schrift und wenig Rundung. Unten rechts: Sektionen eingelassen, Hintergrund passend zur Primärfarbe, dunkel](styles.png)
 
-![Vorlage Papier: Zustand als Tiefe, Prägung und kräftige Körnung](paper.png)
+![Vorlage Papier: Zustand als Tiefe und kräftige Körnung](paper.png)
 
 ### Für meinen Benutzer, nur für dieses Gerät oder für ein Dashboard
 
@@ -126,7 +125,7 @@ actions:
       glow: true
 ```
 
-Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`, `sun`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`, `modern`, `legible`), `font_size` (85 bis 130), `density` (`compact`, `normal`, `airy`), `sections` (`open`, `well`, `raised`), `pressed`, `emboss`, `animations` und `glow` (`true`/`false`), `grain` (`off`, `fine`, `strong`), `charts` (`theme`, `standard`), `evening` (Liste aus `warm`, `flat`, `dark`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
+Möglich sind `primary_color` und `accent_color` (Farbwähler oder `"#rrggbb"`), `background` (`standard`, `gray`, `warm`, `sand`, `mint`, `rose`, `blue`, `primary`), `background_color` (eigene Hintergrundfarbe, Farbwähler oder `"#rrggbb"`), `strength` (−100 bis 100), `light_direction` (`top_left`, `top`, `top_right`, `sun`), `surface` (`flat`, `convex`, `concave`), `contrast` (`normal`, `high`), `roundness` (0 bis 200), `font` (`standard`, `round`, `modern`, `legible`), `font_size` (85 bis 130), `density` (`compact`, `normal`, `airy`), `sections` (`open`, `well`, `raised`), `pressed`, `animations` und `glow` (`true`/`false`), `grain` (`off`, `fine`, `strong`), `charts` (`theme`, `standard`), `evening` (Liste aus `warm`, `flat`, `dark`), `custom_cards` (`full`, `frame`, `off`) und `addons` (`full`, `off`). Nicht angegebene Einstellungen bleiben, wie sie sind.
 
 Die Vorgaben gelten, auch über einen Neustart hinweg, bis **`neumorphism.reset_style`** sie aufhebt, ganz oder nur einzelne:
 

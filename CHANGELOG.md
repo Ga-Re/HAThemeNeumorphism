@@ -1,5 +1,10 @@
 # Änderungen
 
+## 8.4.0
+
+- Hintergrund: Farbwähler im selben Aufbau wie Primär- und Akzentfarbe (großer runder Farbwähler mit Beschreibung und aktuellem Wert), darunter die Vorgaben
+- Prägung entfernt (Einstellung, Optionen, Aktion „Stil festlegen“ und Vorlage *Papier*); gespeicherte Werte werden ignoriert
+
 ## 8.3.0
 
 - Eigene Hintergrundfarbe: Unter *Hintergrund* öffnet *Eigene* einen Farbwähler. Hell wird der Hintergrund genau diese Farbe (Helligkeit so weit begrenzt, dass die Schatten wirken), dunkel ein dunkler Ton im selben Farbton; Schatten, Mulden und Schieber passen sich an. Änderungen sind schon beim Ziehen zu sehen
