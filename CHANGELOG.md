@@ -8,6 +8,8 @@
 - Neue Schatten aus zwei Lagen, mit derselben kurzen Reichweite für große Karten wie für kleine Knöpfe: keine harten Kanten mehr, wo eine neue Fläche beginnt, und Nachbarn heben sich nicht mehr gegenseitig auf. Unter der gewählten Ansicht in der Titelleiste wird der Schatten nicht mehr abgeschnitten. Dialoge schweben etwas flacher
 - Erhabenes in einer Mulde (Griff eines Schalters, gewählte Option, Pille in der Reiterspur, Karten in eingelassenen Sektionen) wirft nur noch seinen Schatten, das Licht liegt als feine Kante darauf. So bleibt die Wand der Mulde sichtbar. Für eigene Karten: `--neumorphism-nested-shadow` und `--neumorphism-nested-card-shadow`
 - Wölbung (*gewölbt*, *gemuldet*) reicht an jeder Seite gleich weit; große Karten werden zur Gegenseite hin nicht mehr dunkel
+- Die Karte *Neumorphism Farben* zeigte manchmal nur „Configuration error“, und Bausteine eigener Karten wurden womöglich nicht erkannt: je nachdem, ob das Skript beim Öffnen schneller lud als Home Assistant selbst. Es wartet jetzt, bis Home Assistant bereit ist. Das war auch der Grund für den gelegentlich fehlschlagenden automatischen Test
+- Automatischer Test: prüft Kapsel und Reiterspur sowie den Start, wenn Home Assistant langsamer lädt
 
 ## 8.5.1
 

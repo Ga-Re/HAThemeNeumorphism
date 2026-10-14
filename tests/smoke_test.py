@@ -51,6 +51,7 @@ onboarding:
 auth:
 person:
 sun:
+recorder:
 demo:
 logger:
   default: warning
@@ -264,6 +265,18 @@ def browser_checks() -> None:
         page.wait_for_timeout(2000)
         check("Einstellung wirkt (Hintergrund Mint)", page.evaluate("() => getComputedStyle(document.documentElement).getPropertyValue('--primary-background-color').trim()") != "#e4e8ef")
         check("Einstellung wirkt (Effektstärke)", page.evaluate("() => getComputedStyle(document.documentElement).getPropertyValue('--neumorphism-strength').trim()") == "-1")
+
+        # Home Assistant tauscht beim Start die Registry der Bausteine aus. Lädt es langsamer als dieses
+        # Skript, müssen dessen Bausteine trotzdem in der neuen Registry landen (sonst "Configuration error").
+        app_js = re.compile(r"/frontend_latest/app\.[0-9a-f]+\.js")
+        page.route(app_js, lambda route: (time.sleep(2.5), route.continue_()))
+        page.reload()
+        page.wait_for_timeout(8000)
+        page.unroute(app_js)
+        check(
+            "Bausteine registriert, auch wenn Home Assistant später lädt",
+            page.evaluate("() => !!customElements.get('neumorphism-color-card') && !!customElements.get('neumorphism-color-picker')"),
+        )
 
         check("Keine Fehler im Browser", not problems, "; ".join(problems[:5]))
         browser.close()

@@ -26,6 +26,17 @@ const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
 const MARKER_VAR = "--neumorphism-inset-shadow";
 
+// Home Assistant tauscht beim Start die Registry der Bausteine und HTMLElement aus (Polyfill für
+// eigene Registries je Shadow DOM). Lädt dieses Skript schneller als Home Assistant selbst, landen
+// seine Bausteine in der alten Registry: Die Karte "Neumorphism Farben" gäbe es für Home Assistant
+// dann nicht ("Configuration error"), und die Haken für neue Bausteine griffen ins Leere. Deshalb
+// geht es erst weiter, wenn Home Assistant seine Oberfläche registriert hat, spätestens nach 20 s.
+await new Promise((resolve) => {
+  if (window.customElements.get("home-assistant")) return resolve();
+  window.customElements.whenDefined("home-assistant").then(resolve);
+  setTimeout(resolve, 20000);
+});
+
 const PRESETS = [
   ["Blau", "#3d7bfd"],
   ["Indigo", "#5c6bc0"],
