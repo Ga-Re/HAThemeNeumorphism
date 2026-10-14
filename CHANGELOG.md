@@ -1,5 +1,14 @@
 # Änderungen
 
+## 8.6.0
+
+- Tropfenform entfernt: Die Knöpfe rechts in der Titelleiste liegen gemeinsam auf einer erhabenen Kapsel, Menü und Zurück auf einem Kreis. Nebeneinanderliegende Knöpfe in Karten und Dialogen haben wieder jeder einen eigenen, kurzen Schatten
+- Reiter: Alle liegen in einer eingelassenen Spur, der gewählte als erhabene Pille darin. Beim Wechsel gleitet die Pille hinüber, auch zwischen den Seiten der Einstellungen (Dashboard-Ansichten, Einstellungen, Entwicklerwerkzeuge, am Handy unten). Passen nicht alle Reiter hin, läuft die Spur nur zur verdeckten Seite weich aus. Nicht gewählte Reiter reagieren beim Darüberfahren
+- Symbol-Knöpfe sinken beim Drücken ein, auch in der Titelleiste
+- Neue Schatten aus zwei Lagen, mit derselben kurzen Reichweite für große Karten wie für kleine Knöpfe: keine harten Kanten mehr, wo eine neue Fläche beginnt, und Nachbarn heben sich nicht mehr gegenseitig auf. Unter der gewählten Ansicht in der Titelleiste wird der Schatten nicht mehr abgeschnitten. Dialoge schweben etwas flacher
+- Erhabenes in einer Mulde (Griff eines Schalters, gewählte Option, Pille in der Reiterspur, Karten in eingelassenen Sektionen) wirft nur noch seinen Schatten, das Licht liegt als feine Kante darauf. So bleibt die Wand der Mulde sichtbar. Für eigene Karten: `--neumorphism-nested-shadow` und `--neumorphism-nested-card-shadow`
+- Wölbung (*gewölbt*, *gemuldet*) reicht an jeder Seite gleich weit; große Karten werden zur Gegenseite hin nicht mehr dunkel
+
 ## 8.5.1
 
 - Am Handy lag auf Seiten mit Reitern (z. B. Geräte & Dienste, Automationen, Bereiche) die Reiterleiste oben über der Titelleiste statt unten; Suche und Titel waren verdeckt. Behoben

@@ -20,7 +20,7 @@
  * Wird von der Integration "Neumorphism" automatisch in das Frontend geladen.
  */
 
-const VERSION = "8.5.1";
+const VERSION = "8.6.0";
 const STYLE_ID = "neumorphism-colors";
 const PICKER_TAG = "neumorphism-color-picker";
 // Diese Variable setzt nur das Neumorphism-Theme. Ist sie leer, ist ein anderes Theme aktiv.
@@ -816,13 +816,24 @@ const RAISED_S = "var(--neumorphism-raised-shadow-s, var(--neumorphism-raised-sh
 const INSET = "var(--neumorphism-inset-shadow)";
 const INSET_S = "var(--neumorphism-inset-shadow-s)";
 const INSET_L = "var(--neumorphism-inset-shadow-l, var(--neumorphism-inset-shadow))";
+// Erhaben in einer Mulde: ohne hellen Schein nach außen, der den Schatten der Muldenwand aufheben würde
+const NESTED = "var(--neumorphism-nested-shadow, var(--neumorphism-raised-shadow-s))";
+const NESTED_CARD = "var(--neumorphism-nested-card-shadow, var(--neumorphism-card-shadow))";
 const SURFACE = "var(--card-background-color)";
 // Gewölbte oder gemuldete Oberfläche erhabener Flächen (Verlauf über der Flächenfarbe), sonst none
 const SHEEN = "var(--neumorphism-surface-image, none)";
 const PILL = "var(--ha-border-radius-pill, 999px)";
 const STRENGTH = "var(--neumorphism-strength, 1)";
-// Knopfgruppen liegen über ihrer Tropfenform (siehe updateDroplets).
-const GROUP = "position: relative; z-index: 1;";
+/**
+ * Knöpfe einer Titelleiste liegen gemeinsam auf einer erhabenen Kapsel, statt jeder mit eigenem
+ * Schatten: dicht beieinander würden sich deren Licht und Schatten gegenseitig aufheben. Die Kapsel
+ * ist niedriger als die Knöpfe (deren Fläche zum Tippen bleibt), ein einzelner Knopf wird zum Kreis.
+ */
+const CAPSULE = `position: relative; isolation: isolate;`;
+const CAPSULE_SHAPE = `content: ""; position: absolute; inset: 4px 0; z-index: -1; pointer-events: none;
+  border-radius: ${PILL}; background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED_S};`;
+// Einzelner Knopf (Menü, Zurück) als erhabener Kreis, siehe ha-icon-button
+const ROUND_BUTTON = `--nm-icon-plate: ${RAISED_S}; --nm-icon-plate-bg: ${SURFACE}; --nm-icon-plate-image: ${SHEEN};`;
 // Gut sichtbarer Fokus bei Bedienung per Tastatur (die Flächen haben keine Ränder mehr)
 const FOCUS = "outline: 2px solid var(--primary-color) !important; outline-offset: 2px;";
 // Statt einer Kante läuft der Inhalt unter der Titelleiste weich aus.
@@ -830,6 +841,13 @@ const HEADER_BG = "var(--app-header-background-color, var(--primary-background-c
 const HEADER_FADE = `content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 32px;
   pointer-events: none;
   background: linear-gradient(to bottom, ${HEADER_BG}, color-mix(in srgb, ${HEADER_BG} 65%, transparent) 35%, transparent);`;
+
+// Spur und Pille der Reiter; Lage und Größe setzt updateTabBars
+const TAB_SLIDER = `
+  .nm-tab-track, .nm-tab-pill { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .nm-tab-track { z-index: -2; box-shadow: ${INSET_S}; }
+  .nm-tab-pill { z-index: -1; background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${NESTED}; }
+`;
 
 // Pro Element (Tag) zusätzliche Regeln für dessen Shadow DOM.
 const CONTROL_STYLES = {
@@ -845,7 +863,7 @@ const CONTROL_STYLES = {
     .switch { box-shadow: ${INSET}; }
     .switch .background { opacity: 0 !important; }
     .switch[checked] .background { opacity: 0.12 !important; }
-    .switch .button { background-color: ${SURFACE} !important; background-image: ${SHEEN}; color: var(--secondary-text-color); box-shadow: ${RAISED}; }
+    .switch .button { background-color: ${SURFACE} !important; background-image: ${SHEEN}; color: var(--secondary-text-color); box-shadow: ${NESTED}; }
     .switch[checked] .button { background-color: var(--control-switch-on-color) !important; color: white; }
     .switch:focus-visible { ${FOCUS} }
   `,
@@ -853,7 +871,7 @@ const CONTROL_STYLES = {
   "ha-control-select": `
     .container { box-shadow: ${INSET}; border-radius: var(--control-select-border-radius); }
     .container::before { opacity: 0 !important; }
-    .option.selected { box-shadow: ${RAISED}; background-image: ${SHEEN}; }
+    .option.selected { box-shadow: ${NESTED}; background-image: ${SHEEN}; }
     .option:focus-visible { ${FOCUS} }
   `,
   // Schieber (Helligkeit, Position ...): eingelassene Spur
@@ -918,40 +936,46 @@ const CONTROL_STYLES = {
   "ha-panel-app": "",
   "ha-panel-iframe": "",
   "hui-iframe-card": "",
-  // Symbol-Knöpfe sind flach, erhaben werden sie erst als Gruppe in der Titelleiste
-  // Buttons, die mit Nachbarn eine gemeinsame Form haben (siehe updateButtonGroups)
   "ha-button": `
     :host([appearance="outlined"]) .button { border-color: transparent !important; background-color: ${SURFACE}; background-image: ${SHEEN}; }
     :host([slot="fab"]) .button { box-shadow: ${RAISED_L} !important; }
-    :host([neumorphism-merged]) { position: relative; z-index: 1; }
-    :host([neumorphism-merged]) .button { box-shadow: none !important; }
     .button:focus-visible { ${FOCUS} }
   `,
+  // Symbol-Knöpfe sind flach. Einzeln in der Titelleiste (Menü, Zurück) liegen sie auf einem
+  // erhabenen Kreis (ROUND_BUTTON); beim Drücken sinkt die Fläche ein (siehe FEATURE_STYLES).
   "ha-icon-button": `
     ha-button { --ha-button-box-shadow: none; }
+    ha-button::before { content: ""; position: absolute; inset: 4px; z-index: -1; border-radius: 50%; pointer-events: none;
+      background: var(--nm-icon-plate-bg, transparent); background-image: var(--nm-icon-plate-image, none);
+      box-shadow: var(--nm-icon-plate, none); }
   `,
-  // Titelleisten: keine Linie, kein Schatten, Knöpfe rechts als gemeinsame Pille
+  // Titelleisten: keine Linie, kein Schatten; Knöpfe rechts auf einer Kapsel, Menü und Zurück als Kreis
   "hui-root": `
     .header { box-shadow: none !important; overflow-x: clip; }
     .header::after { ${HEADER_FADE} }
     .edit-mode .header::after { background: linear-gradient(to bottom, var(--app-header-edit-background-color), transparent); }
     .toolbar { border-bottom: none !important; position: relative; }
-    .action-items, .toolbar > ha-menu-button, .toolbar > ha-icon-button-arrow-prev, .toolbar > ha-tab-group { ${GROUP} }
+    .toolbar > .action-items { ${CAPSULE} margin-inline-start: 8px; }
+    .toolbar > .action-items::before { ${CAPSULE_SHAPE} }
+    .edit-mode .toolbar > .action-items::before { content: none; }
+    .toolbar > ha-menu-button, .toolbar > ha-icon-button-arrow-prev { ${ROUND_BUTTON} }
   `,
   "ha-top-app-bar-fixed": `
     .row, .sub-row { border-bottom: none !important; }
     .top-app-bar, .top-app-bar.scrolled:not(.pane-header) { box-shadow: none !important; }
     .top-app-bar { overflow-x: clip; }
     .top-app-bar::after { ${HEADER_FADE} }
-    #actions, #navigation { position: relative; }
-    #actions slot[name="actionItems"], slot[name="navigationIcon"] { display: flex; align-items: center; ${GROUP} }
+    #actions slot[name="actionItems"] { display: flex; align-items: center; ${CAPSULE} }
+    #actions slot[name="actionItems"]::before { ${CAPSULE_SHAPE} }
+    slot[name="navigationIcon"] { ${ROUND_BUTTON} }
   `,
   "hass-subpage": `
     .toolbar { position: relative; z-index: 2; overflow-x: clip; }
     .toolbar::after { ${HEADER_FADE} }
     .toolbar-content { border-bottom: none !important; position: relative; }
-    slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
-    .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${GROUP} }
+    slot[name="toolbar-icon"] { display: flex; align-items: center; ${CAPSULE} }
+    slot[name="toolbar-icon"]::before { ${CAPSULE_SHAPE} }
+    .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${ROUND_BUTTON} }
   `,
   "hass-tabs-subpage": `
     .toolbar { border-bottom: none !important; position: relative; z-index: 2; overflow-x: clip; }
@@ -962,18 +986,26 @@ const CONTROL_STYLES = {
     :host([narrow]) .toolbar::after { content: none; }
     :host([narrow]) .toolbar-content { z-index: 2; }
     :host([narrow]) .toolbar-content::after { ${HEADER_FADE} }
-    .toolbar-content, #toolbar-icon { position: relative; }
-    #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${GROUP} }
-    .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${GROUP} }
+    .toolbar-content { position: relative; }
+    #toolbar-icon slot[name="toolbar-icon"] { display: flex; align-items: center; ${CAPSULE} }
+    #toolbar-icon slot[name="toolbar-icon"]::before { ${CAPSULE_SHAPE} }
+    .toolbar-content > ha-menu-button, .toolbar-content > ha-icon-button-arrow-prev { ${ROUND_BUTTON} }
+    /* Reiter (siehe updateTabBars); breit liegt die Leiste in der Titelleiste, schmal unten */
+    #tabbar { isolation: isolate; }
+    #tabbar:not(.bottom-bar) { position: relative; }
+    ${TAB_SLIDER}
   `,
   // --- Seiten von Home Assistant: Einstellungen, Werkzeuge, Listen, Kalender ...
-  // Reiter: der gewählte als erhabene Pille statt Unterstrich
+  // Reiter: alle liegen in einer eingelassenen Spur, der gewählte als erhabene Pille darin, die beim
+  // Wechsel hinübergleitet (siehe updateTabBars). Solange es die Spur nicht gibt, trägt der gewählte
+  // Reiter seine Pille selbst.
   "ha-tab": `
     div { isolation: isolate; }
     :host(:not([narrow])[active]) div { border-bottom: none !important; }
-    :host([active]) div::after { content: ""; position: absolute; inset: 9px 8px; z-index: -1;
+    :host([active]:not([nm-slider])) div::after { content: ""; position: absolute; inset: 9px 8px; z-index: -1;
       border-radius: ${PILL}; background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED_S}; }
-    :host([narrow][active]) div::after { inset: 7px 4px; border-radius: 18px; }
+    :host([narrow][active]:not([nm-slider])) div::after { inset: 7px 4px; border-radius: 18px; }
+    :host(:not([active])) div:hover { color: var(--primary-text-color); }
   `,
   "ha-tab-group": `
     :host { --track-color: transparent !important; --indicator-color: transparent !important; }
@@ -981,21 +1013,23 @@ const CONTROL_STYLES = {
     /* Waagrechte Reiterleisten scrollen nur seitlich, nie senkrecht (auch nicht bei Rundungsfehlern) */
     .tab-group-top .nav, .tab-group-bottom .nav { overflow-y: hidden !important; }
     /* Home Assistant blendet die Enden mit einer Fläche in Hintergrundfarbe aus; die legt sich als
-       Streifen über Schatten und Tropfenform. Stattdessen blenden die Reiter selbst weich aus. */
+       Streifen über die Spur. Stattdessen laufen die Reiter selbst weich aus, wenn sie nicht alle Platz haben. */
     .scroll-button { background: none !important; }
-    /* Reiter laufen an den Enden weich aus statt an einer harten Kante */
-    .tab-group-top .nav, .tab-group-bottom .nav {
-      -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
-      mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+    :host([nm-more-start]) .nav { --nm-fade-start: transparent; }
+    :host([nm-more-end]) .nav { --nm-fade-end: transparent; }
+    :host(:is([nm-more-start], [nm-more-end])) :is(.tab-group-top, .tab-group-bottom) .nav {
+      -webkit-mask-image: linear-gradient(to right, var(--nm-fade-start, #000), #000 24px, #000 calc(100% - 24px), var(--nm-fade-end, #000));
+      mask-image: linear-gradient(to right, var(--nm-fade-start, #000), #000 24px, #000 calc(100% - 24px), var(--nm-fade-end, #000)); }
+    .tabs { isolation: isolate; }
+    ${TAB_SLIDER}
   `,
   // Die Pille liegt in der Reiterfläche, ohne sie zu vergrößern: sonst wird die Reiterleiste
   // höher als die Titelleiste, lässt sich verschieben und schneidet den Schatten ab.
   "ha-tab-group-tab": `
     .tab { position: relative; isolation: isolate; }
-    :host([active]) .tab::before { content: ""; position: absolute; inset: 9px 2px; z-index: -1;
+    :host([active]:not([nm-slider])) .tab::before { content: ""; position: absolute; inset: 9px 2px; z-index: -1;
       border-radius: ${PILL}; background: ${SURFACE}; background-image: ${SHEEN}; box-shadow: ${RAISED_S}; }
-    /* In der Titelleiste gehört die Pille zur Tropfenform der Knöpfe (siehe headerTabsGroup) */
-    :host([neumorphism-header][active]) .tab::before { display: none; }
+    :host(:not([active])) .tab:hover { color: var(--primary-text-color); }
     .tab:focus-visible { ${FOCUS} border-radius: ${PILL}; }
   `,
   // Filter- und Auswahl-Chips: erhaben statt umrandet
@@ -1044,6 +1078,9 @@ const CONTROL_STYLES = {
 const GLOW_ICON = "drop-shadow(0 0 5px color-mix(in srgb, currentColor 70%, transparent))";
 const NOT_UNKNOWN = ':not([data-state="unavailable"]):not([data-state="unknown"])';
 const motion = (css) => `@media (prefers-reduced-motion: no-preference) { ${css} }`;
+// Die Pille gleitet zum gewählten Reiter, mit einem kleinen Nachfedern
+const TAB_SLIDE = `.nm-tab-pill { transition: transform 340ms cubic-bezier(0.34, 1.25, 0.64, 1),
+  width 340ms cubic-bezier(0.34, 1.25, 0.64, 1), height 200ms ease; }`;
 const FEATURE_STYLES = {
   // Aktive Geräte leuchten sanft in ihrer Zustandsfarbe
   glow: {
@@ -1054,7 +1091,7 @@ const FEATURE_STYLES = {
     // Schaltfläche und Zeilen: die Zustandsfarbe aktiver Geräte verweist nicht auf "inactive"
     "hui-button-card": `ha-card[style*="--state-color"]:not([style*="inactive"]) ha-state-icon${NOT_UNKNOWN} { --nm-icon-glow: ${GLOW_ICON}; }`,
     "state-badge": `ha-state-icon[style*="color"]:not([style*="inactive"])${NOT_UNKNOWN} { --nm-icon-glow: ${GLOW_ICON}; }`,
-    "ha-control-switch": `.switch[checked] .button { box-shadow: ${RAISED},
+    "ha-control-switch": `.switch[checked] .button { box-shadow: ${NESTED},
       0 0 14px 1px color-mix(in srgb, var(--control-switch-on-color) 55%, transparent); }`,
   },
   // Drücken sinkt ein, Wechsel gleiten statt zu springen
@@ -1076,19 +1113,29 @@ const FEATURE_STYLES = {
       ha-card:active { transform: scale(0.97); box-shadow: ${INSET}; }`),
     "ha-tile-icon": motion(`.container { transition: box-shadow 300ms ease; }`),
     "ha-switch": motion(`.switch { transition: box-shadow 200ms ease; }`),
-    "ha-tab-group-tab": motion(`:host([active]) .tab::before { animation: nm-pill 260ms ease-out; }
-      @keyframes nm-pill { from { opacity: 0; transform: scale(0.85); } }`),
-    "ha-tab": motion(`:host([active]) div::after { animation: nm-pill 260ms ease-out; }
-      @keyframes nm-pill { from { opacity: 0; transform: scale(0.85); } }`),
+    "ha-tab-group-tab": motion(`:host([active]:not([nm-slider])) .tab::before { animation: nm-pill 260ms ease-out; }
+      @keyframes nm-pill { from { opacity: 0; transform: scale(0.85); } }
+      .tab { transition: color 200ms ease; }`),
+    "ha-tab": motion(`:host([active]:not([nm-slider])) div::after { animation: nm-pill 260ms ease-out; }
+      @keyframes nm-pill { from { opacity: 0; transform: scale(0.85); } }
+      div { transition: color 200ms ease; }`),
+    "ha-tab-group": motion(TAB_SLIDE),
+    "hass-tabs-subpage": motion(TAB_SLIDE),
+    "ha-icon-button": motion(`ha-button::before { transition: box-shadow 160ms ease, background-color 160ms ease; }
+      :host(:not([disabled])) ha-button:active::before { box-shadow: ${INSET_S}; }
+      ha-svg-icon, ::slotted(*) { transition: transform 120ms ease; }
+      :host(:not([disabled])) ha-button:active ha-svg-icon { transform: scale(0.9); }`),
     "ha-sidebar": motion(`ha-list-item-button { transition: box-shadow 200ms ease; }`),
     "ha-list-item": motion(`:host { transition: box-shadow 200ms ease; }`),
     "ha-dropdown-item": motion(`:host { transition: box-shadow 200ms ease; }`),
   },
-  // Sektionen eines Dashboards als Mulden, die Karten liegen erhaben darin
+  // Sektionen eines Dashboards als Mulden, die Karten liegen erhaben darin (ohne hellen Schein nach
+  // außen, der sonst den Schatten der Muldenwand aufhebt)
   wells: {
     "hui-sections-view": `
       .section > .section-container { padding: var(--ha-space-3, 12px); box-shadow: ${INSET_L};
-        border-radius: calc(var(--ha-card-border-radius, 28px) + var(--ha-space-3, 12px)); }`,
+        border-radius: calc(var(--ha-card-border-radius, 28px) + var(--ha-space-3, 12px));
+        --ha-card-box-shadow: ${NESTED_CARD}; --neumorphism-card-shadow: ${NESTED_CARD}; }`,
   },
   // Zustand als Tiefe: eingeschaltete Geräte gedrückt (eingelassen), ausgeschaltete erhaben
   pressed: {
@@ -1208,21 +1255,22 @@ function forgetDetached(collection, limit, onForget) {
   }
 }
 
-/** Merkt sich Elemente, die später noch bearbeitet werden (Tropfen, Karten, eingebettete Seiten). */
+/** Merkt sich Elemente, die später noch bearbeitet werden (Reiter, Karten, eingebettete Seiten). */
 function trackHost(el, tag) {
   watchReconnect(el, tag);
-  if (DROPLET_GROUPS[tag]) {
-    dropletHosts.set(el, tag);
-    layoutObserver?.observe(el); // Titelleiste breiter oder schmaler (z. B. Seitenleiste): neu zeichnen
+  if (TAB_BARS[tag]) {
+    tabBarHosts.set(el, tag);
+    scheduleTabBars();
   }
-  if (tag === "ha-button") buttonHosts.add(el);
   if (tag === "hui-card") cardHosts.add(el);
   if (FRAME_HOSTS.includes(tag)) frameHosts.add(el);
   // Neue Seite, neuer Dialog, neue Karte ...: einmal alles prüfen
-  if (DROPLET_GROUPS[tag] || tag === "ha-button" || tag === "hui-card" || FRAME_HOSTS.includes(tag) || PROFILE_TAGS.includes(tag)) {
+  if (tag === "ha-button" || tag === "hui-card" || FRAME_HOSTS.includes(tag) || PROFILE_TAGS.includes(tag)) {
     scheduleTick();
   }
 }
+
+const cardHosts = new Set();
 
 /**
  * Hängt das Stylesheet an alle vorhandenen und künftigen Exemplare eines Elements.
@@ -1265,484 +1313,149 @@ function patchControls(win = window) {
 }
 
 // ---------------------------------------------------------------------------
-// Knopfgruppen in der Titelleiste: wie zusammenlaufende Tropfen
+// Reiter: eingelassene Spur, darin die gewählte Ansicht als erhabene Pille, die beim Wechsel gleitet
 // ---------------------------------------------------------------------------
 
-// Wo in den Titelleisten Knöpfe liegen: rechts die Aktionen, links Menü oder Zurück.
-const slotGroup = (slot) => slot && { anchor: slot, elements: slot.assignedElements({ flatten: true }) };
-const childGroup = (el) => el && { anchor: el, elements: [...el.children] };
-const singleGroup = (el) => el && { anchor: el, elements: [el] };
-const NAV_BUTTON = ":scope > ha-menu-button, :scope > ha-icon-button-arrow-prev";
-const DROPLET_GROUPS = {
-  "hui-root": [
-    (root) =>
-      !root.querySelector(".edit-mode") &&
-      (headerTabsGroup(root) || childGroup(root.querySelector(".toolbar .action-items"))),
-    (root) =>
-      !root.querySelector(".edit-mode") &&
-      !activeHeaderTab(root) &&
-      singleGroup(root.querySelector(".toolbar")?.querySelector(NAV_BUTTON)),
-  ],
-  "ha-top-app-bar-fixed": [
-    (root) => slotGroup(root.querySelector('#actions slot[name="actionItems"]')),
-    (root) => slotGroup(root.querySelector('#navigation slot[name="navigationIcon"]')),
-  ],
-  "hass-subpage": [
-    (root) => slotGroup(root.querySelector('slot[name="toolbar-icon"]')),
-    (root) => singleGroup(root.querySelector(".toolbar-content")?.querySelector(NAV_BUTTON)),
-  ],
-  "hass-tabs-subpage": [
-    (root) => slotGroup(root.querySelector('#toolbar-icon slot[name="toolbar-icon"]')),
-    (root) => singleGroup(root.querySelector(".toolbar-content")?.querySelector(NAV_BUTTON)),
-  ],
+// Wo die Reiter liegen: box ist der Bezugsrahmen für Spur und Pille, inset der Rand der Pille im
+// Reiter, holder das Element, in dem die Reiter liegen (nur dort wird auf Änderungen geachtet)
+const TAB_BARS = {
+  "ha-tab-group": (host) => ({
+    box: host.shadowRoot?.querySelector(".tabs"),
+    holder: host,
+    tabs: [...host.children].filter((el) => el.localName === "ha-tab-group-tab"),
+    inset: 2,
+    scroller: host.shadowRoot?.querySelector(".nav"), // seitlich verschiebbar, wenn nicht alle Platz haben
+  }),
+  "hass-tabs-subpage": (host) => {
+    const box = host.shadowRoot?.querySelector("#tabbar");
+    return { box, holder: box, tabs: box ? [...box.querySelectorAll("ha-tab")] : [], inset: host.hasAttribute("narrow") ? 4 : 8 };
+  },
 };
-const DROPLET_MARGIN = 24; // Platz für die Schatten rund um die Form
-const DROPLET_INSET = 4; // Kreise etwas kleiner als die Knopffläche
-const DROPLET_NECK = 0.5; // halbe Halsbreite im Verhältnis zum Radius
-const dropletHosts = new Map(); // Element -> Tag, dessen Gruppen gelten (auch für Unterklassen)
-const buttonHosts = new Set();
-const cardHosts = new Set();
-const BUTTON_GAP = 24; // Buttons mit höchstens diesem Abstand laufen zusammen
-let dropletProbe = null;
+const TAB_PAD = 4; // Abstand der Pille zum Rand der Spur
+const tabBarHosts = new Map(); // Element -> Tag
+// Letzte Lage der Pille je Reiterleiste (nach Namen): Auf einer neuen Seite mit denselben Reitern
+// (z. B. Einstellungen: Integrationen -> Geräte) gleitet sie von dort aus weiter.
+const lastPill = new Map();
+const tabWatch = new WeakSet();
+const tabSized = new WeakSet(); // Reiter, deren Größe beobachtet wird (ein zweites observe() meldet sich sofort wieder)
+const tabResize = typeof ResizeObserver === "function" ? new ResizeObserver(() => scheduleTabBars()) : null;
 
-/** Sichtbare Fläche eines Elements; Hüllen mit display: contents (z. B. Menüs) über ihren Auslöser. */
-function itemRects(el) {
-  if (el.hidden || el.classList.contains("neumorphism-droplet")) return [];
-  if (getComputedStyle(el).display !== "contents") {
-    const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 ? [rect] : [];
-  }
-  // Nur Auslöser berücksichtigen, keine (geöffneten) Menüeinträge
-  return [...el.children]
-    .filter((child) => [null, "trigger"].includes(child.getAttribute("slot")) && !/item$/.test(child.localName))
-    .flatMap(itemRects)
-    .slice(0, 1);
-}
-
-function groupItems(group) {
-  return group.elements.flatMap(itemRects).sort((a, b) => a.left - b.left);
-}
-
-const activeHeaderTab = (root) => root.querySelector(".toolbar ha-tab-group > ha-tab-group-tab[active]");
-
-/**
- * Titelleiste mit Ansichten: Menüknopf, gewählte Ansicht und Knöpfe rechts in einer Form.
- * Die Pille der gewählten Ansicht liegt mit in der Tropfenform; beim Wischen läuft sie wie ein
- * Tropfen in die Knöpfe hinein (sichtbar nur zwischen deren Mitten).
- */
-function headerTabsGroup(root) {
-  const active = activeHeaderTab(root);
-  const inner = active?.shadowRoot?.querySelector(".tab");
-  if (!inner) return null;
-  const toolbar = root.querySelector(".toolbar");
-  const tabs = active.parentElement;
-  watchTabScroll(tabs);
-  for (const tab of tabs.children) tab.toggleAttribute?.("neumorphism-header", true);
-  const nav = toolbar.querySelector(NAV_BUTTON);
-  const actions = toolbar.querySelector(".action-items");
-  const navRects = nav ? itemRects(nav) : [];
-  const actionRects = actions ? [...actions.children].flatMap(itemRects).sort((a, b) => a.left - b.left) : [];
-  const t = inner.getBoundingClientRect();
-  if (!t.width) return null;
-  // Senkrecht auf Text und Symbol zentriert, nicht auf den Reiter: Home Assistant gibt ihm oben
-  // mehr Innenabstand als unten. Seitlich 2px Rand, plus DROPLET_INSET (zieht drawDroplet wieder ab).
-  const range = document.createRange();
-  range.selectNodeContents(active);
-  const content = range.getBoundingClientRect();
-  const cy = content.height ? (content.top + content.bottom) / 2 : (t.top + t.bottom) / 2;
-  const half = Math.min(18, t.height / 2 - 6);
-  const pill = {
-    left: t.left + 2 - DROPLET_INSET,
-    right: t.right - 2 + DROPLET_INSET,
-    top: cy - half - DROPLET_INSET,
-    bottom: cy + half + DROPLET_INSET,
-    clipLeft: navRects[0] ? navRects[0].left + navRects[0].width / 2 : undefined,
-    clipRight: actionRects[0] ? actionRects[0].left + actionRects[0].width / 2 : undefined,
-    dynamic: true, // verbindet sich erst bei Berührung (siehe dropletNeck)
-  };
-  pill.width = pill.right - pill.left;
-  pill.height = pill.bottom - pill.top;
-  return { anchor: toolbar.firstElementChild, rects: [...navRects, pill, ...actionRects] };
-}
-
-const watchedTabNavs = new WeakSet();
-function watchTabScroll(tabs) {
-  const nav = tabs.shadowRoot?.querySelector(".nav");
-  if (!nav || watchedTabNavs.has(nav)) return;
-  watchedTabNavs.add(nav);
-  nav.addEventListener("scroll", scheduleDroplets, { passive: true });
-  // Andere Ansicht gewählt: die Pille wandert mit
-  new MutationObserver(scheduleDroplets).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["active"] });
-}
-
-let dropletFrame = 0;
-function scheduleDroplets() {
-  if (dropletFrame) return;
-  dropletFrame = requestAnimationFrame(() => {
-    dropletFrame = 0;
-    safely(updateDroplets);
+let tabFrame = 0;
+function scheduleTabBars() {
+  if (tabFrame) return;
+  tabFrame = requestAnimationFrame(() => {
+    tabFrame = 0;
+    safely(updateTabBars);
   });
 }
 
-// Farben und Werte der Schatten: neu gelesen nur nach Änderung der Einstellungen oder des Themes
-let themeGeneration = 0; // zählt Änderungen der Theme-Variablen auf <html>
-let paintCache = null;
-
-function dropletPaint() {
-  const key = `${applied}|${themeGeneration}`;
-  if (paintCache?.key !== key) paintCache = { key, value: readPaint() };
-  return paintCache.value;
+/** Gewählter Reiter gewechselt, Reiter dazugekommen oder umbenannt, Leiste schmal oder breit: neu legen. */
+function watchTabBar(host, { box, holder, scroller }) {
+  if (tabWatch.has(box)) return;
+  tabWatch.add(box);
+  scroller?.addEventListener("scroll", scheduleTabBars, { passive: true });
+  const observer = new MutationObserver(scheduleTabBars);
+  observer.observe(holder, { subtree: true, childList: true, attributes: true, attributeFilter: ["active", "hidden", "class"] });
+  if (holder !== host) observer.observe(host, { attributes: true, attributeFilter: ["narrow"] });
+  tabResize?.observe(box);
 }
 
-/** Farben und Stärke aus dem Theme, aufgelöst über ein unsichtbares Element. */
-function readPaint() {
-  if (!dropletProbe) {
-    dropletProbe = document.createElement("div");
-    dropletProbe.style.cssText =
-      "position:absolute;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;" +
-      "color:var(--neumorphism-shadow-dark);background-color:var(--neumorphism-shadow-light);" +
-      "border:0 solid var(--card-background-color);outline:0 solid var(--neumorphism-sheen);" +
-      "text-decoration-color:var(--neumorphism-shade);caret-color:rgba(var(--rgb-primary-text-color),0.16);";
-    document.body.appendChild(dropletProbe);
+/** Sichtbarer Inhalt eines Reiters (Symbol und Name, auch aus dem Shadow DOM), für die Höhe der Pille. */
+function tabContent(tab) {
+  const rects = [];
+  const range = document.createRange();
+  range.selectNodeContents(tab);
+  rects.push(range.getBoundingClientRect());
+  const name = tab.shadowRoot?.querySelector(".name");
+  if (name) rects.push(name.getBoundingClientRect());
+  const shown = rects.filter((r) => r.height > 0);
+  if (!shown.length) return null;
+  return { top: Math.min(...shown.map((r) => r.top)), bottom: Math.max(...shown.map((r) => r.bottom)) };
+}
+
+function placeTabShape(el, shape, instant) {
+  const style = `${Math.round(shape.width)}px|${Math.round(shape.height)}px|translate(${Math.round(shape.x)}px, ${Math.round(shape.y)}px)|${shape.radius}px`;
+  if (el.dataset.place === style) return;
+  el.dataset.place = style;
+  if (instant) el.style.transition = "none";
+  Object.assign(el.style, { width: `${Math.round(shape.width)}px`, height: `${Math.round(shape.height)}px`,
+    transform: `translate(${Math.round(shape.x)}px, ${Math.round(shape.y)}px)`, borderRadius: `${shape.radius}px` });
+  if (instant) {
+    void el.offsetWidth; // erst ohne Übergang setzen, danach gilt er wieder
+    el.style.transition = "";
   }
-  const css = getComputedStyle(dropletProbe);
-  const root = getComputedStyle(document.documentElement);
-  const number = (name, fallback) => {
-    const value = parseFloat(root.getPropertyValue(name));
-    return Number.isFinite(value) ? value : fallback;
-  };
-  const s = settings();
-  return {
-    dark: css.color,
-    light: css.backgroundColor,
-    fill: css.borderTopColor,
-    strength: clampStrength(number("--neumorphism-strength", 1)) ?? 1,
-    lx: number("--neumorphism-light-x", 1),
-    ly: number("--neumorphism-light-y", 1),
-    edge: number("--neumorphism-contrast", 0) > 0 ? css.caretColor : "",
-    surface:
-      s.surface === "flat"
-        ? null
-        : { angle: number("--neumorphism-light-angle", 135), convex: s.surface === "convex", sheen: css.outlineColor, shade: css.textDecorationColor },
-  };
 }
 
-const fmt = (n) => (Math.round(n * 100) / 100).toString();
-
-/**
- * Kreis oder Pille (von x0 bis x1) als Pfad im Uhrzeigersinn, nur der Teil zwischen den
- * senkrechten Linien left und right (für Pillen, die unter einem Knopf verschwinden).
- */
-function capsulePath(x0, x1, cy, r, left = x0, right = x1) {
-  const c0 = x0 + r;
-  const c1 = Math.max(c0, x1 - r);
-  const h = (x) => (x < c0 ? Math.sqrt(Math.max(0, r * r - (c0 - x) ** 2)) : x > c1 ? Math.sqrt(Math.max(0, r * r - (x - c1) ** 2)) : r);
-  const pt = (x, y) => `${fmt(x)} ${fmt(y)}`;
-  const xs = [left, ...[c0, c1].filter((x) => x > left && x < right), right];
-  const edge = (a, b, sign) => {
-    const mid = (a + b) / 2;
-    return mid < c0 || mid > c1 ? `A${fmt(r)} ${fmt(r)} 0 0 1 ${pt(b, cy + sign * h(b))}` : `L${pt(b, cy + sign * h(b))}`;
-  };
-  let d = `M${pt(left, cy - h(left))}`;
-  for (let i = 1; i < xs.length; i++) d += edge(xs[i - 1], xs[i], -1); // oben nach rechts
-  d += `L${pt(right, cy + h(right))}`;
-  for (let i = xs.length - 1; i > 0; i--) d += edge(xs[i], xs[i - 1], 1); // unten zurück
-  return d + "Z";
+function removeTabSlider(box, tabs) {
+  box?.querySelectorAll(":scope > .nm-tab-track, :scope > .nm-tab-pill").forEach((el) => el.remove());
+  for (const tab of tabs) tab.removeAttribute("nm-slider");
 }
 
-/**
- * Halsbreite (halbe Höhe) zwischen zwei Tropfen mit Mittelpunktabstand dist und Radiensumme
- * sum: null, solange sie sich nicht berühren. Danach füllt der Hals zuerst nur die Kerbe am
- * Schnittpunkt und wird mit wachsender Überlappung stetig breiter, ohne Sprung.
- */
-function dropletNeck(dist, sum, r) {
-  const overlap = sum - dist;
-  const half = dist / 2;
-  if (overlap <= 0 || half <= 0) return null;
-  const notch = Math.sqrt(Math.max(0, r * r - half * half)); // Höhe des Schnittpunkts
-  return notch + (r - notch) * 0.6 * (1 - Math.exp(-overlap / r));
-}
-
-/** Eingeschnürte Brücke zwischen zwei Kreisen: Hohlkehlen tangential an beide Kreise. */
-function bridgePath(x1, x2, cy, r, h = DROPLET_NECK * r) {
-  const a = (x2 - x1) / 2;
-  if (a <= 0 || a > 2 * r) return "";
-  const R = (a * a + h * h - r * r) / (2 * (r - h));
-  if (!(R > 0)) return "";
-  const m = x1 + a;
-  const yR = h + R;
-  const touch = (cx, fy) => {
-    const len = Math.hypot(m - cx, fy);
-    return [cx + (r * (m - cx)) / len, cy + (r * fy) / len];
-  };
-  const [t1x, t1y] = touch(x1, -yR);
-  const [t2x, t2y] = touch(x2, -yR);
-  const [b2x, b2y] = touch(x2, yR);
-  const [b1x, b1y] = touch(x1, yR);
-  return (
-    `M${fmt(t1x)} ${fmt(t1y)}A${fmt(R)} ${fmt(R)} 0 0 0 ${fmt(t2x)} ${fmt(t2y)}` +
-    `L${fmt(b2x)} ${fmt(b2y)}A${fmt(R)} ${fmt(R)} 0 0 0 ${fmt(b1x)} ${fmt(b1y)}Z`
-  );
-}
-
-const rgbaParts = (color) => {
-  const m = color.match(/rgba?\(([^)]+)\)/);
-  if (!m) return ["rgb(0,0,0)", 0];
-  const [r, g, b, a = "1"] = m[1].split(",").map((v) => v.trim());
-  return [`rgb(${r},${g},${b})`, Number(a)];
-};
-
-/** Anfang und Ende eines Verlaufs (SVG, 0..1) aus dem Winkel wie bei linear-gradient(). */
-function gradientEnds(deg) {
-  const rad = (deg * Math.PI) / 180;
-  const [dx, dy] = [Math.sin(rad) / 2, -Math.cos(rad) / 2];
-  return [0.5 - dx, 0.5 - dy, 0.5 + dx, 0.5 + dy].map(fmt);
-}
-
-/**
- * Form mit Schatten: erhaben, bei negativer Effektstärke eingelassen (Schatten innen).
- * caps: die einzelnen Pillen, für die Wölbung je mit eigenem Verlauf.
- */
-function dropletSvg(width, height, d, paint, id, caps = []) {
-  const s = Math.abs(paint.strength);
-  const [dark, darkA] = rgbaParts(paint.dark);
-  const [light, lightA] = rgbaParts(paint.light);
-  // Schatten fällt vom Licht weg (Lichtrichtung aus dem Theme)
-  const shade = (source, k, color, alpha, result) =>
-    `<feOffset in="${source}" dx="${fmt(k * s * paint.lx)}" dy="${fmt(k * s * paint.ly)}" result="${result}o"/>` +
-    `<feFlood flood-color="${color}" flood-opacity="${alpha}"/><feComposite in2="${result}o" operator="in" result="${result}"/>`;
-  // Kontrastmodus: feine Kante rund um die ganze Form
-  const [edgeColor, edgeA] = paint.edge ? rgbaParts(paint.edge) : [];
-  const edge = paint.edge
-    ? `<feMorphology in="SourceAlpha" operator="dilate" radius="1" result="e0"/>` +
-      `<feComposite in="e0" in2="SourceAlpha" operator="out" result="e1"/>` +
-      `<feFlood flood-color="${edgeColor}" flood-opacity="${edgeA}"/><feComposite in2="e1" operator="in" result="e"/>`
-    : "";
-  const edgeNode = paint.edge ? `<feMergeNode in="e"/>` : "";
-  const filter =
-    paint.strength >= 0
-      ? `<feGaussianBlur in="SourceAlpha" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
-        shade("b", 4, dark, darkA, "d") +
-        shade("b", -4, light, lightA, "l") +
-        edge +
-        `<feMerge><feMergeNode in="d"/><feMergeNode in="l"/><feMergeNode in="SourceGraphic"/>${edgeNode}</feMerge>`
-      : // Innenschatten: Umgebung der Form weichzeichnen, versetzen und auf die Form beschneiden
-        `<feComponentTransfer in="SourceAlpha" result="inv"><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>` +
-        `<feGaussianBlur in="inv" stdDeviation="${fmt(4.5 * s)}" result="b"/>` +
-        shade("b", 4, dark, darkA, "d0") +
-        `<feComposite in="d0" in2="SourceAlpha" operator="in" result="d"/>` +
-        shade("b", -4, light, lightA, "l0") +
-        `<feComposite in="l0" in2="SourceAlpha" operator="in" result="l"/>` +
-        edge +
-        `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="d"/><feMergeNode in="l"/>${edgeNode}</feMerge>`;
-  // Wölbung: jede Pille mit eigenem Verlauf über der Fläche, bei negativer Stärke umgekehrt
-  let sheen = "";
-  if (paint.surface && caps.length) {
-    const [x1, y1, x2, y2] = gradientEnds(paint.surface.angle);
-    const forward = paint.surface.convex === paint.strength >= 0;
-    const [from, to] = forward ? [paint.surface.sheen, paint.surface.shade] : [paint.surface.shade, paint.surface.sheen];
-    const k = Math.min(1, s);
-    const stop = (offset, color) => {
-      const [c, a] = rgbaParts(color);
-      return `<stop offset="${offset}" stop-color="${c}" stop-opacity="${fmt(a * k)}"/>`;
-    };
-    sheen = `<linearGradient id="${id}-g" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stop(0, from)}${stop(1, to)}</linearGradient>`;
-  }
-  const capPaths = sheen ? caps.map((cap) => `<path class="cap" fill="url(#${id}-g)" d="${cap}"/>`).join("") : "";
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-    `<defs><filter id="${id}" x="-50%" y="-50%" width="200%" height="200%">${filter}</filter>${sheen}</defs>` +
-    `<path class="shape" filter="url(#${id})" fill="${paint.fill}" d="${d}"/>${capPaths}</svg>`
-  );
-}
-
-/** Zeichnet hinter jeder Knopfgruppe eine Form: Kreise, verbunden wie zwei Tropfen. */
-function updateDroplets() {
-  forgetDetached(dropletHosts, 50, (host) => layoutObserver?.unobserve(host));
-  // Sparmodus: keine Tropfenformen, die Ansicht in der Titelleiste bekommt wieder ihre eigene Pille
-  const enabled = controlsActive && !saver();
-  for (const [host, tag] of dropletHosts) {
-    const root = host.shadowRoot;
-    if (!host.isConnected || !root) continue;
-    if (!enabled) {
-      for (const tab of root.querySelectorAll("ha-tab-group-tab[neumorphism-header]")) tab.removeAttribute("neumorphism-header");
+/** Legt Spur und Pille jeder Reiterleiste an ihre Reiter. */
+function updateTabBars() {
+  forgetDetached(tabBarHosts, 50);
+  for (const [host, tag] of tabBarHosts) {
+    if (!host.isConnected || !host.shadowRoot) continue;
+    const bar = TAB_BARS[tag](host);
+    const { box, tabs, inset, scroller } = bar;
+    if (!box) continue;
+    watchTabBar(host, bar);
+    // Weitere Reiter außerhalb: Leiste läuft an dieser Seite weich aus
+    if (scroller) {
+      host.toggleAttribute("nm-more-start", scroller.scrollLeft > 1);
+      host.toggleAttribute("nm-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
     }
-    DROPLET_GROUPS[tag].forEach((find, index) => {
-      const existing = root.querySelector(`.neumorphism-droplet[data-group="${index}"]`);
-      const group = (enabled && find(root)) || null;
-      const items = group ? group.rects || groupItems(group) : [];
-      const parent = group?.anchor.parentElement;
-      if (!items.length || !parent) {
-        existing?.remove();
-        return;
-      }
-      drawDroplet(existing, parent, group.anchor, items, index, DROPLET_INSET);
-    });
-  }
-}
+    const shown = tabs.filter((tab) => tab.getBoundingClientRect().width > 0);
+    const active = shown.find((tab) => tab.hasAttribute("active"));
+    const content = active && tabContent(active);
+    if (!controlsActive || shown.length < 2 || !content) {
+      removeTabSlider(box, tabs);
+      continue;
+    }
+    const frame = box.getBoundingClientRect();
+    const ox = frame.left + box.clientLeft - box.scrollLeft;
+    const oy = frame.top + box.clientTop - box.scrollTop;
+    const a = active.getBoundingClientRect();
+    // Senkrecht auf Symbol und Name zentriert, nicht auf den Reiter: Home Assistant gibt ihm oben
+    // mehr Innenabstand als unten.
+    const cy = (content.top + content.bottom) / 2 - oy;
+    const trackHeight = Math.min(a.height - 6, Math.max(36, content.bottom - content.top + 24));
+    const height = trackHeight - 2 * TAB_PAD;
+    const radius = Math.min(height / 2, 18);
+    const first = shown[0].getBoundingClientRect();
+    const last = shown[shown.length - 1].getBoundingClientRect();
+    // Die Spur bleibt im Rahmen (der schneidet sonst ihre Enden ab), die Pille in der Spur
+    const left = Math.max(0, Math.min(first.left, last.left) + inset - TAB_PAD - ox);
+    const right = Math.min(box.scrollWidth, Math.max(first.right, last.right) - inset + TAB_PAD - ox);
+    const track = { x: left, y: cy - trackHeight / 2, width: right - left, height: trackHeight, radius: radius + TAB_PAD };
+    const pillLeft = Math.max(a.left + inset - ox, left + TAB_PAD);
+    const pillRight = Math.min(a.right - inset - ox, right - TAB_PAD);
+    const pill = { x: pillLeft, y: cy - height / 2, width: pillRight - pillLeft, height, radius };
 
-/**
- * Zeichnet die Form hinter einer Reihe von Elementen in ihr (positioniertes) Elternelement.
- * Jedes Element wird zu einer Pille (bei quadratischen Knöpfen ein Kreis), benachbarte
- * Pillen werden an ihren zugewandten Enden mit einem Tropfen-Hals verbunden.
- */
-let dropletIds = 0;
-
-function drawDroplet(existing, parent, anchor, items, group, inset) {
-  const box = parent.getBoundingClientRect();
-  const offsetX = box.left + parent.clientLeft - parent.scrollLeft;
-  const offsetY = box.top + parent.clientTop - parent.scrollTop;
-  const pills = [];
-  for (const rect of items) {
-    const r = Math.min(rect.width, rect.height) / 2 - inset;
-    const x0 = rect.left + inset - offsetX;
-    const x1 = rect.right - inset - offsetX;
-    // Teil einer Pille, der zwischen den Knöpfen sichtbar ist (rect.clipLeft/clipRight)
-    const left = rect.clipLeft === undefined ? x0 : Math.max(x0, rect.clipLeft - offsetX);
-    const right = rect.clipRight === undefined ? x1 : Math.min(x1, rect.clipRight - offsetX);
-    if (right - left < 0.5) continue;
-    pills.push({ x0, x1, left, right, cy: rect.top + rect.height / 2 - offsetY, r, dynamic: !!rect.dynamic });
-  }
-  if (!pills.length) {
-    existing?.remove();
-    return null;
-  }
-  pills.sort((a, b) => a.left - b.left);
-  const left = Math.min(...pills.map((p) => p.left)) - DROPLET_MARGIN;
-  const top = Math.min(...pills.map((p) => p.cy - p.r)) - DROPLET_MARGIN;
-  const width = Math.max(...pills.map((p) => p.right)) + DROPLET_MARGIN - left;
-  const height = Math.max(...pills.map((p) => p.cy + p.r)) + DROPLET_MARGIN - top;
-  const local = pills.map((p) => ({
-    ...p,
-    x0: p.x0 - left,
-    x1: p.x1 - left,
-    left: p.left - left,
-    right: p.right - left,
-    cy: p.cy - top,
-  }));
-  const shapes = local.map((p) => capsulePath(p.x0, p.x1, p.cy, p.r, p.left, p.right));
-  for (let i = 1; i < local.length; i++) {
-    const a = local[i - 1];
-    const b = local[i];
-    const r = Math.min(a.r, b.r);
-    const ca = a.x1 - a.r; // Mittelpunkte der einander zugewandten Enden
-    const cb = b.x0 + b.r;
-    if (a.dynamic || b.dynamic) {
-      // Bewegte Pille: wie Wassertropfen erst ab der Berührung verbunden, der Hals wächst stetig mit
-      const neck = dropletNeck(cb - ca, a.r + b.r, r);
-      if (neck) shapes.push(bridgePath(ca, cb, (a.cy + b.cy) / 2, r, neck));
-    } else {
-      shapes.push(bridgePath(ca, cb, (a.cy + b.cy) / 2, r));
+    let trackEl = box.querySelector(":scope > .nm-tab-track");
+    let pillEl = box.querySelector(":scope > .nm-tab-pill");
+    const key = `${tag}|${shown.map((tab) => tab.textContent.trim() || tab.getAttribute("aria-label")).join("|")}`;
+    let fresh = false;
+    if (!trackEl) {
+      trackEl = Object.assign(box.ownerDocument.createElement("div"), { className: "nm-tab-track" });
+      pillEl = Object.assign(box.ownerDocument.createElement("div"), { className: "nm-tab-pill" });
+      trackEl.setAttribute("aria-hidden", "true");
+      pillEl.setAttribute("aria-hidden", "true");
+      box.prepend(trackEl, pillEl);
+      fresh = true;
+    }
+    placeTabShape(trackEl, track, true);
+    const previous = lastPill.get(key);
+    if (fresh && previous) placeTabShape(pillEl, previous, true);
+    placeTabShape(pillEl, pill, fresh && !previous);
+    lastPill.set(key, pill);
+    for (const tab of tabs) tab.toggleAttribute("nm-slider", true);
+    for (const tab of shown) {
+      if (tabSized.has(tab)) continue;
+      tabSized.add(tab);
+      tabResize?.observe(tab);
     }
   }
-  const paint = dropletPaint();
-  // Am rechten Bildschirmrand enden: Was darüber hinausragt, macht die Leiste seitlich verschiebbar
-  const viewRight = parent.ownerDocument.documentElement.clientWidth - offsetX;
-  const shown = Math.max(0, Math.min(width, viewRight - left));
-  const frame = [fmt(left), fmt(top), fmt(shown), fmt(width), fmt(height), JSON.stringify(paint), local.length].join("|");
-  const d = shapes.join("");
-  // Pillen einzeln (ohne Hälse) für die Wölbung
-  const caps = shapes.slice(0, local.length);
-
-  let droplet = existing;
-  if (!droplet) {
-    droplet = parent.ownerDocument.createElement("div");
-    droplet.className = "neumorphism-droplet";
-    droplet.dataset.group = String(group);
-    droplet.dataset.id = `neumorphism-droplet-${++dropletIds}`;
-    droplet.setAttribute("aria-hidden", "true");
-    droplet.style.cssText = "position:absolute;pointer-events:none;z-index:0;overflow:hidden;";
-  }
-  if (droplet.parentElement !== parent || droplet.nextSibling !== anchor) parent.insertBefore(droplet, anchor);
-  if (droplet.dataset.frame !== frame) {
-    // Größe, Farben oder Stärke geändert: neu aufbauen
-    droplet.dataset.frame = frame;
-    Object.assign(droplet.style, { left: `${left}px`, top: `${top}px`, width: `${shown}px`, height: `${height}px` });
-    droplet.innerHTML = dropletSvg(width, height, d, paint, droplet.dataset.id, caps);
-  } else {
-    // Nur die Form bewegt sich (z. B. beim Wischen der Reiterleiste): nur die Umrisse tauschen
-    const path = droplet.querySelector("path.shape");
-    if (path && path.getAttribute("d") !== d) path.setAttribute("d", d);
-    droplet.querySelectorAll("path.cap").forEach((cap, i) => {
-      if (caps[i] && cap.getAttribute("d") !== caps[i]) cap.setAttribute("d", caps[i]);
-    });
-  }
-  return droplet;
-}
-
-/**
- * Buttons, die direkt nebeneinander liegen (z. B. „Profil bearbeiten“ und „Abmelden“),
- * bekommen statt eigener Schatten eine gemeinsame Tropfenform.
- */
-const buttonDroplets = new Map(); // Elternelement -> gezeichnete Formen
-
-function updateButtonGroups() {
-  forgetDetached(buttonHosts, 500);
-  const byParent = new Map();
-  if (controlsActive && !saver()) {
-    for (const btn of buttonHosts) {
-      if (!btn.isConnected || !btn.parentElement) continue;
-      // In Slots eines Bausteins (z. B. Fußzeile von Dialogen) wäre die Form unsichtbar: Knöpfe einzeln lassen
-      if (btn.parentElement.shadowRoot) continue;
-      // Symbol-Knöpfe sind flach; ihre Gruppen in der Titelleiste zeichnet updateDroplets
-      if (btn.getRootNode().host?.localName === "ha-icon-button") continue;
-      const list = byParent.get(btn.parentElement) || [];
-      list.push(btn);
-      byParent.set(btn.parentElement, list);
-    }
-  }
-
-  const merged = new Set();
-  const used = new Map();
-  for (const [parent, buttons] of byParent) {
-    if (buttons.length < 2) continue;
-    const entries = buttons
-      .map((btn) => ({ btn, rect: btn.getBoundingClientRect() }))
-      .filter((e) => e.rect.width > 0 && e.rect.height > 0)
-      .sort((a, b) => a.rect.left - b.rect.left);
-    // Reihen: gleiche Höhe und Zeile, kleiner Abstand
-    const runs = [];
-    for (const entry of entries) {
-      const run = runs[runs.length - 1];
-      const last = run?.[run.length - 1];
-      const sameRow =
-        last &&
-        Math.abs(last.rect.top + last.rect.height / 2 - (entry.rect.top + entry.rect.height / 2)) < 4 &&
-        Math.abs(last.rect.height - entry.rect.height) < 4 &&
-        entry.rect.left - last.rect.right <= BUTTON_GAP &&
-        entry.rect.left - last.rect.right >= -1;
-      if (sameRow) run.push(entry);
-      else runs.push([entry]);
-    }
-    const drawn = [];
-    runs.filter((run) => run.length > 1).forEach((run, index) => {
-      if (getComputedStyle(parent).position === "static") {
-        parent.style.position = "relative";
-        parent.dataset.neumorphismPositioned = "";
-      }
-      const existing = buttonDroplets.get(parent)?.[index];
-      const droplet = drawDroplet(existing, parent, run[0].btn, run.map((e) => e.rect), `b${index}`, 0);
-      if (droplet) drawn.push(droplet);
-      for (const e of run) merged.add(e.btn);
-    });
-    if (drawn.length) used.set(parent, drawn);
-  }
-
-  // Aufräumen: nicht mehr benötigte Formen und Markierungen entfernen
-  for (const [parent, droplets] of buttonDroplets) {
-    const keep = used.get(parent) || [];
-    for (const d of droplets) if (!keep.includes(d)) d.remove();
-    if (!keep.length) layoutObserver?.unobserve(parent);
-    if (!keep.length && parent.dataset.neumorphismPositioned !== undefined) {
-      parent.style.position = "";
-      delete parent.dataset.neumorphismPositioned;
-    }
-  }
-  // Knopfgruppen: Größe des Elternelements geändert (Karte breiter, Dialog umgebrochen): neu zeichnen
-  for (const parent of used.keys()) if (!buttonDroplets.has(parent)) layoutObserver?.observe(parent);
-  buttonDroplets.clear();
-  for (const [parent, droplets] of used) buttonDroplets.set(parent, droplets);
-  for (const btn of buttonHosts) btn.toggleAttribute("neumorphism-merged", merged.has(btn));
 }
 
 // ---------------------------------------------------------------------------
@@ -1776,6 +1489,25 @@ const CARD_STYLE = `
   [nm-inset] { background: var(--card-background-color) !important; box-shadow: ${INSET_S} !important; }
 `;
 const CARD_MARKS = ["nm-card-shadow", "nm-frame-inner", "nm-raised", "nm-accent", "nm-inset"];
+
+// Kartenfarbe aus dem Theme, aufgelöst über ein unsichtbares Element; neu gelesen nur nach einer
+// Änderung der Einstellungen oder des Themes
+let themeGeneration = 0; // zählt Änderungen der Theme-Variablen auf <html>
+let surfaceCache = null;
+let surfaceProbe = null;
+
+function surfaceColor() {
+  const key = `${applied}|${themeGeneration}`;
+  if (surfaceCache?.key === key) return surfaceCache.value;
+  if (!surfaceProbe) {
+    surfaceProbe = document.createElement("div");
+    surfaceProbe.style.cssText =
+      "position:absolute;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;color:var(--card-background-color);";
+    document.body.appendChild(surfaceProbe);
+  }
+  surfaceCache = { key, value: getComputedStyle(surfaceProbe).color };
+  return surfaceCache.value;
+}
 const ACCENT_DISTANCE = 90; // Abstand zur Kartenfarbe, ab dem eine Fläche als farbig gilt
 const cardTags = new Set(); // Namen der gefundenen eigenen Karten (für die Diagnose)
 const framedCards = new WeakSet();
@@ -1964,7 +1696,7 @@ function scanCard(card) {
   if (mode !== "full") return;
 
   // Flächen in der Karte
-  const surface = parseColor(dropletPaint().fill) || { r: 0, g: 0, b: 0 };
+  const surface = parseColor(surfaceColor()) || { r: 0, g: 0, b: 0 };
   const cardArea = box.width * box.height;
   const marks = [];
   for (const el of elements) {
@@ -2013,7 +1745,7 @@ function scanCard(card) {
 function updateCards() {
   if (!supportsSheets) return;
   CONTROL_STYLES.__cards = CARD_STYLE;
-  cardsKey = `${controlsActive}|${dropletPaint().fill}|${cardsMode()}`;
+  cardsKey = `${controlsActive}|${surfaceColor()}|${cardsMode()}`;
   forgetDetached(cardHosts, 500);
   for (const [el, card] of cardsWaiting) {
     if (el.isConnected) continue;
@@ -3326,8 +3058,8 @@ function buildTexts(hass) {
     saver_off: t("Aus", "Off"),
     saver_on: t("An", "On"),
     saverHint: t(
-      "Für schwache Geräte: ohne Tropfenformen, Animationen, Körnung und Weichzeichner, seltener geprüft; Add-ons bleiben unverändert, eigene Karten bekommen nur den Rahmen.",
-      "For weak devices: no droplet shapes, animations, grain or blur, checked less often; add-ons stay unchanged, custom cards only get their frame."
+      "Für schwache Geräte: ohne Animationen, Körnung und Weichzeichner, seltener geprüft; Add-ons bleiben unverändert, eigene Karten bekommen nur den Rahmen.",
+      "For weak devices: no animations, grain or blur, checked less often; add-ons stay unchanged, custom cards only get their frame."
     ),
     defaults: t("Als Standard für alle", "Use as default for everyone"),
     defaultsSaved: t("Als Standard für alle Benutzer gespeichert", "Saved as default for all users"),
@@ -3448,12 +3180,20 @@ function sampleShadow({ x = 1, y = 1, strength = 1, contrast = 0, inset = false,
   const s = inset ? -strength : strength;
   const k = Math.abs(s);
   const pre = s < 0 ? "inset " : "";
-  const a = Math.round(k * (1 + 0.5 * contrast) * 100) / 100;
   const px = (n) => `${Math.round(n * 10) / 10}px`;
+  const color = (kind, part) =>
+    `rgba(var(--neumorphism-shadow-${kind}-rgb), calc(var(--neumorphism-shadow-${kind}-alpha, ${kind === "dark" ? 0.65 : 0.9}) * ${
+      Math.round(k * part * (1 + 0.5 * contrast) * 100) / 100}))`;
+  // Zwei Lagen wie im Theme (generate.py): nah und kräftig für die Kante, weit und weich für die Tiefe
+  const layers = s < 0
+    ? [[d / 2, blur * 0.45, 0.6, 0.7], [d, blur, 0.35, 0.4]]
+    : [[d * 0.375, blur / 3, 0.45, 0.55], [d, blur, 0.5, 0.55]];
   const out = [];
   if (k) {
-    out.push(`${pre}${px(d * k * x)} ${px(d * k * y)} ${px(blur * k)} rgba(var(--neumorphism-shadow-dark-rgb), calc(var(--neumorphism-shadow-dark-alpha, 0.65) * ${a}))`);
-    out.push(`${pre}${px(-d * k * x)} ${px(-d * k * y)} ${px(blur * k)} rgba(var(--neumorphism-shadow-light-rgb), calc(var(--neumorphism-shadow-light-alpha, 0.9) * ${a}))`);
+    for (const [dd, bb, dark, light] of layers) {
+      out.push(`${pre}${px(dd * k * x)} ${px(dd * k * y)} ${px(bb * k)} ${color("dark", dark)}`);
+      out.push(`${pre}${px(-dd * k * x)} ${px(-dd * k * y)} ${px(bb * k)} ${color("light", light)}`);
+    }
   }
   if (contrast) out.push(`${inset ? "inset " : ""}0 0 0 1px rgba(var(--rgb-primary-text-color), 0.16)`);
   return out.join(", ") || "none";
@@ -3475,7 +3215,8 @@ function surfaceImage(surface, strength, angle) {
   const p = Math.round(Math.min(1, Math.abs(strength)) * 100);
   let [from, to] = ["var(--neumorphism-sheen)", "var(--neumorphism-shade)"];
   if ((surface === "concave") !== (strength < 0)) [from, to] = [to, from];
-  return `linear-gradient(${angle}deg, color-mix(in srgb, ${from} ${p}%, transparent), color-mix(in srgb, ${to} ${p}%, transparent))`;
+  const grad = (deg, color) => `linear-gradient(${deg}deg, color-mix(in srgb, ${color} ${p}%, transparent), transparent min(50%, 140px))`;
+  return `${grad(angle, from)}, ${grad(angle + 180, to)}`;
 }
 
 const BULB_PATH =
@@ -3749,7 +3490,8 @@ class NeumorphismColorPicker extends HTMLElement {
           background: transparent; color: var(--secondary-text-color); font: inherit; font-size: 0.85rem; white-space: nowrap;
           transition: box-shadow 200ms ease, color 200ms ease; }
         .segmented button.selected { background: var(--card-background-color); background-image: var(--neumorphism-surface-image, none);
-          color: var(--primary-color); font-weight: var(--ha-font-weight-medium, 500); box-shadow: var(--neumorphism-raised-shadow, none); }
+          color: var(--primary-color); font-weight: var(--ha-font-weight-medium, 500);
+          box-shadow: var(--neumorphism-nested-shadow, var(--neumorphism-raised-shadow, none)); }
         button:focus-visible, .dot:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
         .apps-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 16px; margin: 8px 0 2px; }
         .apps-list label { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer;
@@ -4704,8 +4446,7 @@ function tick() {
   safely(updateBrandMode);
   safely(applySettings);
   safely(injectIntoProfile);
-  safely(updateDroplets);
-  safely(updateButtonGroups);
+  safely(updateTabBars);
   safely(updateCards);
   safely(updateFrames);
   safely(updateForeignElements);
@@ -4713,7 +4454,7 @@ function tick() {
 
 /**
  * Geprüft wird nur, wenn sich etwas ändert: neue Bausteine (Seiten, Dialoge, Karten, Knöpfe),
- * Seitenwechsel, Theme oder Einstellungen. Danach noch zweimal die Lage, weil Dialoge und
+ * Seitenwechsel, Theme oder Einstellungen. Danach noch zweimal die Lage der Reiter, weil Dialoge und
  * Seiten noch kurz einschweben. Dazu eine seltene Sicherheitsprüfung (siehe unten).
  */
 let tickTimer = 0;
@@ -4724,21 +4465,9 @@ function scheduleTick(delay = 50) {
     tickTimer = 0;
     tick();
     for (const timer of followTimers) clearTimeout(timer);
-    followTimers = [350, 900].map((ms) => setTimeout(scheduleLayout, ms));
+    followTimers = [350, 900].map((ms) => setTimeout(scheduleTabBars, ms));
   }, delay);
 }
-
-// Lage der Knöpfe geändert (Größe): nur die Tropfenformen neu
-let layoutFrame = 0;
-function scheduleLayout() {
-  if (layoutFrame) return;
-  layoutFrame = requestAnimationFrame(() => {
-    layoutFrame = 0;
-    safely(updateDroplets);
-    safely(updateButtonGroups);
-  });
-}
-const layoutObserver = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleLayout) : null;
 
 // Kurzer Bericht dieses Geräts für die Diagnose der Integration (einmal pro Laden der Seite)
 const DEVICE_ID_KEY = "neumorphism-device-id";
@@ -4814,7 +4543,7 @@ if (!customElements.get(PICKER_TAG)) {
   hookDefine();
   patchControls();
   hookStateBadges();
-  window.addEventListener("resize", scheduleLayout);
+  window.addEventListener("resize", scheduleTabBars);
   // Theme- oder Moduswechsel: Home Assistant schreibt die Theme-Variablen in das style-Attribut von <html>.
   new MutationObserver(() => {
     themeGeneration++;

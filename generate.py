@@ -181,20 +181,40 @@ def text_on(value: str) -> str:
 # Theme-Aufbau
 # --------------------------------------------------------------------------
 
-def mode_vars(m: dict) -> list[tuple[str, str]]:
-    def color(kind: str, k: str) -> str:
-        """Schattenfarbe; Farbton und Deckkraft sind Variablen (Hintergrund-Farbton, Kontrast)."""
-        return f"rgba(var(--neumorphism-shadow-{kind}-rgb), calc(var(--neumorphism-shadow-{kind}-alpha) * {k} * (1 + 0.5 * {CONTRAST})))"
+# Schatten aus zwei Lagen: eine nahe, kräftige Lage zeichnet die Kante, eine weite, weiche Lage die
+# Tiefe. Die Reichweite hängt nicht von der Größe ab: Große Karten werfen keinen größeren Schatten
+# als Knöpfe, sonst legt er sich über die Nachbarn und hebt deren Licht und Schatten auf.
+# Je Lage: Versatz, Weichheit, Anteil der Schattenfarbe, Anteil des hellen Scheins.
+CARD = ((2, 4, 0.45, 0.55), (6, 14, 0.55, 0.6))
+RAISED_L = ((2, 4, 0.45, 0.55), (5, 11, 0.5, 0.55))
+RAISED = ((1.5, 3, 0.45, 0.55), (4, 9, 0.5, 0.55))
+RAISED_S = ((1, 2, 0.45, 0.5), (3, 6, 0.45, 0.5))
+INSET_L = ((2, 5, 0.6, 0.7), (6, 14, 0.35, 0.4))
+INSET = ((2, 4, 0.6, 0.7), (4, 9, 0.35, 0.4))
+INSET_S = ((1.5, 3, 0.6, 0.7), (3, 6, 0.35, 0.4))
+DIALOG = ((3, 6, 0.4, 0.5), (12, 32, 0.6, 0.6))
+# Erhaben in einer Mulde: Der helle Schein nach außen würde den Schatten der Muldenwand aufheben.
+# Deshalb nur der Schatten nach außen, das Licht als schmale Kante auf der Fläche selbst.
+NESTED_CARD = ((2, 4, 0.5, 0.25), (5, 12, 0.45, 0))
+NESTED = ((1.5, 3, 0.5, 0.25), (3, 7, 0.35, 0))
 
-    def layer(d: float, b: float, k: str, inset: bool) -> str:
+
+def mode_vars(m: dict) -> list[tuple[str, str]]:
+    def color(kind: str, k: str, part: float = 1) -> str:
+        """Schattenfarbe; Farbton und Deckkraft sind Variablen (Hintergrund-Farbton, Kontrast)."""
+        share = "" if part == 1 else f" * {part}"
+        return f"rgba(var(--neumorphism-shadow-{kind}-rgb), calc(var(--neumorphism-shadow-{kind}-alpha) * {k}{share} * (1 + 0.5 * {CONTRAST})))"
+
+    def layer(spec, k: str, inset: bool) -> str:
         """Schatten zur Lichtrichtung hin und heller Schein auf der Gegenseite."""
+        d, b, dark_part, light_part = spec
         pre = "inset " if inset else ""
         x = lambda sign: f"calc({sign * d}px * {k} * {LIGHT_X})"  # noqa: E731
         y = lambda sign: f"calc({sign * d}px * {k} * {LIGHT_Y})"  # noqa: E731
         blur = f"calc({b}px * {k})"
         return (
-            f"{pre}{x(1)} {y(1)} {blur} {color('dark', k)}, "
-            f"{pre}{x(-1)} {y(-1)} {blur} {color('light', k)}"
+            f"{pre}{x(1)} {y(1)} {blur} {color('dark', k, dark_part)}, "
+            f"{pre}{x(-1)} {y(-1)} {blur} {color('light', k, light_part)}"
         )
 
     def edge(inset: bool) -> str:
@@ -202,22 +222,35 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         pre = "inset " if inset else ""
         return f"{pre}0 0 0 calc(1px * {CONTRAST}) rgba(var(--rgb-primary-text-color), 0.16)"
 
-    def shadow(d: float, b: float, inset: bool = False) -> str:
+    def shadow(layers, inset: bool = False) -> str:
         """Erhaben (oder eingelassen), bei negativer Effektstärke umgekehrt."""
-        return f"{layer(d, b, POSITIVE, inset)}, {layer(d, b, NEGATIVE, not inset)}, {edge(inset)}"
+        out = [layer(spec, POSITIVE, inset) for spec in layers]
+        out += [layer(spec, NEGATIVE, not inset) for spec in layers]
+        return ", ".join(out + [edge(inset)])
 
-    def floating(d: float, b: float) -> str:
+    def nested(layers) -> str:
+        """Erhaben in einer Mulde: Licht als Kante auf der Fläche statt als Schein daneben."""
+        rim = (
+            f"inset calc(1px * {POSITIVE} * {LIGHT_X}) calc(1px * {POSITIVE} * {LIGHT_Y}) calc(1px * {POSITIVE}) "
+            f"{color('light', POSITIVE, 0.6)}"
+        )
+        return f"{shadow(layers)}, {rim}"
+
+    def floating(layers) -> str:
         """Dialoge schweben immer über der Seite."""
-        return f"{layer(d, b, MAGNITUDE, False)}, {edge(False)}"
+        return ", ".join([layer(spec, MAGNITUDE, False) for spec in layers] + [edge(False)])
 
     def surface(first: str, second: str) -> str:
-        """Gewölbte oder gemuldete Oberfläche: Verlauf von der Licht- zur Schattenseite.
-        Bei negativer Effektstärke ist der Verlauf umgekehrt."""
+        """Gewölbte oder gemuldete Oberfläche: zur Lichtseite heller, zur Gegenseite dunkler.
+        Der Verlauf reicht an jeder Seite höchstens 140px weit, auch auf großen Flächen; dazwischen
+        bleibt die Fläche, wie sie ist. Bei negativer Effektstärke ist er umgekehrt."""
         mix = lambda c, k: f"color-mix(in srgb, {c} calc(100% * min(1, {k})), transparent)"  # noqa: E731
-        return (
-            f"linear-gradient({LIGHT_ANGLE}, {mix(first, POSITIVE)}, {mix(second, POSITIVE)}), "
-            f"linear-gradient({LIGHT_ANGLE}, {mix(second, NEGATIVE)}, {mix(first, NEGATIVE)})"
-        )
+        grad = lambda angle, c: f"linear-gradient({angle}, {c}, transparent min(50%, 140px))"  # noqa: E731
+        back = f"calc({LIGHT_ANGLE} + 180deg)"
+        return ", ".join([
+            grad(LIGHT_ANGLE, mix(first, POSITIVE)), grad(back, mix(second, POSITIVE)),
+            grad(LIGHT_ANGLE, mix(second, NEGATIVE)), grad(back, mix(first, NEGATIVE)),
+        ])
 
     dark, light = color("dark", MAGNITUDE), color("light", MAGNITUDE)
     radius = lambda px: f"calc({px}px * {RADIUS})"  # noqa: E731
@@ -249,29 +282,32 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("rgb-primary-text-color", m["rgb_ink"]),
         ("ha-card-header-color", "var(--primary-text-color)"),
         ("# Karten: weicher Schatten unten rechts, heller Schein oben links", None),
-        ("ha-card-box-shadow", shadow(9, 22)),
-        ("neumorphism-card-shadow", shadow(9, 22)),
+        ("ha-card-box-shadow", shadow(CARD)),
+        ("neumorphism-card-shadow", shadow(CARD)),
         ("ha-card-border-width", "0px"),
         ("ha-card-border-color", "transparent"),
         ("ha-card-border-radius", radius(CARD_RADIUS)),
-        ("ha-box-shadow-s", shadow(4, 10)),
-        ("ha-box-shadow-m", shadow(8, 20)),
-        ("ha-box-shadow-l", shadow(14, 36)),
-        ("bar-box-shadow", shadow(6, 16)),
+        ("ha-box-shadow-s", shadow(RAISED_S)),
+        ("ha-box-shadow-m", shadow(RAISED)),
+        ("ha-box-shadow-l", shadow(CARD)),
+        ("bar-box-shadow", shadow(RAISED_S)),
         ("shadow-color", dark),
         ("# Bausteine für erhabene und eingelassene Elemente (auch für eigene Karten)", None),
         ("neumorphism-shadow-dark", dark),
         ("neumorphism-shadow-light", light),
-        ("neumorphism-raised-shadow", shadow(4, 9)),
-        ("neumorphism-raised-shadow-l", shadow(7, 16)),
-        ("neumorphism-raised-shadow-s", shadow(3, 6)),
-        ("neumorphism-inset-shadow", shadow(4, 9, inset=True)),
-        ("neumorphism-inset-shadow-s", shadow(2, 5, inset=True)),
-        ("neumorphism-inset-shadow-l", shadow(7, 16, inset=True)),
+        ("neumorphism-raised-shadow", shadow(RAISED)),
+        ("neumorphism-raised-shadow-l", shadow(RAISED_L)),
+        ("neumorphism-raised-shadow-s", shadow(RAISED_S)),
+        ("neumorphism-inset-shadow", shadow(INSET, inset=True)),
+        ("neumorphism-inset-shadow-s", shadow(INSET_S, inset=True)),
+        ("neumorphism-inset-shadow-l", shadow(INSET_L, inset=True)),
+        ("# Erhaben in einer Mulde (Spur, Leiste, Sektion als Mulde)", None),
+        ("neumorphism-nested-shadow", nested(NESTED)),
+        ("neumorphism-nested-card-shadow", nested(NESTED_CARD)),
         ("# Oberfläche gewölbt oder gemuldet (das Profil wählt eine davon für --neumorphism-surface-image)", None),
         ("neumorphism-convex", surface(sheen, shade)),
         ("neumorphism-concave", surface(shade, sheen)),
-        ("ha-button-box-shadow", shadow(3, 7)),
+        ("ha-button-box-shadow", shadow(RAISED_S)),
         ("divider-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-color", f"rgba({m['rgb_ink']}, 0.08)"),
         ("outline-hover-color", f"rgba({m['rgb_ink']}, 0.16)"),
@@ -290,7 +326,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("# Dialoge", None),
         ("ha-dialog-surface-background", "var(--card-background-color)"),
         ("ha-dialog-border-radius", radius(DIALOG_RADIUS)),
-        ("dialog-box-shadow", floating(18, 48)),
+        ("dialog-box-shadow", floating(DIALOG)),
         ("mdc-dialog-scrim-color", m["scrim"]),
         ("ha-dialog-scrim-backdrop-filter", "blur(6px)"),
         ("# Eingabefelder wirken eingelassen", None),
@@ -314,7 +350,7 @@ def mode_vars(m: dict) -> list[tuple[str, str]]:
         ("ha-switch-thumb-background-color", "var(--neumorphism-thumb)"),
         ("ha-switch-checked-background-color", "var(--accent-color)"),
         ("ha-switch-checked-thumb-background-color", "var(--neumorphism-thumb)"),
-        ("ha-switch-thumb-box-shadow", shadow(2, 5)),
+        ("ha-switch-thumb-box-shadow", nested(NESTED)),
         ("switch-unchecked-track-color", "var(--neumorphism-track)"),
         ("switch-unchecked-button-color", "var(--neumorphism-thumb)"),
         ("slider-track-color", "var(--neumorphism-track)"),

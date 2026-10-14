@@ -6,12 +6,13 @@ Das Design gilt überall: auf den Dashboards, in allen Seiten von Home Assistant
 
 - **Hell- und Dunkelmodus**, umgeschaltet wie gewohnt im Profil (Auto / Hell / Dunkel)
 - **Geformte Bedienelemente** in Kacheln, Karten und Detailansichten: Schalter, Schieber, Modus-Auswahl, Thermostat- und Luftbefeuchter-Regler, +/–-Knöpfe, Buttons, Eingabefelder
-- **Titelleiste ohne Kante**: Der Inhalt läuft beim Scrollen weich darunter aus
-- **Alle Seiten von Home Assistant**: Einstellungen, Automationen-Editor, Entwicklerwerkzeuge, Verlauf, Kalender, To-do-Listen, Dialoge und Menüs. Der gewählte Reiter ist eine erhabene Pille, Filter-Chips und aufklappbare Abschnitte sind erhaben, Suchfelder und Code-Editoren eingelassen, die gewählte Zeile in Listen und Tabellen ebenfalls
+- **Titelleiste ohne Kante**: Der Inhalt läuft beim Scrollen weich darunter aus. Die Knöpfe rechts liegen gemeinsam auf einer erhabenen Kapsel, Menü und Zurück auf einem Kreis
+- **Reiter in einer Spur**: Alle Reiter liegen in einer eingelassenen Spur, der gewählte als erhabene Pille darin. Beim Wechsel gleitet die Pille hinüber, auch zwischen den Seiten der Einstellungen. Passen nicht alle Reiter hin, läuft die Spur zur verdeckten Seite weich aus
+- **Schatten, die sich nicht gegenseitig aufheben**: Jeder Schatten hat eine nahe, kräftige Lage für die Kante und eine weiche für die Tiefe, mit derselben kurzen Reichweite für große Karten wie für kleine Knöpfe. So legt er sich nicht über die Nachbarn und schneidet an der nächsten Fläche nicht hart ab. Erhabenes in einer Mulde (Schalter, gewählte Option, Karten in eingelassenen Sektionen) wirft nur seinen Schatten und trägt das Licht als feine Kante, damit die Wand der Mulde sichtbar bleibt
+- **Alle Seiten von Home Assistant**: Einstellungen, Automationen-Editor, Entwicklerwerkzeuge, Verlauf, Kalender, To-do-Listen, Dialoge und Menüs. Filter-Chips und aufklappbare Abschnitte sind erhaben, Suchfelder und Code-Editoren eingelassen, die gewählte Zeile in Listen und Tabellen ebenfalls
 - **Alles andere automatisch**: Seiten von Integrationen (z. B. WashData, Vacuum Agent), HACS und die Oberflächen von Add-ons (z. B. ESPHome, Zigbee2MQTT, Node-RED, File editor) bekommen dasselbe Design, im Dunkelmodus auch dunkel. Ohne Anpassungen für einzelne Integrationen oder Add-ons, deshalb auch für künftige
 - **Auch eigene Karten** aus HACS oder selbst geschrieben, etwa [M3 Cards](https://github.com/j0sp0r/m3-cards), Mushroom, Button Card oder Bubble Card: Rahmen, Chips, Symbolfelder, Knöpfe und Schieber-Spuren werden erhaben oder eingelassen
-- **Knöpfe wie Tropfen**: Nebeneinanderliegende Knöpfe, in der Titelleiste wie in Karten und Dialogen, laufen in der Mitte zusammen. Die gewählte Ansicht in der Titelleiste läuft beim Wischen wie ein Tropfen in die Knöpfe hinein, die übrigen Ansichten blenden an den Rändern weich aus
-- **Aktive Geräte leuchten** sanft in ihrer Zustandsfarbe oder erscheinen **gedrückt wie ein eingerasteter Taster**, **Knöpfe sinken beim Drücken ein**, Schalter und Auswahl gleiten
+- **Aktive Geräte leuchten** sanft in ihrer Zustandsfarbe oder erscheinen **gedrückt wie ein eingerasteter Taster**, **Knöpfe sinken beim Drücken ein** (auch die Symbol-Knöpfe der Titelleiste), Schalter, Auswahl und Reiter gleiten
 - **Vorlagen** per Klick, eigene speichern und als Code teilen
 - **Alles einstellbar im Profil**: Primär- und Akzentfarbe, Farbton des Hintergrunds, Effektstärke von −100 bis +100 (im negativen Bereich umgekehrt), Lichtrichtung bis hin zum **Licht nach der Sonne**, gewölbte oder gemuldete Oberfläche, Kontrast, **Körnung**, Rundung, vier Schriften, Schriftgröße, Abstände, Sektionen eingelassen oder herausgehoben, **Diagramme in Themenfarben**
 - **Abendmodus**: ab Sonnenuntergang wärmer, flacher oder dunkel
@@ -65,7 +66,7 @@ Zu jeder Farbe gibt es einen Farbwähler und zehn Vorgaben zum Antippen.
 **Licht und Tiefe**
 - **Effektstärke**: von −100 bis +100. +50 ist der Standard, +100 besonders kräftig, 0 flach ohne Schatten. Negative Werte kehren den Effekt um: Karten, Knöpfe und Symbole werden eingelassen, Schieber, Auswahlleisten und Eingabefelder erhaben. Je weiter ins Negativ, desto kräftiger
 - **Lichtrichtung**: *Oben links*, *Oben*, *Oben rechts* oder *Sonne*. Die Schatten liegen auf der Gegenseite. Mit *Sonne* wandert das Licht mit dem Sonnenstand aus Home Assistant: morgens von links, mittags von oben, abends von rechts, nachts von oben
-- **Oberfläche**: erhabene Flächen *flach*, *gewölbt* wie ein Kissen oder *gemuldet* wie eine Schale
+- **Oberfläche**: erhabene Flächen *flach*, *gewölbt* wie ein Kissen oder *gemuldet* wie eine Schale. Die Wölbung reicht an jeder Seite gleich weit, auf großen Karten bleibt die Mitte ruhig
 - **Kontrast**: *Hoch* macht Schrift, Linien und Schatten kräftiger und legt eine feine Kante um jede Fläche, für helle Umgebungen oder bessere Lesbarkeit
 - **Zustand als Tiefe**: Eingeschaltete Geräte erscheinen gedrückt wie ein eingerasteter Taster, ausgeschaltete erhaben, in Kacheln, Schaltflächen und Abzeichen
 - **Körnung**: *Fein* oder *Kräftig* legt eine feine Struktur wie Papier oder Stoff über alle Flächen
@@ -105,7 +106,7 @@ Oben in den Einstellungen wählst du, wofür gespeichert wird:
 Unter **Dieses Gerät** gibt es außerdem:
 
 - **Ausnahme für hell oder dunkel**: Hell oder dunkel stellst du im Profil beim *Design-Modus* von Home Assistant ein (Auto, Hell, Dunkel); das gilt für deinen Benutzer auf allen Geräten, eine zweite Einstellung brauchst du dafür nicht. Nur wenn ein einzelnes Gerät abweichen soll, etwa ein Wandtablet mit demselben Benutzer, das immer dunkel bleibt, wählst du hier *Immer hell* oder *Immer dunkel*. *Keine* folgt dem Design-Modus. Die Ausnahme gilt nur, solange das Neumorphism-Theme gewählt ist
-- **Sparmodus**: für schwache Geräte. Ohne Tropfenformen, Animationen und weichgezeichneten Hintergrund hinter Dialogen; Add-ons bleiben unverändert, eigene Karten bekommen nur den Rahmen
+- **Sparmodus**: für schwache Geräte. Ohne Animationen, Körnung und weichgezeichneten Hintergrund hinter Dialogen; Add-ons bleiben unverändert, eigene Karten bekommen nur den Rahmen
 
 ### Standard für alle Benutzer
 
@@ -202,6 +203,8 @@ Das Theme stellt Schatten-Variablen bereit, die zu Modus und Effektstärke passe
 | `--neumorphism-inset-shadow` | eingelassen, für Spuren und Leisten |
 | `--neumorphism-inset-shadow-s` | leicht eingelassen, für Eingabefelder |
 | `--neumorphism-inset-shadow-l` | tief eingelassen, für große Mulden |
+| `--neumorphism-nested-shadow` | erhaben in einer Mulde, etwa der Griff in einer Spur (Licht als Kante statt als Schein daneben) |
+| `--neumorphism-nested-card-shadow` | wie oben, für Karten in einer Mulde |
 | `--neumorphism-surface-image` | Wölbung erhabener Flächen als `background-image` (bei *Flach* nicht gesetzt) |
 
 Alle folgen auch Lichtrichtung, Hintergrund-Farbton und Kontrast.
@@ -216,7 +219,7 @@ card_mod:
 
 ## Theme anpassen
 
-Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit `generate.py` erzeugt. Hintergrund, Schatten, Textfarben und Rundungen stehen oben in `generate.py` (`MODES`, `CARD_RADIUS`, `DIALOG_RADIUS`, `HA_RADII`). Nach einer Änderung `python3 generate.py` ausführen (Python 3, keine Zusatzpakete) und die Integration neu laden. Ein HACS-Update überschreibt eigene Änderungen.
+Die Theme-Datei `custom_components/neumorphism/theme/neumorphism.yaml` wird mit `generate.py` erzeugt. Hintergrund, Schatten, Textfarben und Rundungen stehen oben in `generate.py` (`MODES`, die Schattenlagen `CARD`, `RAISED`, `INSET` usw., `CARD_RADIUS`, `DIALOG_RADIUS`, `HA_RADII`). Nach einer Änderung `python3 generate.py` ausführen (Python 3, keine Zusatzpakete) und die Integration neu laden. Ein HACS-Update überschreibt eigene Änderungen.
 
 ## Grenzen
 

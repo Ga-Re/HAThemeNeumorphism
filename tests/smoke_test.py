@@ -189,6 +189,8 @@ def browser_checks() -> None:
             check("Skript geladen", False, repr(err)[:200])
             listed = page.evaluate("() => [...document.scripts].some((s) => s.textContent.includes('neumorphism-colors'))")
             print(f"     Skript in der Startseite eingetragen: {listed}")
+            state = page.evaluate("() => [!!customElements.get('neumorphism-color-picker'), document.visibilityState]")
+            print(f"     Jetzt definiert, Sichtbarkeit: {state}")
             for line in module_log[-25:]:
                 print(f"     {line}")
         for dark in (False, True):
@@ -207,7 +209,10 @@ def browser_checks() -> None:
                     "() => findAllDeep('ha-card').some((c) => c.shadowRoot && [...c.shadowRoot.adoptedStyleSheets].some((s) => [...s.cssRules].some((r) => r.cssText.includes('neumorphism'))))"
                 ),
             )
-            check(f"Tropfenformen in der Titelleiste ({mode})", page.evaluate("() => findAllDeep('.neumorphism-droplet').length") > 0)
+            check(
+                f"Knöpfe der Titelleiste auf einer Kapsel ({mode})",
+                page.evaluate("() => findAllDeep('.action-items').some((el) => getComputedStyle(el, '::before').boxShadow !== 'none')"),
+            )
             page.screenshot(path=str(OUTPUT / f"dashboard-{mode}.png"))
             go("/profile")
             check(
@@ -216,6 +221,12 @@ def browser_checks() -> None:
             )
             page.screenshot(path=str(OUTPUT / f"profil-{mode}.png"), full_page=True)
             go("/config/integrations/dashboard")
+            check(
+                f"Reiter in einer Spur, der gewählte als Pille ({mode})",
+                page.evaluate(
+                    "() => { const pill = findDeep('.nm-tab-pill'); return !!findDeep('.nm-tab-track') && !!pill && pill.getBoundingClientRect().width > 40; }"
+                ),
+            )
             page.screenshot(path=str(OUTPUT / f"einstellungen-{mode}.png"))
 
         # Aufbau wie im Standard-Theme, am Handy und am großen Bildschirm
